@@ -281,3 +281,10 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.equal(s.cadStatus, 'ok');
   console.log('ok - absolute-watts test session (100 W @ 85 rpm)');
 }
+{
+  const erg = new Session({ trainer: new SimTrainer(), hr: null, settings: {}, workout: { steps: [{ dur: 60, power: 0.5 }] } });
+  assert.equal(erg.mode, 'erg', 'ERG layout before the ride starts');
+  const slope = new Session({ trainer: new SimTrainer(), hr: null, settings: {}, workout: { steps: [{ dur: 60, grade: 3 }] } });
+  assert.equal(slope.mode, 'sim');
+  console.log('ok - mode known before start');
+}
