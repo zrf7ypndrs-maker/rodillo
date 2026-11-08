@@ -480,6 +480,9 @@ function beginSession(opts) {
   const s = app.session;
   s.on('shift', (g) => { const t = $('.tile.gear'); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); app.controllers.forEach((c) => c.vibrate?.()); });
   s.on('lap', () => toast('Lap'));
+  s.on('autostart', () => toast('Go!'));
+  s.on('autopause', () => toast('Auto-paused'));
+  s.on('autoresume', () => toast('Resumed'));
   s.on('workoutDone', () => toast('Workout complete. Free ride, or B twice to finish'));
   show('ride');
   $('#r-name').textContent = s.name;
@@ -895,6 +898,10 @@ function renderRide() {
   renderSegList(s);
 
   $('#r-paused').classList.toggle('hidden', !s.paused);
+  if (s.paused) {
+    $('#r-paused-title').textContent = !s.started ? 'Ready' : 'Paused';
+    $('#r-paused-sub').textContent = !s.started ? 'Start pedaling to begin' : s.autoPaused ? 'Start pedaling to resume' : 'Press A or Space to resume';
+  }
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
   $('#r-hints').innerHTML = s.mode === 'erg'
     ? '<b>Up/Down</b> intensity &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
@@ -984,6 +991,8 @@ const FIELDS = [
   ['section', 'Trainer (learned automatically)'],
   ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
   ['maxSendGrade', 'Max grade sent to trainer (%)', 1, 100],
+  ['section', 'Ride'],
+  ['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.'],
 ];
 function renderSettings() {
   const f = $('#settings-form');

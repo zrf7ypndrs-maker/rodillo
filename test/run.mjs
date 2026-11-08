@@ -224,3 +224,31 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.ok(ints.find((x) => x.i === 1 && x.dist === 1500 && x.avgP > 200));
   console.log(`ok - distance segments (climb 1 took ${a.n}s at ${Math.round(a.p / a.n)} W)`);
 }
+{
+  // auto start on pedalling, auto pause in ERG with no watts, resume on pedalling
+  const wo = JSON.parse(fs.readFileSync(new URL('../workouts/z2-60.json', import.meta.url)));
+  const trainer = new SimTrainer(); const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: {}, workout: wo });
+  trainer.riderPower = 0; ride(s, trainer, hr, 5);
+  assert.ok(!s.started, 'waits for pedalling');
+  trainer.riderPower = 150; ride(s, trainer, hr, 3);
+  assert.ok(s.started && !s.paused, 'started by pedalling');
+  ride(s, trainer, hr, 30);
+  trainer.riderPower = 0; ride(s, trainer, hr, 4);
+  assert.ok(!s.paused); ride(s, trainer, hr, 2);
+  assert.ok(s.paused && s.autoPaused, 'auto-paused after 5 s without watts');
+  const t = s.elapsed; ride(s, trainer, hr, 20); assert.equal(s.elapsed, t, 'clock stops while paused');
+  trainer.riderPower = 150; ride(s, trainer, hr, 2);
+  assert.ok(!s.paused, 'resumes when pedalling');
+  // manual pause is not auto-resumed
+  s.togglePause(); ride(s, trainer, hr, 5); assert.ok(s.paused, 'manual pause holds');
+  // slope: coasting downhill doesn't pause, stopping does
+  const t2 = new SimTrainer(); const h2 = new SimHr(t2);
+  const f = new Session({ trainer: t2, hr: h2, settings: {} });
+  t2.riderPower = 200; ride(f, t2, h2, 60);
+  f.gradeOffset = -0.06; t2.riderPower = 0; ride(f, t2, h2, 15);
+  assert.ok(!f.paused && f.bike.v > 5, 'coasting downhill keeps riding');
+  f.gradeOffset = 0.05; ride(f, t2, h2, 40);
+  assert.ok(f.paused, 'stopped on a climb -> auto-paused');
+  console.log('ok - auto start / pause / resume');
+}

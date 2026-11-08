@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   drivetrain: DEFAULT_DRIVETRAIN,
   shiftStyle: 'sram',     // 'sram' | 'shimano'
   ergCadenceGuard: true,
+  autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
 };
 
 export class Session extends Emitter {
@@ -66,8 +67,8 @@ export class Session extends Emitter {
   }
 
   // ---------- controls ----------
-  start() { this.started = true; this.paused = false; this.startMs ||= Date.now(); this.emit('change'); }
-  togglePause() { if (!this.started) return this.start(); this.paused = !this.paused; this.emit('change'); }
+  start() { this.started = true; this.paused = false; this.autoPaused = false; this.startMs ||= Date.now(); this.emit('change'); }
+  togglePause() { if (!this.started) return this.start(); this.paused = !this.paused; this.autoPaused = false; this.emit('change'); }
   /** Rear shift, dir +1 = harder. */
   shift(dir) { if (this.gb.shiftRear(dir)) { this.emit('shift', this.gb.label); this.emit('change'); } }
   shiftFront(dir) { if (this.gb.shiftFront(dir)) { this.emit('shift', this.gb.label); this.emit('change'); } }
@@ -128,6 +129,18 @@ export class Session extends Emitter {
     this.powerBuf.push(power);
     while (this.powerBuf.length > Math.round(3 / dt)) this.powerBuf.shift();
 
+    // ---- auto start / pause / resume ----
+    if (!this.finished) {
+      const pedalling = cadence > 15 || power > 15;
+      this._activeFor = pedalling ? (this._activeFor || 0) + dt : 0;
+      if (!this.started && this._activeFor >= 1) { this.start(); this.emit('autostart'); }
+      else if (this.paused && this.autoPaused && this._activeFor >= 1) { this.paused = false; this.autoPaused = false; this.emit('autoresume'); }
+      else if (!this.paused && this.s.autoPauseSec > 0) {
+        const idle = this.mode === 'erg' ? power < 5 && cadence < 5 : this.bike.v < 0.3 && cadence < 5;
+        this._idleFor = idle ? (this._idleFor || 0) + dt : 0;
+        if (this._idleFor >= this.s.autoPauseSec) { this.paused = true; this.autoPaused = true; this._idleFor = 0; this.emit('autopause'); }
+      }
+    }
     if (this.paused || this.finished) {
       this.emit('tick');
       return;
