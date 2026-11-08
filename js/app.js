@@ -641,8 +641,8 @@ function action(a) {
   const s = app.session;
   if (app.screen === 'ride' && s) {
     switch (a) {
-      case 'easier': s.shift(-1); break;
-      case 'harder': s.shift(+1); break;
+      case 'easier': if (s.mode === 'erg') return action('down'); s.shift(-1); break;
+      case 'harder': if (s.mode === 'erg') return action('up'); s.shift(+1); break;
       case 'front': if (s.gb.isDouble) s.toggleFront(); else toast('1x: no front shifting'); break;
       case 'up': s.bump(+1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
       case 'down': s.bump(-1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
@@ -717,6 +717,14 @@ let pendingShift = null; // SRAM: wait briefly to see if the other side joins (f
 function onShiftButton(b) {
   const s = app.session;
   if (app.screen !== 'ride' || !s) return action(isLeft(b) ? 'easier' : 'harder'); // menus
+  if (s.mode === 'erg') { // ERG: left side -1%, right side +1% of target watts (hold to repeat)
+    const a = isLeft(b) ? 'down' : 'up';
+    action(a);
+    clearTimeout(holdTimers[b]);
+    const rep = () => { action(a); holdTimers[b] = setTimeout(rep, 120); };
+    holdTimers[b] = setTimeout(rep, 450);
+    return;
+  }
   const sramFront = (app.settings.shiftStyle || 'sram') === 'sram' && s.gb.isDouble;
   if (!sramFront) { const [kind, dir] = shiftFor(b); doShift(kind, dir); return; }
   if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
@@ -860,12 +868,16 @@ function renderRide() {
   const pt = $('.tile.power');
   pt.classList.remove('low', 'high', 'ok');
   if (s.target) {
-    $('#r-target').innerHTML = `target <b style="color:var(--text)">${s.target}</b> W${s.intensity !== 1 ? ` (${Math.round(s.intensity * 100)}%)` : ''}`;
+    $('#r-target').innerHTML = `target <b style="color:var(--text)">${s.target}</b> W`;
     const r = p / s.target;
     pt.classList.add(r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok');
   } else {
     $('#r-target').textContent = `${(p / app.settings.riderKg).toFixed(1)} W/kg`;
   }
+  const pctEl = $('#r-pct');
+  pctEl.classList.toggle('hidden', s.mode !== 'erg');
+  pctEl.textContent = `${Math.round(s.intensity * 100)}%`;
+  pctEl.className = `t-pct ${s.mode !== 'erg' ? 'hidden' : s.intensity > 1.001 ? 'up' : s.intensity < 0.999 ? 'down' : ''}`;
   $('#r-hr').textContent = hr || '--';
   const hrs = s.samples.filter((x) => x.hr).slice(-600);
   $('#r-hrzone').textContent = hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '';
@@ -913,7 +925,7 @@ function renderRide() {
   }
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
   $('#r-hints').innerHTML = s.mode === 'erg'
-    ? '<b>Up/Down</b> intensity &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
+    ? '<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
     : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>B&times;2</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
   renderRideStatus();
   drawChart();
