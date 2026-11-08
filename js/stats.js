@@ -57,11 +57,11 @@ export function intervalResults(samples, segs, ftp) {
   const out = [];
   segs.forEach((seg, i) => {
     const lead = seg.dur >= 30 ? 5 : 0; // ignore ERG ramp-in at the start of each step
-    const xs = samples.filter((s) => s.wt >= seg.start + lead && s.wt < seg.end);
+    const xs = samples.filter((s) => (s.si !== undefined ? s.si === i && s.st >= lead : s.wt >= seg.start + lead && s.wt < seg.end));
     if (xs.length < Math.min(10, seg.dur * 0.5)) return;
     const res = {
       i, label: seg.label, kind: seg.kind, rep: seg.rep ? `${seg.rep.i}/${seg.rep.of}` : undefined,
-      dur: seg.dur, done: xs.length, avgP: Math.round(mean(xs.map((s) => s.power))),
+      dur: seg.dur, dist: seg.dist || undefined, done: xs.length, avgP: Math.round(mean(xs.map((s) => s.power))),
       avgHr: Math.round(mean(xs.filter((s) => s.hr).map((s) => s.hr))) || undefined,
       avgCad: Math.round(mean(xs.map((s) => s.cadence))),
     };

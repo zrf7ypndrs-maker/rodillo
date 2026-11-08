@@ -132,10 +132,10 @@ table.ints { margin-bottom: 14px; }
 .int-next { font-size: 14px; color: var(--muted); text-align: right; min-width: 160px; }
 
 .tiles { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.35fr 1fr 1fr; gap: 12px; }
-.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; position: relative; overflow: hidden; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; position: relative; overflow: hidden; container-type: inline-size; min-width: 0; }
 .t-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
-.t-val { font-size: clamp(40px, 5.4vw, 80px); font-weight: 750; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
-.tile.power .t-val { font-size: clamp(56px, 8.5vw, 120px); }
+.t-val { font-size: min(80px, 40cqi); font-weight: 750; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.tile.power .t-val { font-size: min(120px, 42cqi); }
 .t-sub { font-size: 15px; color: var(--muted); min-height: 20px; font-variant-numeric: tabular-nums; }
 .unit { font-size: .4em; color: var(--muted); margin-left: 2px; letter-spacing: 0; }
 .tile.power.low { box-shadow: inset 0 -5px 0 var(--z2); }
@@ -145,6 +145,9 @@ table.ints { margin-bottom: 14px; }
 @keyframes flash { from { background: #3a1f17; } }
 .tile.gear.dim { opacity: .45; }
 
+.ride-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 12px; }
+.ride-body.with-segs { grid-template-columns: 1fr 330px; }
+.ride-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .chart { width: 100%; flex: 1; min-height: 140px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
 .ride-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .hints { font-size: 12.5px; color: var(--muted); }
@@ -174,7 +177,7 @@ table.ints { margin-bottom: 14px; }
 .sync-form { grid-template-columns: 110px 1fr; }
 .sync-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; font-size: 13px; }
 
-.t-val.combo { font-size: clamp(32px, 4.2vw, 62px); padding: 10px 0 8px; white-space: nowrap; }
+.t-val.combo { font-size: min(62px, 25cqi); padding: 10px 0 8px; white-space: nowrap; }
 .gearviz { height: 26px; display: block; margin-bottom: 2px; max-width: 100%; }
 button.danger { color: var(--bad); border-color: #4a2026; }
 
@@ -220,3 +223,23 @@ button.danger { color: var(--bad); border-color: #4a2026; }
 .cal-detail p { font-size: 13.5px; line-height: 1.45; }
 .cal-ride { font-size: 13px; padding: 8px 0; border-top: 1px solid var(--line); color: var(--good); }
 .cal-ride b { color: var(--text); }
+
+/* ERG: gears and grade are irrelevant */
+.tiles.erg { grid-template-columns: 1.6fr 1fr 1fr 1fr; }
+.tiles.erg .tile.gear, .tiles.erg .tile.grade { display: none; }
+
+/* ---------- segment list ---------- */
+.segs { display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow-y: auto; padding: 6px; }
+.ride-body.with-segs .segs { display: block; }
+.seg { position: relative; display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 10px 8px 12px; border-radius: 9px; border-left: 4px solid var(--c); margin-bottom: 4px; background: var(--panel2); overflow: hidden; }
+.seg.todo { background: transparent; }
+.seg.done { opacity: .78; }
+.seg.current { background: #2a1d18; box-shadow: inset 0 0 0 1px #5a3326; }
+.seg-name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.seg-tgt { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.seg-r { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.seg-r .big { font-size: 15px; font-weight: 650; color: var(--text); }
+.seg-r .muted { font-size: 12px; }
+.seg .check { color: var(--good); font-weight: 700; }
+.seg .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); }
+.seg-head { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 6px 8px 8px; display: flex; justify-content: space-between; }

@@ -40,6 +40,7 @@ That makes trainer power equal road force × virtual speed. The app learns two v
     { "dur": 600, "from": 0.45, "to": 0.70, "label": "Warm-up" },
     { "repeat": 5, "steps": [ { "dur": 240, "power": 1.12, "cadence": "95-105" }, { "dur": 240, "power": 0.5 } ] },
     { "dur": 360, "grade": 6, "text": "Slope step: grade in %" },
+    { "dist": 1500, "grade": 6, "text": "Slope step by distance (metres)" },
     { "dur": 300, "free": true }
   ] }
 ```

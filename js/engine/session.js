@@ -1,8 +1,8 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { VirtualBike, DevEstimator, TrainerModel, G } from './physics.js';
-import { flatten, segmentAt, segTarget } from './workout.js';
+import { VirtualBike, DevEstimator, G } from './physics.js';
+import { flatten, segTarget } from './workout.js';
 import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js';
 import { Emitter } from '../ble/base.js';
 
@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS = {
   crr: 0.004,
   wheelCirc: 2.105,
   realDev: 5.1,          // metres per crank rev the trainer sees (learned)
-  trainerModel: { m: 75, c1: 0, c3: 0 }, // how the trainer responds in sim mode (learned)
+  trainerMassKg: 75,     // mass the trainer assumes in sim mode (feedforward)
   maxSendGrade: 0.25,
   minSendGrade: -0.15,
   gradeScale: 1.0,       // 1.0 = full realism (Zwift default is 0.5)
@@ -36,8 +36,8 @@ export class Session extends Emitter {
     this.name = name || workout?.name || 'Free slope';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);
-    this.tm = new TrainerModel(this.s.trainerModel);
-    this.gradeHist = [];
+    this.gOff = this.s.gradeTrim || 0; // closed-loop grade correction (learned per ride)
+    this.cadHist = [];
 
     this.intensity = 1.0;
     this.gradeOffset = 0;      // manual grade in free ride (fraction)
@@ -46,7 +46,10 @@ export class Session extends Emitter {
     this.started = false;
     this.finished = false;
     this.elapsed = 0;          // active seconds
-    this.segOffset = 0;        // time shift from skipped intervals
+    this.segI = 0;             // current segment
+    this.segT0 = 0;            // elapsed time when it started
+    this.segD0 = 0;            // distance when it started
+    this.segAgg = [];          // running per-segment stats
     this.grade = 0;            // smoothed virtual grade being ridden
     this.altitude = 100;
     this.samples = [];
@@ -76,10 +79,9 @@ export class Session extends Emitter {
   }
   toggleErg() { this.ergOff = !this.ergOff; this.emit('change'); }
   skip() {
-    if (!this.segs) return;
-    const t = this.elapsed + this.segOffset;
-    const i = segmentAt(this.segs, t);
-    if (i >= 0) { this.segOffset += this.segs[i].end - t; this.emit('change'); }
+    if (!this.seg) return;
+    this._advance();
+    this.emit('change');
   }
   lap() {
     const n = this.samples.length;
@@ -94,9 +96,23 @@ export class Session extends Emitter {
   }
 
   // ---------- derived ----------
-  get workoutTime() { return this.elapsed + this.segOffset; }
-  get segIndex() { return this.segs ? segmentAt(this.segs, this.workoutTime) : -1; }
+  get workoutTime() { return this.elapsed; }
+  get segIndex() { return this.segs && this.segI < this.segs.length ? this.segI : -1; }
   get seg() { const i = this.segIndex; return i >= 0 ? this.segs[i] : null; }
+  get segElapsed() { return this.elapsed - this.segT0; }
+  get segDist() { return this.bike.dist - this.segD0; }
+  /** 0..1 through the current segment, by distance for distance steps, else by time. */
+  get segProgress() { const g = this.seg; if (!g) return 1; return g.dist ? this.segDist / g.dist : this.segElapsed / g.dur; }
+  /** Remaining in the current segment: { sec } or { m }. */
+  get segRemaining() { const g = this.seg; if (!g) return null; return g.dist ? { m: Math.max(0, g.dist - this.segDist) } : { sec: Math.max(0, g.dur - this.segElapsed) }; }
+  /** Position on the workout chart's time axis (uses estimated durations for distance steps). */
+  get chartPos() {
+    const g = this.seg;
+    if (g) return g.start + Math.min(1, this.segProgress) * g.dur;
+    const last = this.segs?.at(-1);
+    return last ? last.end + (this.elapsed - this.segT0) : this.elapsed;
+  }
+  _advance() { this.segI++; this.segT0 = this.elapsed; this.segD0 = this.bike.dist; this.emit('segment', this.segI); }
   get power3s() { const b = this.powerBuf; return b.length ? b.reduce((a, x) => a + x, 0) / b.length : 0; }
   get ratio() { return this.gb.ratio; }
 
@@ -119,11 +135,12 @@ export class Session extends Emitter {
     this.elapsed += dt;
 
     // ---- what are we riding right now? ----
+    while (this.seg && this.segProgress >= 1) this._advance();
     const seg = this.seg;
     let targetGrade = this.gradeOffset;
     let ergTarget = null;
     if (seg) {
-      if (seg.kind === 'erg' && !this.ergOff) ergTarget = segTarget(seg, this.workoutTime) * this.s.ftp * this.intensity;
+      if (seg.kind === 'erg' && !this.ergOff) ergTarget = segTarget(seg, this.segProgress) * this.s.ftp * this.intensity;
       else if (seg.kind === 'sim') targetGrade = (seg.free ? 0 : seg.grade) + this.gradeOffset;
     } else if (this.segs && !this.workoutDone) {
       this.workoutDone = true;
@@ -151,14 +168,26 @@ export class Session extends Emitter {
       this.target = null;
       const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
       const k = this.bike.dev(this.ratio) / this.devEst.dev;
-      let gs = res.engaged ? this.tm.gradeFor(k * res.force, Math.max(trainerV, 2)) : this.s.minSendGrade;
+      const vr = Math.max(trainerV, 2);
+      let gs = this.s.minSendGrade;
+      if (res.engaged) {
+        // feedforward: the grade that makes trainer force x its speed = road force x virtual speed
+        const ff = (k * res.force) / (this.s.trainerMassKg * G);
+        // feedback: slowly trim the grade until measured power matches the virtual demand.
+        // This cancels whatever the trainer adds on its own (built-in drag, different mass).
+        this.cadHist.push(cadence);
+        if (this.cadHist.length > 8) this.cadHist.shift();
+        const cadSteady = this.cadHist.length === 8 && Math.max(...this.cadHist) - Math.min(...this.cadHist) < 6;
+        const demand = res.force * res.v;
+        if (cadSteady && power > 15 && cadence > 30) {
+          const err = demand - power;
+          this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / 4);
+          this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
+        }
+        gs = ff + this.gOff;
+      } else this.cadHist = [];
       this.maxed = gs > this.s.maxSendGrade;
       gs = Math.max(this.s.minSendGrade, Math.min(this.s.maxSendGrade, gs));
-      // learn the trainer's response from steady moments (same grade for the last ~2 s)
-      this.gradeHist.push(this.lastSentGrade);
-      if (this.gradeHist.length > 8) this.gradeHist.shift();
-      const steady = this.gradeHist.length === 8 && Math.max(...this.gradeHist) - Math.min(...this.gradeHist) < 0.004;
-      if (res.engaged && steady && cadence > 30) this.tm.update(power, this.lastSentGrade, trainerV);
       this.lastSentGrade = gs;
       this.trainer.setGrade(gs);
     }
@@ -172,14 +201,22 @@ export class Session extends Emitter {
         t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
         speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
         grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
-        wt: this.workoutTime,
+        wt: this.workoutTime, wx: this.chartPos, si: this.segIndex, st: Math.round(this.segElapsed),
       });
+      this._aggregate(this.samples.at(-1));
     }
     this.emit('tick');
   }
 
+  _aggregate(x) {
+    if (x.si < 0) return;
+    const a = (this.segAgg[x.si] ||= { n: 0, p: 0, hr: 0, hrN: 0, cad: 0 });
+    a.n++; a.p += x.power; a.cad += x.cadence;
+    if (x.hr) { a.hr += x.hr; a.hrN++; }
+  }
+
   /** Learned calibration values to persist into settings after a ride. */
-  learned() { return { realDev: this.devEst.dev, trainerModel: this.tm.toJSON() }; }
+  learned() { return { realDev: this.devEst.dev, gradeTrim: Math.round(this.gOff * 1000) / 1000 }; }
 }
 
 export { G };

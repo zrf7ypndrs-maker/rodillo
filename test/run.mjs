@@ -9,6 +9,7 @@ import { powerAt } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
 import fs from 'node:fs';
+import { buildRide } from '../js/stats.js';
 
 const require = createRequire(import.meta.url);
 const { Decoder, Stream } = require('@garmin/fitsdk');
@@ -75,7 +76,7 @@ test('Virtual gearbox: trainer power matches virtual bike physics', () => {
   ride(s, trainer, hr, 900);
   const v = s.bike.v, p = trainer.data.power;
   const expected = powerAt(v, s.grade, s.s);
-  console.log(`   gear ${s.gb.label}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} model ${JSON.stringify(s.tm.toJSON())}`);
+  console.log(`   gear ${s.gb.label}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} trim ${(s.gOff*100).toFixed(1)}%`);
   assert.ok(Math.abs(s.devEst.dev - 5.4) < 0.1, 'learns real development');
   assert.ok(Math.abs(p - expected) / expected < 0.08, 'trainer power within 8% of physics');
   // shifting harder at the same power lowers cadence
@@ -197,8 +198,29 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   trainer.riderPower = 200;
   ride(s, trainer, hr, 300);
   const v = s.bike.v * 3.6, expected = powerAt(s.bike.v, 0, s.s);
-  console.log(`   ${s.gb.label} at 200 W: ${v.toFixed(1)} km/h, ${trainer.data.cadence.toFixed(0)} rpm, physics says ${expected.toFixed(0)} W, model ${JSON.stringify(s.tm.toJSON())}`);
+  console.log(`   ${s.gb.label} at 200 W: ${v.toFixed(1)} km/h, ${trainer.data.cadence.toFixed(0)} rpm, physics says ${expected.toFixed(0)} W, trim ${(s.gOff*100).toFixed(1)}%`);
   assert.ok(Math.abs(trainer.data.power - expected) / expected < 0.1, 'trainer power matches road physics on the flat');
   assert.ok(v > 30 && v < 37, `flat speed at 200 W ${v}`);
   console.log('ok - light gears are light (trainer drag compensated)');
+}
+{
+  // distance-based slope steps advance by distance; per-segment stats accumulate
+  const w = JSON.parse(fs.readFileSync(new URL('../workouts/sim-hill-repeats-1500.json', import.meta.url)));
+  const trainer = new SimTrainer();
+  const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { drivetrain: 'road-2x12-shimano-50-34' }, workout: w });
+  s.start(); trainer.riderPower = 230;
+  ride(s, trainer, hr, 610);
+  assert.equal(s.segIndex, 1); assert.equal(s.seg.dist, 1500);
+  const d0 = s.segD0;
+  while (s.segIndex === 1) ride(s, trainer, hr, 1);
+  assert.ok(Math.abs(s.bike.dist - d0 - 1500) < 15, `climb ended after ${(s.bike.dist - d0).toFixed(0)} m`);
+  const a = s.segAgg[1];
+  assert.ok(a.n > 100 && Math.abs(a.p / a.n - 230) < 25, `avg power on climb ${a.p / a.n}`);
+  s.skip(); assert.equal(s.segIndex, 3);
+  ride(s, trainer, hr, 20);
+  s.finish();
+  const ints = buildRide(s.samples, { name: w.name, ftp: 200, startMs: Date.now(), segs: s.segs }).intervals;
+  assert.ok(ints.find((x) => x.i === 1 && x.dist === 1500 && x.avgP > 200));
+  console.log(`ok - distance segments (climb 1 took ${a.n}s at ${Math.round(a.p / a.n)} W)`);
 }

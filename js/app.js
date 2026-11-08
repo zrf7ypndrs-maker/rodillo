@@ -194,7 +194,9 @@ function profileSvg(w, width = 340, height = 54) {
 
 const isSim = (w) => flatten(w).some((s) => s.kind === 'sim');
 function woMeta(w) {
+  const dist = flatten(w).filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
   const mins = Math.round(totalDuration(w) / 60);
+  if (dist) return `${(dist / 1000).toFixed(1)} km of climbing steps &middot; ~${mins} min`;
   const tss = estimateTSS(w);
   return `${mins} min${isSim(w) ? '' : ` &middot; TSS ~${tss}`}`;
 }
@@ -796,6 +798,40 @@ function renderRideStatus() {
     (app.session?.maxed ? '<span class="pill off">Max resistance</span>' : '');
 }
 
+const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
+const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
+
+function renderSegList(s) {
+  const body = $('#r-body');
+  body.classList.toggle('with-segs', !!s.segs);
+  if (!s.segs) return;
+  const ftp = app.settings.ftp, cur = s.segIndex < 0 ? s.segs.length : s.segIndex;
+  const doneN = Math.min(cur, s.segs.length);
+  const rows = s.segs.map((g, i) => {
+    const state = i < cur ? 'done' : i === cur ? 'current' : 'todo';
+    const color = g.kind === 'erg' ? zoneHex((g.from + g.to) / 2) : gradeHex(g.grade);
+    const tgtW = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * ftp * s.intensity)} W` : `${Math.round(g.from * ftp * s.intensity)}-${Math.round(g.to * ftp * s.intensity)} W`) : `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`;
+    const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
+    const a = s.segAgg[i];
+    const avgP = a?.n ? Math.round(a.p / a.n) : null, avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
+    let right;
+    if (state === 'todo') right = `<span class="big">${segAmount(g)}</span>`;
+    else if (!avgP) right = state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
+    else {
+      const pct = g.kind === 'erg' && !s.ergOff ? ` <span class="pct ${avgP / ((g.from + g.to) / 2 * ftp * s.intensity) < 0.95 ? 'low' : 'ok'}">${Math.round((avgP / ((g.from + g.to) / 2 * ftp * s.intensity)) * 100)}%</span>` : '';
+      right = `<span class="big">${avgP} W</span>${pct}<br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : ''}</span>`;
+    }
+    const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
+    return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)}</div></div><div class="seg-r">${right}</div>${bar}</div>`;
+  });
+  const el = $('#r-segs');
+  el.innerHTML = `<div class="seg-head"><span>Segments</span><span>${doneN}/${s.segs.length} done</span></div>` + rows.join('');
+  if (app._segI !== cur) {
+    app._segI = cur;
+    el.querySelector('.seg.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
 function gearViz(gb) {
   if (gb.seq) return `gear ${gb.rear + 1}/${gb.nRear} &middot; ratio ${gb.ratio.toFixed(2)}`;
   const cogs = gb.cogsEasyFirst, max = cogs[0];
@@ -837,17 +873,18 @@ function renderRide() {
   $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
 
   // interval card
+  $('.tiles').classList.toggle('erg', s.mode === 'erg');
   const seg = s.seg;
   const card = $('#r-interval');
   if (seg) {
-    const left = seg.end - s.workoutTime;
-    const tgt = seg.kind === 'erg' ? segTarget(seg, s.workoutTime) : null;
+    const rem = s.segRemaining;
+    const tgt = seg.kind === 'erg' ? segTarget(seg, s.segProgress) : null;
     card.style.borderLeftColor = seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade);
     $('#r-int-label').textContent = `${seg.label}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`;
     $('#r-int-text').textContent = seg.text || (seg.kind === 'erg' ? `${Math.round(tgt * 100)}% FTP` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}% grade, use your gears`);
-    $('#r-int-left').textContent = fmtTime(left);
+    $('#r-int-left').textContent = rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m);
     const next = s.segs[s.segIndex + 1];
-    $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${fmtTime(next.dur)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`}</b>` : 'Last interval';
+    $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${segAmount(next)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`}</b>` : 'Last interval';
   } else {
     card.style.borderLeftColor = '#3d8bfd';
     $('#r-int-label').textContent = s.segs ? 'Workout complete' : `Free slope: ${fmtGradeSet(s)}`;
@@ -855,6 +892,7 @@ function renderRide() {
     $('#r-int-left').textContent = '';
     $('#r-int-next').textContent = '';
   }
+  renderSegList(s);
 
   $('#r-paused').classList.toggle('hidden', !s.paused);
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
@@ -872,7 +910,7 @@ function sizeChart() {
   canvas.width = Math.max(300, r.width * devicePixelRatio);
   canvas.height = Math.max(100, r.height * devicePixelRatio);
 }
-window.addEventListener('resize', () => { if (app.screen === 'ride') { sizeChart(); drawChart(); } });
+new ResizeObserver(() => { if (app.screen === 'ride') { sizeChart(); drawChart(); } }).observe(canvas);
 
 function drawChart() {
   const s = app.session;
@@ -889,7 +927,7 @@ function drawChart() {
   const Yp = (p) => H - pad - (Math.min(p, maxP) / maxP) * plotH;
 
   if (s.segs) {
-    const T = Math.max(s.segs[s.segs.length - 1].end, s.workoutTime + 1);
+    const T = Math.max(s.segs[s.segs.length - 1].end, s.chartPos + 1);
     const X = (t) => (t / T) * W;
     for (const g of s.segs) {
       if (g.kind === 'erg') {
@@ -909,9 +947,9 @@ function drawChart() {
     ctx.fillStyle = '#8b93a1'; ctx.fillText(`FTP ${ftp}`, 6 * dpr, Yp(ftp) - 4 * dpr);
     // power trace
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
-    s.samples.forEach((x, i) => { const px = X(x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
     ctx.stroke();
-    ctx.fillStyle = '#ff5a36'; ctx.fillRect(X(s.workoutTime) - dpr, 0, 2 * dpr, H);
+    ctx.fillStyle = '#ff5a36'; ctx.fillRect(X(s.chartPos) - dpr, 0, 2 * dpr, H);
     return;
   }
 
@@ -952,7 +990,7 @@ function renderSettings() {
   f.innerHTML = FIELDS.map(([k, label, step, mult = 1, help, offset = 0]) => k === 'section'
     ? `<div class="section">${label}</div>`
     : `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`).join('') +
-    `<div class="help" id="tm-line">Trainer response model (learned while riding): mass ${(app.settings.trainerModel?.m ?? 75)} kg, built-in rolling ${(app.settings.trainerModel?.c1 ?? 0)} N, built-in aero ${(app.settings.trainerModel?.c3 ?? 0)} kg/m. <a href="#" id="tm-reset">Reset</a></div>
+    `<div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>
      <div class="section">Gearing</div>
      <label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
      <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
@@ -960,7 +998,7 @@ function renderSettings() {
      <label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
      <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`;
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
-  $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.trainerModel = { ...DEFAULT_SETTINGS.trainerModel }; app.settings.realDev = DEFAULT_SETTINGS.realDev; ls.set('settings', app.settings); renderSettings(); };
+  $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; ls.set('settings', app.settings); renderSettings(); };
   $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {

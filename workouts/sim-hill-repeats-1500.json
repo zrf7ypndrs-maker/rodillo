@@ -1,0 +1,39 @@
+{
+  "id": "sim-hill-repeats-1500",
+  "name": "Hill repeats 5 x 1.5 km at 6%",
+  "tags": [
+    "sim",
+    "climb",
+    "distance"
+  ],
+  "description": "Distance-based climbs: each rep ends at the top, not on a timer, so a stronger effort finishes sooner. Aim for ~105% FTP, seated, 75-85 rpm, and shift to keep cadence. Recover on 2 km of flat between reps.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 1,
+      "label": "Warm-up roll"
+    },
+    {
+      "repeat": 5,
+      "steps": [
+        {
+          "dist": 1500,
+          "grade": 6,
+          "label": "Climb",
+          "cadence": "75-85",
+          "text": "Seated, ~105% FTP"
+        },
+        {
+          "dist": 2000,
+          "grade": 0,
+          "label": "Flat recovery"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

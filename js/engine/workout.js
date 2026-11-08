@@ -9,9 +9,14 @@
 //     { "dur": 300, "power": 0.65 },                                    // ERG steady
 //     { "repeat": 5, "steps": [ { "dur": 240, "power": 1.05 }, { "dur": 240, "power": 0.50 } ] },
 //     { "dur": 360, "grade": 7, "cadence": "60-70", "text": "Seated grind" }, // SIM: grade in %
-//     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0% unless a route is loaded
+//     { "dist": 1500, "grade": 6 },                                   // SIM step by distance (metres)
+//     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0%
 //   ]
 // }
+
+import { speedForPower } from './physics.js';
+
+const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
 
 export function flatten(workout) {
   const out = [];
@@ -22,7 +27,8 @@ export function flatten(workout) {
         continue;
       }
       const seg = {
-        dur: Number(s.dur),
+        dur: s.dur != null ? Number(s.dur) : null,
+        dist: s.dist != null ? Number(s.dist) : null,
         label: s.label || defaultLabel(s),
         text: s.text || '',
         cadence: s.cadence || '',
@@ -32,6 +38,12 @@ export function flatten(workout) {
       else if (s.free) { seg.kind = 'sim'; seg.grade = 0; seg.free = true; }
       else if (s.from !== undefined) { seg.kind = 'erg'; seg.from = Number(s.from); seg.to = Number(s.to); }
       else { seg.kind = 'erg'; seg.from = seg.to = Number(s.power); }
+      if (seg.dur == null && seg.dist) {
+        // distance step: estimate its duration (for charts and totals) at a steady ~180 W
+        const v = speedForPower(seg.kind === 'erg' ? seg.from * 200 : 180, seg.kind === 'sim' ? seg.grade : 0, EST);
+        seg.dur = Math.round(seg.dist / Math.max(v, 1));
+        seg.estDur = true;
+      }
       out.push(seg);
     }
   };
@@ -42,7 +54,7 @@ export function flatten(workout) {
 }
 
 function defaultLabel(s) {
-  if (s.grade !== undefined) return `${s.grade}% climb`;
+  if (s.grade !== undefined) return s.grade > 2 ? `${s.grade}% climb` : s.grade < 0 ? 'Descent' : 'Flat';
   if (s.free) return 'Free ride';
   if (s.from !== undefined) return s.from < s.to ? 'Ramp up' : 'Ramp down';
   const p = Number(s.power);
@@ -60,12 +72,14 @@ export function totalDuration(workout) {
   return segs.length ? segs[segs.length - 1].end : 0;
 }
 
-/** Target as a fraction of FTP at time t within an ERG segment. */
-export function segTarget(seg, t) {
+/** Target as a fraction of FTP at progress p (0..1) through an ERG segment. */
+export function segTarget(seg, p) {
   if (seg.kind !== 'erg') return null;
-  const x = Math.min(1, Math.max(0, (t - seg.start) / seg.dur));
+  const x = Math.min(1, Math.max(0, p));
   return seg.from + (seg.to - seg.from) * x;
 }
+
+export const hasDistance = (w) => flatten(w).some((s) => s.dist);
 
 export function segmentAt(segs, t) {
   for (let i = 0; i < segs.length; i++) if (t < segs[i].end) return i;
