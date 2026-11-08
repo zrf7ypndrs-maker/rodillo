@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082251';
-import { HeartRate } from './ble/hr.js?v=202611082251';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082251';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082251';
-import { log, logMsg } from './ble/base.js?v=202611082251';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082251';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082251';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082251';
-import { encodeActivity } from './fit.js?v=202611082251';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082251';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082251';
-import { ls, rides } from './store.js?v=202611082251';
+import { Trainer } from './ble/trainer.js?v=202611082319';
+import { HeartRate } from './ble/hr.js?v=202611082319';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082319';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082319';
+import { log, logMsg } from './ble/base.js?v=202611082319';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082319';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082319';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082319';
+import { encodeActivity } from './fit.js?v=202611082319';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082319';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082319';
+import { ls, rides } from './store.js?v=202611082319';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -600,6 +600,7 @@ function beginSession(opts) {
   $('#r-name').textContent = s.name;
   sizeChart(); sizePhoneChart();
   $('#rp-sheet').classList.add('hidden');
+  app._rpSegI = undefined;
   navigator.wakeLock?.request('screen').then((l) => (wakeLock = l)).catch(() => {});
   renderRide();
 }
@@ -934,6 +935,17 @@ function renderSegList(s) {
   const body = $('#r-body');
   body.classList.toggle('with-segs', !!s.segs);
   if (!s.segs) return;
+  const { rows, cur, doneN } = segRows(s);
+  const el = $('#r-segs');
+  el.innerHTML = `<div class="seg-head"><span>Segments</span><span>${doneN}/${s.segs.length} done</span></div>` + rows.join('');
+  if (app._segI !== cur) {
+    app._segI = cur;
+    el.querySelector('.seg.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
+/** Segment rows shared by the desktop sidebar and the phone list view. */
+function segRows(s) {
   const ftp = app.settings.ftp, cur = s.segIndex < 0 ? s.segs.length : s.segIndex;
   const doneN = Math.min(cur, s.segs.length);
   const rows = s.segs.map((g, i) => {
@@ -959,12 +971,7 @@ function renderSegList(s) {
     const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
     return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${right}</div>${bar}</div>`;
   });
-  const el = $('#r-segs');
-  el.innerHTML = `<div class="seg-head"><span>Segments</span><span>${doneN}/${s.segs.length} done</span></div>` + rows.join('');
-  if (app._segI !== cur) {
-    app._segI = cur;
-    el.querySelector('.seg.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }
+  return { rows, cur, doneN };
 }
 
 function gearViz(gb) {
@@ -1231,13 +1238,53 @@ function renderPhone(s) {
   if (app.endArmed && Date.now() - app.endArmed > 3000) app.endArmed = 0;
   set('rp-end', app.endArmed ? 'Tap again to end ride' : 'End ride');
 
+  renderPhoneView(s);
   drawPhoneChart();
 }
+
+// Chart vs list for the workout area. Remembered across rides; switchable mid-ride.
+app.phoneView = ls.get('phoneView', 'chart') === 'list' ? 'list' : 'chart';
+const phoneList = (s) => !!s?.segs && app.phoneView === 'list';
+
+function renderPhoneView(s) {
+  const wrap = $('#rp-wrap'), list = phoneList(s);
+  wrap.classList.toggle('no-segs', !s.segs);
+  wrap.classList.toggle('as-list', list);
+  for (const b of $('#rp-view-tg').children) b.classList.toggle('on', b.dataset.view === (list ? 'list' : 'chart'));
+  if (!s.segs) return;
+  const n = s.segs.length, done = Math.min(s.segIndex < 0 ? n : s.segIndex, n);
+  const k = `Workout &middot; ${done}/${n} done`;
+  const kEl = $('#rp-view-k');
+  if (kEl.innerHTML !== k) kEl.innerHTML = k;
+  if (!list) return;
+  const { rows, cur } = segRows(s);
+  const el = $('#rp-segs'), html = rows.join('');
+  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+  if (app._rpSegI !== cur) { // keep the current interval centred when it changes (or the list was just opened)
+    const jump = app._rpSegI === undefined;
+    app._rpSegI = cur;
+    const row = el.querySelector('.seg.current') || el.lastElementChild;
+    if (row) el.scrollTo({ top: Math.max(0, row.offsetTop - (el.clientHeight - row.offsetHeight) / 2), behavior: jump ? 'auto' : 'smooth' });
+  }
+}
+
+$('#rp-view-tg').onclick = (e) => {
+  const v = e.target.closest('button')?.dataset.view;
+  if (!v || v === app.phoneView) return;
+  e.preventDefault();
+  app.phoneView = v;
+  ls.set('phoneView', v);
+  app._rpSegI = undefined;
+  if (app.screen === 'ride' && app.session) {
+    renderPhoneView(app.session);
+    if (v === 'chart') { sizePhoneChart(); drawPhoneChart(); }
+  }
+};
 
 /** Workout bars like Zwift: solid zone-coloured blocks, done part dimmed under the power trace. */
 function drawPhoneChart() {
   const s = app.session;
-  if (!s || !isPhone()) return;
+  if (!s || !isPhone() || phoneList(s)) return;
   const ctx = rpCanvas.getContext('2d');
   const W = rpCanvas.width, H = rpCanvas.height, dpr = devicePixelRatio;
   ctx.clearRect(0, 0, W, H);

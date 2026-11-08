@@ -9,7 +9,7 @@
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=202611082251">
+<link rel="stylesheet" href="css/app.css?v=202611082319">
 </head>
 <body>
 <div id="app">
@@ -126,7 +126,16 @@
         <div class="rp-m" id="rp-cad-box"><span class="rp-k">Cadence</span><span class="rp-v" id="rp-cad">0</span><span class="rp-s" id="rp-cad-sub"></span></div>
         <div class="rp-m"><span class="rp-k" id="rp-m3-k">Effort</span><span class="rp-v" id="rp-m3">100%</span><span class="rp-s" id="rp-m3-sub"></span></div>
       </div>
-      <div class="rp-chart-wrap"><canvas id="rp-chart" class="rp-chart"></canvas></div>
+      <div class="rp-chart-wrap" id="rp-wrap">
+        <div class="rp-view-head">
+          <span class="rp-k" id="rp-view-k">Workout</span>
+          <div class="rp-view-tg" id="rp-view-tg">
+            <button data-view="chart" aria-label="Show chart">Chart</button>
+            <button data-view="list" aria-label="Show list">List</button>
+          </div>
+        </div>
+        <div class="rp-view-body"><canvas id="rp-chart" class="rp-chart"></canvas><div class="rp-segs" id="rp-segs"></div></div>
+      </div>
       <div class="rp-next" id="rp-next"></div>
       <div class="rp-btns">
         <button id="rp-minus" aria-label="Easier">&minus;1%</button>
@@ -237,6 +246,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611082251"></script>
+<script type="module" src="js/app.js?v=202611082319"></script>
 </body>
 </html>
