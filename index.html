@@ -39,7 +39,7 @@
         <div class="dev-meta"></div>
         <div class="row-btns">
           <button class="primary small" data-connect="controller">Connect</button>
-          <button class="ghost small hidden" data-connect="controller2">+ Other side</button>
+          <button class="ghost small" data-connect="controller2" title="Show every Zwift device">Not listed?</button>
         </div>
       </div>
       <div class="device demo">
@@ -139,8 +139,9 @@
       <div class="stats" id="s-stats"></div>
       <div id="s-extra"></div>
       <div class="row-btns">
-        <button class="primary" id="s-fit">Download .FIT</button>
-        <button class="ghost" id="s-home">Done</button>
+        <button class="primary" id="s-home">Save ride</button>
+        <button class="ghost" id="s-fit">Download .FIT</button>
+        <button class="ghost danger" id="s-discard">Discard</button>
       </div>
       <p class="muted small-print" id="s-sync"></p>
       <p class="muted small-print">Upload the .FIT to Strava or Garmin Connect. It's saved as a virtual ride.</p>
@@ -161,8 +162,8 @@
     <h4>Controls</h4>
     <table class="keys">
       <tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>
-      <tr><td>Easier gear</td><td>Left shifter / paddle</td><td>&larr;</td></tr>
-      <tr><td>Harder gear</td><td>Right shifter / paddle</td><td>&rarr;</td></tr>
+      <tr><td>Rear: easier / harder</td><td>SRAM: left / right side. Shimano: right shift-down / shift-up</td><td>&larr; / &rarr;</td></tr>
+      <tr><td>Front shift (2x)</td><td>SRAM: left + right together. Shimano: left shift-up / shift-down</td><td>F</td></tr>
       <tr><td>ERG intensity or grade &plusmn;1% (hold to repeat)</td><td>D-pad up / down</td><td>&uarr; / &darr;</td></tr>
       <tr><td>Start / pause</td><td>A</td><td>Space</td></tr>
       <tr><td>End ride (press twice)</td><td>B</td><td>Esc</td></tr>

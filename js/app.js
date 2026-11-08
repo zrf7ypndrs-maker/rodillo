@@ -4,7 +4,7 @@ import { ZwiftRide } from './ble/zwiftride.js';
 import { SimTrainer, SimHr } from './ble/sim.js';
 import { log, logMsg } from './ble/base.js';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js';
-import { GEAR_RATIOS } from './engine/physics.js';
+import { DRIVETRAINS } from './engine/drivetrain.js';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js';
 import { encodeActivity } from './fit.js';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js';
@@ -64,12 +64,14 @@ async function connect(kind) {
       await h.pick(HeartRate.requestOptions());
       ls.set('dev.hr', h.device.id);
     } else {
+      for (const old of app.controllers) old.disconnect();
+      app.controllers = [];
       const c = new ZwiftRide();
       bindDevice(c);
       c.on('press', (b) => onButton(b));
       c.on('release', onRelease);
       app.controllers.push(c);
-      await c.pick(ZwiftRide.requestOptions());
+      await c.pick(ZwiftRide.requestOptions(kind === 'controller2'));
       ls.set('dev.controllers', app.controllers.map((x) => x.device?.id).filter(Boolean));
     }
   } catch (e) {
@@ -144,7 +146,7 @@ function renderDevices() {
   const ctl = app.controllers.find((c) => c.state === 'connected') || app.controllers[0];
   const names = app.controllers.filter((c) => c.state === 'connected').map((c) => c.name);
   card('controller', ctl, names.length > 1 ? `<br>${names.length} connected` : '');
-  $('[data-connect="controller2"]').classList.toggle('hidden', !app.controllers.some((c) => c.state === 'connected'));
+  $('[data-connect="controller2"]').classList.toggle('hidden', app.controllers.some((c) => c.state === 'connected'));
   const fw = ctl?.info?.firmware;
   if (fw && /^(\d+)\.(\d+)/.test(fw)) {
     const [, a, b] = fw.match(/^(\d+)\.(\d+)/).map(Number);
@@ -408,7 +410,6 @@ async function endSession() {
   }
   const ride = await saveRide('done');
   showSummary(ride);
-  syncRide(ride);
 }
 
 function rideDoc(ride) {
@@ -515,9 +516,25 @@ function showSummary(ride) {
   if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
   $('#s-extra').innerHTML = extra;
   if ($('#s-setftp')) $('#s-setftp').onclick = (e) => { app.settings.ftp = Math.round(st.bests[60] * 0.75); ls.set('settings', app.settings); e.target.textContent = 'Saved'; };
-  $('#s-sync').textContent = '';
+  $('#s-sync').textContent = ride.demo ? 'Demo ride: saving keeps it on this Mac only.' : syncClient() ? 'Saving adds it to your training history in rodillo-data.' : 'Saving keeps it on this Mac. Add your GitHub token in Settings to sync it.';
   $('#s-fit').onclick = () => downloadFit(ride);
-  $('#s-home').onclick = () => { app.session = null; show('home'); if (app.tab === 'training') renderTraining(); };
+  $('#s-home').onclick = async () => {
+    app.session = null;
+    show('home');
+    if (!ride.demo && syncClient()) {
+      toast('Syncing ride...');
+      toast((await syncRide(ride)) ? 'Ride synced' : 'Sync failed, will retry next launch');
+    } else toast('Ride saved');
+    if (app.tab === 'training') renderTraining();
+  };
+  $('#s-discard').onclick = async () => {
+    if (!confirm('Discard this ride? It will not be saved or synced.')) return;
+    try { await rides.del(ride.id); } catch { /* ignore */ }
+    app.session = null;
+    show('home');
+    toast('Ride discarded');
+    if (app.tab === 'training') renderTraining();
+  };
   show('summary');
 }
 
@@ -528,6 +545,7 @@ function action(a) {
     switch (a) {
       case 'easier': s.shift(-1); break;
       case 'harder': s.shift(+1); break;
+      case 'front': if (s.gb.isDouble) s.toggleFront(); else toast('1x: no front shifting'); break;
       case 'up': s.bump(+1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
       case 'down': s.bump(-1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
       case 'select': s.togglePause(); break;
@@ -544,7 +562,7 @@ function action(a) {
     renderRide();
     return;
   }
-  if (app.screen === 'summary') { if (a === 'select' || a === 'back') $('#s-home').click(); return; }
+  if (app.screen === 'summary') { if (a === 'select') $('#s-home').click(); return; }
   // home navigation
   const items = focusables();
   switch (a) {
@@ -570,14 +588,60 @@ function action(a) {
 const fmtGradeSet = (s) => `${(s.gradeOffset * 100).toFixed(0)}%`;
 
 const BUTTON_ACTIONS = {
-  shiftUpL: 'easier', shiftDnL: 'easier', paddleL: 'easier',
-  shiftUpR: 'harder', shiftDnR: 'harder', paddleR: 'harder',
   up: 'up', down: 'down', left: 'left', right: 'right',
   a: 'select', b: 'back', y: 'skip', z: 'lap', powerUpL: 'ergToggle',
 };
+const SHIFT_BUTTONS = new Set(['shiftUpL', 'shiftDnL', 'paddleL', 'shiftUpR', 'shiftDnR', 'paddleR']);
+const isLeft = (b) => b.endsWith('L');
+
+/**
+ * Shifting styles on the Zwift Ride:
+ *  SRAM:    right side (both buttons + paddle) = harder, left side = easier,
+ *           left + right together = front shift (2x only).
+ *  Shimano: right shift-up = harder, right shift-down = easier (rear);
+ *           left shift-up = big ring, left shift-down = small ring (2x);
+ *           paddles: right harder / left easier. On 1x the left buttons also shift the rear.
+ */
+function shiftFor(b) {
+  const s = app.session;
+  const style = app.settings.shiftStyle || 'sram';
+  const double = s?.gb.isDouble;
+  if (style === 'shimano') {
+    if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
+    if (b === 'shiftDnR' || b === 'paddleL') return ['rear', -1];
+    if (b === 'shiftUpL') return double ? ['front', +1] : ['rear', +1];
+    if (b === 'shiftDnL') return double ? ['front', -1] : ['rear', -1];
+  }
+  return ['rear', isLeft(b) ? -1 : +1];
+}
+
+let pendingShift = null; // SRAM: wait briefly to see if the other side joins (front shift)
+function onShiftButton(b) {
+  const s = app.session;
+  if (app.screen !== 'ride' || !s) return action(isLeft(b) ? 'easier' : 'harder'); // menus
+  const sramFront = (app.settings.shiftStyle || 'sram') === 'sram' && s.gb.isDouble;
+  if (!sramFront) { const [kind, dir] = shiftFor(b); doShift(kind, dir); return; }
+  if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
+    clearTimeout(pendingShift.t); pendingShift = null;
+    doShift('toggle', 0);
+    return;
+  }
+  clearTimeout(pendingShift?.t);
+  pendingShift = { b, t: setTimeout(() => { pendingShift = null; doShift('rear', isLeft(b) ? -1 : +1); }, 140) };
+}
+function doShift(kind, dir) {
+  const s = app.session;
+  if (!s) return;
+  if (kind === 'rear') s.shift(dir);
+  else if (kind === 'front') s.shiftFront(dir);
+  else s.toggleFront();
+  renderRide();
+}
+
 const REPEATABLE = new Set(['up', 'down']);
 const holdTimers = {};
 function onButton(b) {
+  if (SHIFT_BUTTONS.has(b)) { logMsg('controller', b); return onShiftButton(b); }
   const a = BUTTON_ACTIONS[b];
   logMsg('controller', `${b}${a ? ' -> ' + a : ''}`);
   if (!a) return;
@@ -592,7 +656,7 @@ function onRelease(b) { clearTimeout(holdTimers[b]); delete holdTimers[b]; }
 
 document.addEventListener('keydown', (e) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
-  const map = { ArrowLeft: app.screen === 'ride' ? 'easier' : 'left', ArrowRight: app.screen === 'ride' ? 'harder' : 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'select', Enter: 'select', Escape: 'back', s: 'skip', l: 'lap', e: 'ergToggle', '[': 'easier', ']': 'harder' };
+  const map = { ArrowLeft: app.screen === 'ride' ? 'easier' : 'left', ArrowRight: app.screen === 'ride' ? 'harder' : 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'select', Enter: 'select', Escape: 'back', s: 'skip', l: 'lap', e: 'ergToggle', '[': 'easier', ']': 'harder', f: 'front' };
   if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
     app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
     toast(`Demo rider: ${app.trainer.riderPower} W`);
@@ -638,6 +702,14 @@ function renderRideStatus() {
     (app.session?.maxed ? '<span class="pill off">Max resistance</span>' : '');
 }
 
+function gearViz(gb) {
+  if (gb.seq) return `gear ${gb.rear + 1}/${gb.nRear} &middot; ratio ${gb.ratio.toFixed(2)}`;
+  const cogs = gb.cogsEasyFirst, max = cogs[0];
+  const bars = cogs.map((c, i) => `<rect x="${i * 9}" y="${22 - (c / max) * 20}" width="6" height="${(c / max) * 20}" rx="1.5" fill="${i === gb.rear ? '#ff5a36' : '#3a414c'}"/>`).join('');
+  const rings = gb.d.rings.map((r, i) => `<circle cx="${cogs.length * 9 + 10 + i * 14}" cy="12" r="${3 + (r / gb.d.rings.at(-1)) * 6}" fill="none" stroke="${i === gb.front ? '#ff5a36' : '#3a414c'}" stroke-width="2.5"/>`).join('');
+  return `<svg class="gearviz" viewBox="0 0 ${cogs.length * 9 + 14 + gb.d.rings.length * 14} 24">${bars}${rings}</svg><span>ratio ${gb.ratio.toFixed(2)}</span>`;
+}
+
 function renderRide() {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
@@ -662,8 +734,9 @@ function renderRide() {
   $('#r-cadtarget').textContent = s.seg?.cadence ? `target ${s.seg.cadence}` : '';
   const gearTile = $('.tile.gear');
   gearTile.classList.toggle('dim', s.mode === 'erg');
-  $('#r-gear').textContent = s.gear + 1;
-  $('#r-ratio').textContent = s.mode === 'erg' ? 'ERG: gears not used' : `ratio ${GEAR_RATIOS[s.gear].toFixed(2)}`;
+  $('#r-gear').textContent = s.gb.seq ? s.gb.label : s.gb.label.replace('x', '\u00d7');
+  $('#r-gear').classList.toggle('combo', !s.gb.seq);
+  $('#r-ratio').innerHTML = s.mode === 'erg' ? 'ERG: gears not used' : gearViz(s.gb);
   $('#r-grade').innerHTML = `${(s.mode === 'sim' ? s.grade * 100 : 0).toFixed(1)}<span class="unit">%</span>`;
   $('#r-gradesub').textContent = s.mode !== 'sim' ? '' : !s.seg ? 'up/down to change' : s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}%` : '';
   $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
@@ -776,7 +849,6 @@ const FIELDS = [
   ['section', 'Road feel'],
   ['gradeScale', 'Grade realism (%)', 5, 100, 'Zwift defaults to 50%. 100% = real climbs. Descents are always 100%.'],
   ['cda', 'CdA (m²)', 0.01, 1, 'Aero drag. 0.32 hoods, 0.25 drops.'], ['crr', 'Rolling resistance', 0.001],
-  ['startGear', 'Starting gear (1-24)', 1, 1, null, 1],
   ['section', 'Trainer (learned automatically)'],
   ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
   ['trainerMassKg', 'Trainer sim mass (kg)', 0.5, 1, 'Mass the trainer assumes in slope mode; learned on climbs.'],
@@ -787,12 +859,20 @@ function renderSettings() {
   f.innerHTML = FIELDS.map(([k, label, step, mult = 1, help, offset = 0]) => k === 'section'
     ? `<div class="section">${label}</div>`
     : `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`).join('') +
-    `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
+    `<div class="section">Gearing</div>
+     <label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
+     <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
+     <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>
+     <label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
      <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`;
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
+  $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
+  $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
     const el = e.target;
     if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
+    else if (el.id === 'set-dt') app.settings.drivetrain = el.value;
+    else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
     ls.set('settings', app.settings);
   };

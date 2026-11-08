@@ -111,6 +111,7 @@ table.ints { margin-bottom: 14px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .settings-form { display: grid; grid-template-columns: 1fr 120px; gap: 8px 12px; align-items: center; margin-bottom: 20px; font-size: 14px; }
 .settings-form input, .settings-form select { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 100%; }
+.settings-form select.wide-select { grid-column: 1 / -1; }
 .settings-form .help { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin-top: -4px; }
 .settings-form .section { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-top: 10px; font-weight: 600; }
 .keys { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -134,10 +135,10 @@ table.ints { margin-bottom: 14px; }
 .int-left { font-size: 44px; font-weight: 750; font-variant-numeric: tabular-nums; }
 .int-next { font-size: 14px; color: var(--muted); text-align: right; min-width: 160px; }
 
-.tiles { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1fr; gap: 12px; }
+.tiles { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.35fr 1fr 1fr; gap: 12px; }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; position: relative; overflow: hidden; }
 .t-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
-.t-val { font-size: clamp(40px, 6vw, 84px); font-weight: 750; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.t-val { font-size: clamp(40px, 5.4vw, 80px); font-weight: 750; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
 .tile.power .t-val { font-size: clamp(56px, 8.5vw, 120px); }
 .t-sub { font-size: 15px; color: var(--muted); min-height: 20px; font-variant-numeric: tabular-nums; }
 .unit { font-size: .4em; color: var(--muted); margin-left: 2px; letter-spacing: 0; }
@@ -177,3 +178,7 @@ table.ints { margin-bottom: 14px; }
 
 .sync-form { grid-template-columns: 110px 1fr; }
 .sync-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+
+.t-val.combo { font-size: clamp(32px, 4.2vw, 62px); padding: 10px 0 8px; white-space: nowrap; }
+.gearviz { height: 26px; display: block; margin-bottom: 2px; max-width: 100%; }
+button.danger { color: var(--bad); border-color: #4a2026; }

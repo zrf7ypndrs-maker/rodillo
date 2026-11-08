@@ -1,8 +1,9 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { GEAR_RATIOS, VirtualBike, DevEstimator, TrainerMassEstimator, gradeToSend, G } from './physics.js';
+import { VirtualBike, DevEstimator, TrainerMassEstimator, gradeToSend, G } from './physics.js';
 import { flatten, segmentAt, segTarget } from './workout.js';
+import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js';
 import { Emitter } from '../ble/base.js';
 
 export const DEFAULT_SETTINGS = {
@@ -16,7 +17,8 @@ export const DEFAULT_SETTINGS = {
   trainerMassKg: 75,     // mass the trainer assumes in sim mode (learned)
   maxSendGrade: 0.25,
   gradeScale: 1.0,       // 1.0 = full realism (Zwift default is 0.5)
-  startGear: 11,
+  drivetrain: DEFAULT_DRIVETRAIN,
+  shiftStyle: 'sram',     // 'sram' | 'shimano'
   ergCadenceGuard: true,
 };
 
@@ -26,6 +28,8 @@ export class Session extends Emitter {
     this.trainer = trainer;
     this.hr = hr;
     this.s = { ...DEFAULT_SETTINGS, ...settings };
+    this.gb = new Gearbox(this.s.drivetrain);
+    this.s.wheelCirc = this.gb.wheel;
     this.workout = workout;
     this.segs = workout ? flatten(workout) : null;
     this.name = name || workout?.name || 'Free slope';
@@ -33,7 +37,6 @@ export class Session extends Emitter {
     this.devEst = new DevEstimator(this.s.realDev);
     this.massEst = new TrainerMassEstimator(this.s.trainerMassKg);
 
-    this.gear = this.s.startGear;
     this.intensity = 1.0;
     this.gradeOffset = 0;      // manual grade in free ride (fraction)
     this.ergOff = false;       // rider forced sim during an ERG interval
@@ -60,10 +63,10 @@ export class Session extends Emitter {
   // ---------- controls ----------
   start() { this.started = true; this.paused = false; this.startMs ||= Date.now(); this.emit('change'); }
   togglePause() { if (!this.started) return this.start(); this.paused = !this.paused; this.emit('change'); }
-  shift(dir) {
-    const g = Math.max(0, Math.min(GEAR_RATIOS.length - 1, this.gear + dir));
-    if (g !== this.gear) { this.gear = g; this.emit('shift', g); this.emit('change'); }
-  }
+  /** Rear shift, dir +1 = harder. */
+  shift(dir) { if (this.gb.shiftRear(dir)) { this.emit('shift', this.gb.label); this.emit('change'); } }
+  shiftFront(dir) { if (this.gb.shiftFront(dir)) { this.emit('shift', this.gb.label); this.emit('change'); } }
+  toggleFront() { if (this.gb.toggleFront()) { this.emit('shift', this.gb.label); this.emit('change'); } }
   bump(dir) {
     if (this.mode === 'erg') this.intensity = Math.max(0.5, Math.min(1.5, Math.round((this.intensity + 0.01 * dir) * 100) / 100));
     else this.gradeOffset = Math.max(-0.1, Math.min(0.2, Math.round((this.gradeOffset + 0.01 * dir) * 100) / 100));
@@ -93,7 +96,7 @@ export class Session extends Emitter {
   get segIndex() { return this.segs ? segmentAt(this.segs, this.workoutTime) : -1; }
   get seg() { const i = this.segIndex; return i >= 0 ? this.segs[i] : null; }
   get power3s() { const b = this.powerBuf; return b.length ? b.reduce((a, x) => a + x, 0) / b.length : 0; }
-  get ratio() { return GEAR_RATIOS[this.gear]; }
+  get ratio() { return this.gb.ratio; }
 
   /** Called ~4x per second with dt seconds. */
   tick(dt) {
@@ -146,7 +149,7 @@ export class Session extends Emitter {
       this.target = null;
       const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
       const k = this.bike.dev(this.ratio) / this.devEst.dev;
-      let gs = res.engaged ? gradeToSend(res.force, k, this.massEst.m) : 0;
+      let gs = res.engaged ? gradeToSend(res.force, k, this.massEst.m) : -0.1;
       this.maxed = gs > this.s.maxSendGrade;
       gs = Math.max(-0.1, Math.min(this.s.maxSendGrade, gs));
       if (res.engaged) this.massEst.update(power, this.lastSentGrade, trainerV);
@@ -162,7 +165,7 @@ export class Session extends Emitter {
       this.samples.push({
         t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
         speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
-        grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: this.gear + 1,
+        grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
         wt: this.workoutTime,
       });
     }

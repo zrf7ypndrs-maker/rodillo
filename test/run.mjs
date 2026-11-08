@@ -5,7 +5,7 @@ import { decodeRideButtons } from '../js/ble/zwiftride.js';
 import { parseHr } from '../js/ble/hr.js';
 import { SimTrainer, SimHr } from '../js/ble/sim.js';
 import { Session } from '../js/engine/session.js';
-import { powerAt, GEAR_RATIOS } from '../js/engine/physics.js';
+import { powerAt } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
 import fs from 'node:fs';
@@ -68,14 +68,14 @@ test('Virtual gearbox: trainer power matches virtual bike physics', () => {
   // the "real" trainer differs from the app defaults; the app must learn it
   const trainer = new SimTrainer({ realDev: 5.4, trainerMass: 82 });
   const hr = new SimHr(trainer);
-  const s = new Session({ trainer, hr, settings: { riderKg: 77, bikeKg: 9 } });
+  const s = new Session({ trainer, hr, settings: { riderKg: 77, bikeKg: 9, drivetrain: 'zwift-24' } });
   s.gradeOffset = 0.06;
   s.start();
   trainer.riderPower = 220;
   ride(s, trainer, hr, 900);
   const v = s.bike.v, p = trainer.data.power;
   const expected = powerAt(v, s.grade, s.s);
-  console.log(`   gear ${s.gear + 1}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} mass ${s.massEst.m.toFixed(1)}`);
+  console.log(`   gear ${s.gb.label}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} mass ${s.massEst.m.toFixed(1)}`);
   assert.ok(Math.abs(s.devEst.dev - 5.4) < 0.1, 'learns real development');
   assert.ok(Math.abs(p - expected) / expected < 0.08, 'trainer power within 8% of physics');
   // shifting harder at the same power lowers cadence
@@ -144,3 +144,39 @@ test('ZWO import', () => {
 
 
 console.log(`\n${passed} tests passed`);
+
+import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
+{
+  const g = new Gearbox('road-2x12-shimano-50-34');
+  assert.equal(g.label, '50x19'); // start near 2.6 in the big ring
+  g.shiftRear(+1); assert.equal(g.label, '50x17');
+  g.toggleFront(); assert.equal(g.label, '34x17');
+  for (let i = 0; i < 20; i++) g.shiftRear(-1);
+  assert.equal(g.label, '34x34');
+  assert.ok(!g.shiftRear(-1));
+  const m = new Gearbox('mtb-1x12-sram-34');
+  assert.ok(!m.isDouble && !m.toggleFront());
+  assert.equal(m.wheel, 2.32);
+  const z = new Gearbox('zwift-24');
+  assert.equal(z.label, '12'); assert.equal(z.ratio, 2.4);
+  for (const [k, d] of Object.entries(DRIVETRAINS)) if (!d.seq) assert.equal(d.cogs.length, 12, k);
+  console.log('ok - drivetrains');
+}
+{
+  // sim session on a real drivetrain: front shift to the small ring on a climb drops resistance
+  const trainer = new SimTrainer();
+  const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { drivetrain: 'road-2x12-shimano-50-34' } });
+  s.gradeOffset = 0.08; s.start(); trainer.riderPower = 220;
+  ride(s, trainer, hr, 120);
+  const cadBig = trainer.data.cadence;
+  s.toggleFront();
+  ride(s, trainer, hr, 30);
+  assert.ok(trainer.data.cadence > cadBig * 1.3, `small ring spins faster (${cadBig.toFixed(0)} -> ${trainer.data.cadence.toFixed(0)})`);
+  console.log(`ok - front shift on a climb (${cadBig.toFixed(0)} -> ${trainer.data.cadence.toFixed(0)} rpm)`);
+  // coasting sends minimum resistance
+  trainer.riderPower = 0;
+  ride(s, trainer, hr, 10);
+  assert.equal(trainer.grade, -0.1);
+  console.log('ok - freewheel drops trainer to minimum resistance');
+}
