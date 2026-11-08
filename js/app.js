@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082329';
-import { HeartRate } from './ble/hr.js?v=202611082329';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082329';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082329';
-import { log, logMsg } from './ble/base.js?v=202611082329';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082329';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082329';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082329';
-import { encodeActivity } from './fit.js?v=202611082329';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082329';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082329';
-import { ls, rides } from './store.js?v=202611082329';
+import { Trainer } from './ble/trainer.js?v=202611082335';
+import { HeartRate } from './ble/hr.js?v=202611082335';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082335';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082335';
+import { log, logMsg } from './ble/base.js?v=202611082335';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082335';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082335';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082335';
+import { encodeActivity } from './fit.js?v=202611082335';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082335';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082335';
+import { ls, rides } from './store.js?v=202611082335';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -189,8 +189,13 @@ async function loadCoachData() {
     app.coachWorkouts = w?.json?.workouts || [];
     ls.set('coachPlan', app.coachPlan);
     ls.set('coachWorkouts', app.coachWorkouts);
+    app.coachError = null;
     applyLibrary();
-  } catch (e) { logMsg('coach', `could not load coach data: ${e.message}`); }
+  } catch (e) {
+    app.coachError = e.message;
+    logMsg('coach', `could not load coach data: ${e.message}`);
+    renderWeek();
+  }
 }
 
 /** FTP set by the coach (plan.ftp + plan.ftpSetAt) wins once per update, so Mac and phone stay in sync. */
@@ -321,7 +326,10 @@ function renderWeek() {
   const days = Array.from({ length: 14 }, (_, i) => dayInfo(dkey(addDays(start, i))));
   const today = days.find((x) => x.isToday);
   const note = (today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '') + recoveryAdvice(today);
-  el.innerHTML = `<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">this week and next</span></div>
+  const src = !syncClient()
+    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <b>Settings</b> to get the coach\'s daily changes on this device.</p>'
+    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <b>Settings</b>.</p>` : '';
+  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">this week and next</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
   const strip = $('#week-strip');

@@ -202,6 +202,8 @@ button.danger { color: var(--bad); border-color: #4a2026; }
 .d-done { font-size: 12.5px; color: var(--good); font-weight: 600; }
 .d-missed { font-size: 12.5px; color: var(--muted); }
 .day button { align-self: flex-start; margin-top: 4px; }
+.plan-src { margin: 0 2px 8px; padding: 8px 12px; border-radius: 10px; background: #2a2414; border: 1px solid #5a4a1a; color: #ffd98a; font-size: 13.5px; line-height: 1.4; }
+.plan-src b { color: #fff; }
 .week-note { font-size: 13.5px; color: var(--muted); margin: 6px 2px 0; }
 .week-note b { color: var(--text); }
 
