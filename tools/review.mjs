@@ -20,3 +20,10 @@ for (const r of rides.filter((x) => Date.parse(x.start) >= since)) {
   const d = r.decoupling != null ? ` drift ${r.decoupling}%` : '';
   console.log(`${r.id}  ${r.name.padEnd(32)} ${Math.round(r.durSec / 60)}min NP ${r.np} IF ${r.if} TSS ${r.tss} HR ${r.avgHr ?? '-'}${c}${d}  [ftp ${r.ftp}]`);
 }
+
+const wpath = path.join(dir, 'whoop', 'daily.json');
+if (fs.existsSync(wpath)) {
+  const days = Object.entries(JSON.parse(fs.readFileSync(wpath, 'utf8')).days).slice(-14);
+  console.log('\nWHOOP (last 14 days):');
+  for (const [d, v] of days) console.log(`${d}  recovery ${v.recovery ?? '-'}%  HRV ${v.hrv ?? '-'}  RHR ${v.rhr ?? '-'}  sleep ${v.sleepHours ?? '-'}h  strain ${v.strain ?? '-'}`);
+}

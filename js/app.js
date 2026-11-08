@@ -271,7 +271,7 @@ function dayCardHtml(info) {
   else if (info.workout && info.isPast) status = '<div class="d-missed">Missed</div>';
   else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
   return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : '#2a2f37'}" tabindex="0">
-    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}</div>`;
+    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}${recoveryPill(info.key)}</div>`;
 }
 
 function renderWeek() {
@@ -281,13 +281,14 @@ function renderWeek() {
   const start = mondayOf(new Date());
   const days = Array.from({ length: 14 }, (_, i) => dayInfo(dkey(addDays(start, i))));
   const today = days.find((x) => x.isToday);
-  const note = today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '';
+  const note = (today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '') + recoveryAdvice(today);
   el.innerHTML = `<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">this week and next</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
   const strip = $('#week-strip');
   el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
   bindDayCards(el);
+  bindRecoveryAdvice(el);
   const t = strip.querySelector('.day.today');
   if (t) strip.scrollLeft = Math.max(0, t.offsetLeft - strip.offsetLeft - 8);
 }
@@ -331,6 +332,8 @@ function renderCalendar() {
       ${info.note ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
       <button class="primary small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
+  const wd = whoopDay(sel);
+  if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}${wd.strain != null ? ` &middot; strain ${wd.strain}` : ''}</div>`;
   for (const r of info.ridden) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)} &middot; NP ${r.np} W &middot; TSS ${r.tss}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
   }
@@ -338,8 +341,65 @@ function renderCalendar() {
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
 }
 
+// ------------------------------------------------------------------ WHOOP recovery
+const recZone = (r) => (r >= 67 ? 'green' : r >= 34 ? 'yellow' : 'red');
+const whoopDay = (key) => app.whoop?.[key];
+
+function recoveryPill(key) {
+  const d = whoopDay(key);
+  if (d?.recovery == null) return '';
+  return `<div class="rec-pill ${recZone(d.recovery)}">Recovery ${d.recovery}%${d.hrv ? ` &middot; HRV ${Math.round(d.hrv)}` : ''}</div>`;
+}
+
+function isHard(w) {
+  if (!w) return false;
+  if ((w.tags || []).some((t) => ['vo2', 'threshold', 'test'].includes(t))) return true;
+  return flatten(w).some((x) => x.kind === 'erg' && x.dur >= 120 && (x.from + x.to) / 2 >= 0.88);
+}
+
+/** Coach's read of today's recovery vs today's session. */
+function recoveryAdvice(today) {
+  if (!today) return '';
+  const d = whoopDay(today.key);
+  if (d?.recovery == null) return app.whoop ? '<p class="week-note muted">WHOOP: today\'s recovery isn\'t scored yet.</p>' : '';
+  const z = recZone(d.recovery), w = today.workout;
+  const facts = `Recovery <b class="rz ${z}">${d.recovery}%</b>${d.hrv ? `, HRV ${Math.round(d.hrv)} ms` : ''}${d.rhr ? `, RHR ${d.rhr}` : ''}${d.sleepHours ? `, slept ${d.sleepHours} h` : ''}.`;
+  let advice = '', btns = '';
+  if (!w || today.done) advice = '';
+  else if (z === 'red' && isHard(w)) {
+    advice = ` Hard session on a red day is a bad trade. Swap to easy Zone 2, or ride it at 90%.`;
+    btns = `<button class="primary small" data-rec="swap">Swap to Zone 2, 60 min</button><button class="ghost small" data-rec="0.9">Ride it at 90%</button>`;
+  } else if (z === 'red') {
+    advice = ' Keep it truly easy today; drop to 95% if HR runs high.';
+    btns = `<button class="ghost small" data-rec="0.95">Ride at 95%</button>`;
+  } else if (z === 'yellow' && isHard(w)) {
+    advice = ' Ride as planned. If the first rep feels like a fight, nudge effort down 2-3% with the left shifter.';
+    btns = `<button class="ghost small" data-rec="0.97">Start at 97%</button>`;
+  } else advice = ' Green light: ride as planned.';
+  return `<div class="rec-advice ${z}"><p>${facts}${advice}</p>${btns ? `<div class="row-btns">${btns}</div>` : ''}</div>`;
+}
+
+function bindRecoveryAdvice(root) {
+  root.querySelectorAll('[data-rec]').forEach((b) => (b.onclick = () => {
+    const today = dayInfo(dkey(new Date()));
+    if (b.dataset.rec === 'swap') { const z2 = app.library.find((x) => x.id === 'z2-60'); if (z2) startWorkout(z2); }
+    else if (today.workout) startWorkout(today.workout, Number(b.dataset.rec));
+  }));
+}
+
+async function loadWhoop() {
+  app.whoop = ls.get('whoop', null);
+  const gh = syncClient();
+  if (!gh) return;
+  try {
+    const r = await gh.getJson('whoop/daily.json');
+    if (r?.json?.days) { app.whoop = r.json.days; ls.set('whoop', app.whoop); }
+  } catch (e) { logMsg('whoop', e.message); }
+}
+
 async function refreshPlanViews() {
   app.rows = await trainingRows();
+  await loadWhoop();
   renderWeek();
   if (app.tab === 'calendar') renderCalendar();
 }
@@ -430,6 +490,11 @@ async function renderTraining() {
     card(Math.round(today.ctl), 'Fitness (CTL)'), card(Math.round(today.atl), 'Fatigue (ATL)'),
     card(`${today.tsb > 0 ? '+' : ''}${Math.round(today.tsb)}`, 'Form (TSB)', formLabel(today.tsb)),
     card(`${thisWeek.hours}h`, 'This week', `${thisWeek.tss} TSS &middot; ${thisWeek.rides} rides`),
+    (() => {
+      const days = Object.entries(app.whoop || {}).slice(-7).map(([, v]) => v).filter((v) => v.hrv);
+      const t = whoopDay(dkey(new Date())) || Object.values(app.whoop || {}).at(-1);
+      return t?.recovery != null ? card(`<span class="rz ${recZone(t.recovery)}">${t.recovery}%</span>`, 'Recovery (WHOOP)', days.length ? `HRV 7-day avg ${Math.round(days.reduce((a, v) => a + v.hrv, 0) / days.length)} ms` : '') : card('-', 'Recovery (WHOOP)', 'not connected');
+    })(),
     card(`${app.settings.ftp} W`, 'FTP', [est.from20min && `20-min est ${est.from20min}`, est.fromRamp && `ramp ${est.fromRamp}`].filter(Boolean).join(' &middot; ') || 'no estimate yet'),
   ].join('');
   $('#chart-load').innerHTML = svgLoad(series);
@@ -473,13 +538,15 @@ function canRide() {
   if (app.trainer && (app.trainer.state === 'connected')) return true;
   return confirm('No trainer connected. Start anyway? (Use Demo mode to try without hardware.)');
 }
-function startWorkout(w) { if (canRide()) beginSession({ workout: w }); }
+function startWorkout(w, intensity = 1) { if (canRide()) beginSession({ workout: w, intensity }); }
 function startFree() { if (canRide()) beginSession({}); }
 
 let wakeLock = null;
 function beginSession(opts) {
   const trainer = app.trainer || new SimTrainer();
-  app.session = new Session({ trainer, hr: app.hr, settings: app.settings, ...opts });
+  const { intensity = 1, ...sessionOpts } = opts;
+  app.session = new Session({ trainer, hr: app.hr, settings: app.settings, ...sessionOpts });
+  app.session.intensity = intensity;
   app.rideId = Date.now();
   const s = app.session;
   s.on('shift', (g) => { const t = $('.tile.gear'); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); app.controllers.forEach((c) => c.vibrate?.()); });
