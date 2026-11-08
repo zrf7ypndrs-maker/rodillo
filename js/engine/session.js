@@ -1,7 +1,7 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { VirtualBike, DevEstimator, TrainerMassEstimator, gradeToSend, G } from './physics.js';
+import { VirtualBike, DevEstimator, TrainerModel, G } from './physics.js';
 import { flatten, segmentAt, segTarget } from './workout.js';
 import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js';
 import { Emitter } from '../ble/base.js';
@@ -14,8 +14,9 @@ export const DEFAULT_SETTINGS = {
   crr: 0.004,
   wheelCirc: 2.105,
   realDev: 5.1,          // metres per crank rev the trainer sees (learned)
-  trainerMassKg: 75,     // mass the trainer assumes in sim mode (learned)
+  trainerModel: { m: 75, c1: 0, c3: 0 }, // how the trainer responds in sim mode (learned)
   maxSendGrade: 0.25,
+  minSendGrade: -0.15,
   gradeScale: 1.0,       // 1.0 = full realism (Zwift default is 0.5)
   drivetrain: DEFAULT_DRIVETRAIN,
   shiftStyle: 'sram',     // 'sram' | 'shimano'
@@ -35,7 +36,8 @@ export class Session extends Emitter {
     this.name = name || workout?.name || 'Free slope';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);
-    this.massEst = new TrainerMassEstimator(this.s.trainerMassKg);
+    this.tm = new TrainerModel(this.s.trainerModel);
+    this.gradeHist = [];
 
     this.intensity = 1.0;
     this.gradeOffset = 0;      // manual grade in free ride (fraction)
@@ -149,10 +151,14 @@ export class Session extends Emitter {
       this.target = null;
       const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
       const k = this.bike.dev(this.ratio) / this.devEst.dev;
-      let gs = res.engaged ? gradeToSend(res.force, k, this.massEst.m) : -0.1;
+      let gs = res.engaged ? this.tm.gradeFor(k * res.force, Math.max(trainerV, 2)) : this.s.minSendGrade;
       this.maxed = gs > this.s.maxSendGrade;
-      gs = Math.max(-0.1, Math.min(this.s.maxSendGrade, gs));
-      if (res.engaged) this.massEst.update(power, this.lastSentGrade, trainerV);
+      gs = Math.max(this.s.minSendGrade, Math.min(this.s.maxSendGrade, gs));
+      // learn the trainer's response from steady moments (same grade for the last ~2 s)
+      this.gradeHist.push(this.lastSentGrade);
+      if (this.gradeHist.length > 8) this.gradeHist.shift();
+      const steady = this.gradeHist.length === 8 && Math.max(...this.gradeHist) - Math.min(...this.gradeHist) < 0.004;
+      if (res.engaged && steady && cadence > 30) this.tm.update(power, this.lastSentGrade, trainerV);
       this.lastSentGrade = gs;
       this.trainer.setGrade(gs);
     }
@@ -173,7 +179,7 @@ export class Session extends Emitter {
   }
 
   /** Learned calibration values to persist into settings after a ride. */
-  learned() { return { realDev: this.devEst.dev, trainerMassKg: this.massEst.m }; }
+  learned() { return { realDev: this.devEst.dev, trainerModel: this.tm.toJSON() }; }
 }
 
 export { G };

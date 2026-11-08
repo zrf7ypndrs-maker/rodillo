@@ -75,7 +75,7 @@ test('Virtual gearbox: trainer power matches virtual bike physics', () => {
   ride(s, trainer, hr, 900);
   const v = s.bike.v, p = trainer.data.power;
   const expected = powerAt(v, s.grade, s.s);
-  console.log(`   gear ${s.gb.label}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} mass ${s.massEst.m.toFixed(1)}`);
+  console.log(`   gear ${s.gb.label}, cadence ${trainer.data.cadence.toFixed(0)}, speed ${(v * 3.6).toFixed(1)} km/h, trainer ${p} W, physics ${expected.toFixed(0)} W, learned dev ${s.devEst.dev.toFixed(2)} model ${JSON.stringify(s.tm.toJSON())}`);
   assert.ok(Math.abs(s.devEst.dev - 5.4) < 0.1, 'learns real development');
   assert.ok(Math.abs(p - expected) / expected < 0.08, 'trainer power within 8% of physics');
   // shifting harder at the same power lowers cadence
@@ -177,6 +177,28 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   // coasting sends minimum resistance
   trainer.riderPower = 0;
   ride(s, trainer, hr, 10);
-  assert.equal(trainer.grade, -0.1);
+  assert.equal(trainer.grade, -0.15);
   console.log('ok - freewheel drops trainer to minimum resistance');
+}
+
+{
+  // The reported bug: lightest gear on the flat must be light, not ~220 W at 90 rpm.
+  const trainer = new SimTrainer({ realDev: 5.1, trainerMass: 75, c1: 2.9, c3: 0.51 });
+  const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { drivetrain: 'road-2x12-shimano-50-34' } });
+  s.start();
+  s.toggleFront(); for (let i = 0; i < 12; i++) s.shift(-1); // 34x34
+  trainer.riderPower = 60;
+  ride(s, trainer, hr, 300);
+  console.log(`   34x34 on 0%: ${trainer.data.cadence.toFixed(0)} rpm at ${trainer.data.power} W (sent grade ${(trainer.grade * 100).toFixed(1)}%)`);
+  assert.ok(trainer.data.cadence > 100, 'lightest gear spins easily on the flat');
+  // and a normal gear at a normal power gives realistic speed
+  s.toggleFront(); for (let i = 0; i < 6; i++) s.shift(+1);
+  trainer.riderPower = 200;
+  ride(s, trainer, hr, 300);
+  const v = s.bike.v * 3.6, expected = powerAt(s.bike.v, 0, s.s);
+  console.log(`   ${s.gb.label} at 200 W: ${v.toFixed(1)} km/h, ${trainer.data.cadence.toFixed(0)} rpm, physics says ${expected.toFixed(0)} W, model ${JSON.stringify(s.tm.toJSON())}`);
+  assert.ok(Math.abs(trainer.data.power - expected) / expected < 0.1, 'trainer power matches road physics on the flat');
+  assert.ok(v > 30 && v < 37, `flat speed at 200 W ${v}`);
+  console.log('ok - light gears are light (trainer drag compensated)');
 }

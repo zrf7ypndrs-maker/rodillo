@@ -2,18 +2,35 @@
   "name": "Block 1: VO2max build",
   "ftp": 200,
   "days": {
+    "2026-11-08": "rest",
+    "2026-11-09": "strength",
     "2026-11-10": "vo2-5x4",
+    "2026-11-11": "strength",
     "2026-11-12": "z2-60",
+    "2026-11-13": "strength",
     "2026-11-14": "z2-90",
+    "2026-11-15": "rest",
+    "2026-11-16": "strength",
     "2026-11-17": "vo2-30-15",
+    "2026-11-18": "strength",
     "2026-11-19": "sim-rolling-45",
+    "2026-11-20": "strength",
     "2026-11-21": "z2-120",
+    "2026-11-22": "rest",
+    "2026-11-23": "strength",
     "2026-11-24": "vo2-6x4",
+    "2026-11-25": "strength",
     "2026-11-26": "z2-60",
+    "2026-11-27": "strength",
     "2026-11-28": "sim-climb-repeats",
+    "2026-11-29": "rest",
+    "2026-11-30": "strength",
     "2026-12-01": "ramp-test",
+    "2026-12-02": "strength",
     "2026-12-03": "z2-60",
-    "2026-12-05": "sim-low-cadence"
+    "2026-12-04": "strength",
+    "2026-12-05": "sim-low-cadence",
+    "2026-12-06": "rest"
   },
   "notes": {
     "2026-11-10": "First week at 112% FTP (up from your usual 105%). If rep 5 falls apart, hold 108% next time.",
@@ -26,5 +43,9 @@
     "2026-11-28": "Climb repeats in slope mode. Shift to keep 80-90 rpm, hold ~200 W.",
     "2026-12-01": "Recovery week, and an FTP test to reset your zones. Fresh legs: skip Monday's heavy lower body if you can.",
     "2026-12-05": "Torque work in a heavy gear. Plays to your low-cadence strength."
+  },
+  "legend": {
+    "strength": "Gym day (full-body strength). No ride.",
+    "rest": "Rest day."
   }
 }

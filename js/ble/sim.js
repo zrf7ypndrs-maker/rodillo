@@ -6,7 +6,7 @@ import { Emitter } from './base.js';
 import { G } from '../engine/physics.js';
 
 export class SimTrainer extends Emitter {
-  constructor({ realDev = 5.1, trainerMass = 75 } = {}) {
+  constructor({ realDev = 5.1, trainerMass = 75, c1 = 2.9, c3 = 0.51 } = {}) {
     super();
     this.kind = 'trainer';
     this.name = 'Simulated KICKR';
@@ -14,6 +14,8 @@ export class SimTrainer extends Emitter {
     this.info = {};
     this.realDev = realDev;
     this.trainerMass = trainerMass;
+    this.c1 = c1;
+    this.c3 = c3;
     this.riderPower = 180;
     this.ergCadence = 90;
     this.mode = 'erg';
@@ -31,12 +33,21 @@ export class SimTrainer extends Emitter {
       cad = this.riderPower > 0 ? this.ergCadence : 0;
       power = cad ? this.erg : 0;
     } else {
-      // trainer power = Mt*g*grade*v_r, v_r = cad/60*dev; rider supplies riderPower
-      const perRpm = this.trainerMass * G * Math.max(this.grade, 0.004) * (this.realDev / 60) + 0.15;
-      const want = this.riderPower > 0 ? Math.min(115, this.riderPower / perRpm) : 0;
+      // Like a KICKR in sim mode: its own mass, rolling and aero drag (it ignores the
+      // app's crr/cw), and a physical floor because the brake can't go below zero.
+      const P = (c) => {
+        const vr = (c / 60) * this.realDev;
+        return Math.max(0.8 * vr, this.trainerMass * G * this.grade * vr + this.c1 * vr + this.c3 * vr ** 3);
+      };
+      let want = 0;
+      if (this.riderPower > 0) {
+        let lo = 0, hi = 115;
+        if (P(hi) < this.riderPower) want = hi;
+        else { for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (P(m) > this.riderPower) hi = m; else lo = m; } want = lo; }
+      }
       this._cad = (this._cad ?? 85) + (want - (this._cad ?? 85)) * 0.25; // rider + flywheel inertia
       cad = this._cad < 20 ? 0 : this._cad;
-      power = cad * perRpm;
+      power = cad ? P(cad) : 0;
     }
     const noise = () => (Math.random() - 0.5) * 2;
     this.data = {

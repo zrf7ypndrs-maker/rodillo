@@ -170,7 +170,7 @@ async function loadLibrary() {
   for (const w of ls.get('imported', [])) app.library.push(w);
   try { app.plan = await (await fetch('plans/current.json', { cache: 'no-cache' })).json(); } catch { app.plan = null; }
   renderLibrary();
-  renderToday();
+  refreshPlanViews();
 }
 
 function profileSvg(w, width = 340, height = 54) {
@@ -225,26 +225,117 @@ function renderLibrary() {
   applyFocus();
 }
 
-function renderToday() {
-  const el = $('#today');
-  const key = new Date().toLocaleDateString('en-CA');
-  const id = app.plan?.days?.[key];
-  const w = id && app.library.find((x) => x.id === id);
-  if (!w) {
-    const note = app.plan?.days?.[key] === 'rest' ? 'Rest day. Lift, walk, sleep.' : null;
-    el.classList.toggle('hidden', !note);
-    if (note) el.innerHTML = `<div><div class="eyebrow">Today</div><h2>${note}</h2></div>`;
-    return;
-  }
+// ------------------------------------------------------------------ plan: week carousel + calendar
+const dkey = (d) => d.toLocaleDateString('en-CA');
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const mondayOf = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+
+function workoutColor(w) {
+  const segs = flatten(w);
+  if (segs.every((x) => x.kind === 'sim')) return '#6c8db8';
+  const work = Math.max(...segs.filter((x) => x.kind === 'erg' && x.dur >= 30).map((x) => (x.from + x.to) / 2));
+  return zoneHex(work);
+}
+
+/** What's planned and what was ridden on a given date. */
+function dayInfo(key) {
+  const entry = app.plan?.days?.[key];
+  const w = entry && app.library.find((x) => x.id === entry);
+  const ridden = (app.rows || []).filter((r) => !r.demo && r.summary.id.slice(0, 10) === key).map((r) => r.summary);
+  const done = w ? ridden.find((r) => r.workoutId === w.id) || ridden[0] : ridden[0];
+  return {
+    key, workout: w || null, kind: w ? 'ride' : entry || null,
+    note: app.plan?.notes?.[key] || '', ridden, done,
+    isToday: key === dkey(new Date()), isPast: key < dkey(new Date()),
+  };
+}
+
+function dayCardHtml(info) {
+  const d = new Date(info.key + 'T12:00');
+  const dow = d.toLocaleDateString([], { weekday: 'short' });
+  const date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  let body, status = '';
+  if (info.workout) {
+    const w = info.workout;
+    body = `<div class="d-name">${esc(w.name)}</div><div class="d-meta">${woMeta(w)}</div>${profileSvg(w, 220, 34)}`;
+  } else if (info.kind === 'strength') body = '<div class="d-name muted">Strength</div><div class="d-meta">Gym day, no ride</div>';
+  else if (info.kind === 'rest') body = '<div class="d-name muted">Rest</div>';
+  else body = '<div class="d-name muted">Nothing planned</div>';
+  if (info.done) status = `<div class="d-done">&#10003; ${info.done.workoutId === info.workout?.id ? 'Done' : esc(info.done.name)} &middot; ${info.done.tss} TSS</div>`;
+  else if (info.workout && info.isPast) status = '<div class="d-missed">Missed</div>';
+  else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
+  return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : '#2a2f37'}" tabindex="0">
+    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}</div>`;
+}
+
+function renderWeek() {
+  const el = $('#week');
+  if (!app.plan) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const note = app.plan.notes?.[key] || '';
-  el.innerHTML = `
-    <div><div class="eyebrow">Today &middot; ${esc(app.plan.name || 'Plan')}</div><h2>${esc(w.name)}</h2>
-    <p>${esc(note || w.description)}</p></div>
-    <div>${profileSvg(w, 340, 60)}<div class="muted" style="font-size:13px;margin-top:4px">${woMeta(w)}</div></div>
-    <button class="primary" id="btn-today">Start</button>`;
-  $('#btn-today').onclick = () => startWorkout(w);
-  el.dataset.workout = w.id;
+  const start = mondayOf(new Date());
+  const days = Array.from({ length: 14 }, (_, i) => dayInfo(dkey(addDays(start, i))));
+  const today = days.find((x) => x.isToday);
+  const note = today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '';
+  el.innerHTML = `<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">this week and next</span></div>
+    <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
+    <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
+  const strip = $('#week-strip');
+  el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
+  bindDayCards(el);
+  const t = strip.querySelector('.day.today');
+  if (t) strip.scrollLeft = Math.max(0, t.offsetLeft - strip.offsetLeft - 8);
+}
+
+function bindDayCards(root) {
+  root.querySelectorAll('[data-startday]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const i = dayInfo(b.dataset.startday); if (i.workout) startWorkout(i.workout); }));
+  root.querySelectorAll('.day[data-day], .cal-cell[data-day]').forEach((c) => (c.onclick = () => { app.calMonth = c.dataset.day.slice(0, 7); app.calSel = c.dataset.day; setTab('calendar'); }));
+}
+
+function renderCalendar() {
+  const now = new Date();
+  const ym = app.calMonth || dkey(now).slice(0, 7);
+  const [y, m] = ym.split('-').map(Number);
+  const first = new Date(y, m - 1, 1, 12);
+  const start = mondayOf(first);
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = addDays(start, i);
+    if (i >= 35 && d.getMonth() !== m - 1) break;
+    cells.push(d);
+  }
+  const sel = app.calSel || dkey(now);
+  $('#cal-title').textContent = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  $('#cal-grid').innerHTML = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-dow">${d}</div>`).join('') +
+    cells.map((d) => {
+      const info = dayInfo(dkey(d));
+      const chip = info.workout ? `<div class="cal-chip" style="--c:${workoutColor(info.workout)}">${esc(info.workout.name)}<span>${Math.round(totalDuration(info.workout) / 60)}'</span></div>`
+        : info.kind === 'strength' ? '<div class="cal-chip ghost">Strength</div>' : info.kind === 'rest' ? '<div class="cal-chip ghost">Rest</div>' : '';
+      const done = info.done ? `<div class="cal-done">&#10003; ${info.done.tss} TSS</div>` : info.workout && info.isPast ? '<div class="cal-missed">missed</div>' : '';
+      return `<div class="cal-cell ${d.getMonth() !== m - 1 ? 'other' : ''} ${info.isToday ? 'today' : ''} ${info.key === sel ? 'sel' : ''}" data-day="${info.key}">
+        <div class="cal-num">${d.getDate()}</div>${chip}${done}</div>`;
+    }).join('');
+  $('#cal-grid').querySelectorAll('.cal-cell').forEach((c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
+  // detail for the selected day
+  const info = dayInfo(sel);
+  const date = new Date(sel + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  let html = `<h3>${date}</h3>`;
+  if (info.workout) {
+    const w = info.workout;
+    html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>${profileSvg(w, 600, 60)}
+      ${info.note ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
+      <button class="primary small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
+  } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
+  for (const r of info.ridden) {
+    html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)} &middot; NP ${r.np} W &middot; TSS ${r.tss}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
+  }
+  $('#cal-detail').innerHTML = html;
+  $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
+}
+
+async function refreshPlanViews() {
+  app.rows = await trainingRows();
+  renderWeek();
+  if (app.tab === 'calendar') renderCalendar();
 }
 
 function removeImported(w) {
@@ -477,6 +568,7 @@ async function refreshRemoteIndex() {
   try { ls.set('remoteIndex', await gh.fetchIndex()); ls.set('remoteIndexAt', Date.now()); }
   catch (e) { logMsg('sync', `index fetch failed: ${e.message}`); }
   if (app.tab === 'training') renderTraining();
+  refreshPlanViews();
 }
 
 function downloadFit(ride) {
@@ -526,6 +618,7 @@ function showSummary(ride) {
       toast((await syncRide(ride)) ? 'Ride synced' : 'Sync failed, will retry next launch');
     } else toast('Ride saved');
     if (app.tab === 'training') renderTraining();
+    refreshPlanViews();
   };
   $('#s-discard').onclick = async () => {
     if (!confirm('Discard this ride? It will not be saved or synced.')) return;
@@ -569,7 +662,7 @@ function action(a) {
     case 'up': case 'easier': app.focus = Math.max(0, app.focus - 1); applyFocus(); break;
     case 'down': case 'harder': app.focus = Math.min(items.length - 1, app.focus + 1); applyFocus(); break;
     case 'left': case 'right': {
-      const tabs = ['workouts', 'free', 'training'];
+      const tabs = ['workouts', 'free', 'calendar', 'training'];
       const i = (tabs.indexOf(app.tab) + (a === 'right' ? 1 : -1) + tabs.length) % tabs.length;
       setTab(tabs[i]);
       break;
@@ -577,7 +670,7 @@ function action(a) {
     case 'select': {
       const el = items[app.focus];
       if (!el) break;
-      if (el.id === 'today') $('#btn-today')?.click();
+      if (el.classList.contains('day')) el.querySelector('[data-startday]')?.click();
       else if (el.dataset.i !== undefined) startWorkout(app.library[+el.dataset.i]);
       else el.click();
       break;
@@ -669,7 +762,8 @@ document.addEventListener('keydown', (e) => {
 function focusables() {
   const list = [];
   if (app.tab === 'workouts') {
-    if (!$('#today').classList.contains('hidden') && $('#btn-today')) list.push($('#today'));
+    const t = $('#week .day.today [data-startday]');
+    if (t) list.push(t.closest('.day'));
     list.push(...$$('#workout-list .wo'));
   } else if (app.tab === 'free') {
     list.push($('#btn-free'), ...$$('#slope-list .wo'));
@@ -851,7 +945,6 @@ const FIELDS = [
   ['cda', 'CdA (m²)', 0.01, 1, 'Aero drag. 0.32 hoods, 0.25 drops.'], ['crr', 'Rolling resistance', 0.001],
   ['section', 'Trainer (learned automatically)'],
   ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
-  ['trainerMassKg', 'Trainer sim mass (kg)', 0.5, 1, 'Mass the trainer assumes in slope mode; learned on climbs.'],
   ['maxSendGrade', 'Max grade sent to trainer (%)', 1, 100],
 ];
 function renderSettings() {
@@ -859,13 +952,15 @@ function renderSettings() {
   f.innerHTML = FIELDS.map(([k, label, step, mult = 1, help, offset = 0]) => k === 'section'
     ? `<div class="section">${label}</div>`
     : `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`).join('') +
-    `<div class="section">Gearing</div>
+    `<div class="help" id="tm-line">Trainer response model (learned while riding): mass ${(app.settings.trainerModel?.m ?? 75)} kg, built-in rolling ${(app.settings.trainerModel?.c1 ?? 0)} N, built-in aero ${(app.settings.trainerModel?.c3 ?? 0)} kg/m. <a href="#" id="tm-reset">Reset</a></div>
+     <div class="section">Gearing</div>
      <label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
      <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
      <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>
      <label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
      <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`;
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
+  $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.trainerModel = { ...DEFAULT_SETTINGS.trainerModel }; app.settings.realDev = DEFAULT_SETTINGS.realDev; ls.set('settings', app.settings); renderSettings(); };
   $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
@@ -918,9 +1013,14 @@ function setTab(t) {
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
   $$('.tab').forEach((x) => x.classList.toggle('active', x.id === `tab-${t}`));
   if (t === 'training') { renderTraining(); refreshRemoteIndex(); }
+  if (t === 'calendar') { renderCalendar(); refreshPlanViews(); }
   applyFocus();
 }
 $$('#tabs button').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+const shiftMonth = (n) => { const [y, m] = (app.calMonth || dkey(new Date()).slice(0, 7)).split('-').map(Number); const d = new Date(y, m - 1 + n, 1, 12); app.calMonth = dkey(d).slice(0, 7); renderCalendar(); };
+$('#cal-prev').onclick = () => shiftMonth(-1);
+$('#cal-next').onclick = () => shiftMonth(1);
+$('#cal-today').onclick = () => { app.calMonth = null; app.calSel = null; renderCalendar(); };
 $('#r-pause').onclick = () => { app.session?.togglePause(); renderRide(); };
 $('#r-end').onclick = () => { if (confirm('End this ride?')) endSession(); };
 
