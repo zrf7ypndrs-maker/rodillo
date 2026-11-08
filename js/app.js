@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082133';
-import { HeartRate } from './ble/hr.js?v=202611082133';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082133';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082133';
-import { log, logMsg } from './ble/base.js?v=202611082133';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082133';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082133';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082133';
-import { encodeActivity } from './fit.js?v=202611082133';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082133';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082133';
-import { ls, rides } from './store.js?v=202611082133';
+import { Trainer } from './ble/trainer.js?v=202611082251';
+import { HeartRate } from './ble/hr.js?v=202611082251';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082251';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082251';
+import { log, logMsg } from './ble/base.js?v=202611082251';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082251';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082251';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082251';
+import { encodeActivity } from './fit.js?v=202611082251';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082251';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082251';
+import { ls, rides } from './store.js?v=202611082251';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -359,6 +359,7 @@ function renderCalendar() {
       ${info.note ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
       <button class="primary small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
+  html += coachDecision(sel);
   const wd = whoopDay(sel);
   if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}${wd.strain != null ? ` &middot; strain ${wd.strain}` : ''}</div>`;
   for (const r of info.ridden) {
@@ -388,10 +389,13 @@ function isHard(w) {
 function recoveryAdvice(today) {
   if (!today) return '';
   const d = whoopDay(today.key);
-  if (d?.recovery == null) return app.whoop ? '<p class="week-note muted">WHOOP: today\'s recovery isn\'t scored yet.</p>' : '';
+  if (d?.recovery == null) return coachDecision(today.key) || (app.whoop ? '<p class="week-note muted">WHOOP: today\'s recovery isn\'t scored yet.</p>' : '');
   const z = recZone(d.recovery), w = today.workout;
   const facts = `Recovery <b class="rz ${z}">${d.recovery}%</b>${d.hrv ? `, HRV ${Math.round(d.hrv)} ms` : ''}${d.rhr ? `, RHR ${d.rhr}` : ''}${d.sleepHours ? `, slept ${d.sleepHours} h` : ''}.`;
   let advice = '', btns = '';
+  // The morning coach run already weighed recovery against the plan: show its call, don't adjust twice.
+  const decided = coachDecision(today.key);
+  if (decided) return `<div class="rec-advice ${z} stacked"><p>${facts}</p>${decided}</div>`;
   if (!w || today.done) advice = '';
   else if (z === 'red' && isHard(w)) {
     advice = ` Hard session on a red day is a bad trade. Swap to easy Zone 2, or ride it at 90%.`;
@@ -404,6 +408,16 @@ function recoveryAdvice(today) {
     btns = `<button class="ghost small" data-rec="0.97">Start at 97%</button>`;
   } else advice = ' Green light: ride as planned.';
   return `<div class="rec-advice ${z}"><p>${facts}${advice}</p>${btns ? `<div class="row-btns">${btns}</div>` : ''}</div>`;
+}
+
+const DECISION_LABEL = { kept: 'Ride as planned', scaled: 'Adjusted', swapped: 'Swapped', moved: 'Moved', rest: 'Rest instead' };
+
+/** The daily coach run's decision for a day (plan.daily[key]), as HTML. */
+function coachDecision(key) {
+  const d = app.plan?.daily?.[key];
+  if (!d?.reason) return '';
+  const label = DECISION_LABEL[d.action] || 'Coach';
+  return `<p class="coach-call"><span class="tag coach">coach &middot; ${esc(label)}</span> ${esc(d.reason)}</p>`;
 }
 
 function bindRecoveryAdvice(root) {
