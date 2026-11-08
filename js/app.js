@@ -583,7 +583,8 @@ function beginSession(opts) {
   s.on('workoutDone', () => toast('Workout complete. Free ride, or B twice to finish'));
   show('ride');
   $('#r-name').textContent = s.name;
-  sizeChart();
+  sizeChart(); sizePhoneChart();
+  $('#rp-sheet').classList.add('hidden');
   navigator.wakeLock?.request('screen').then((l) => (wakeLock = l)).catch(() => {});
   renderRide();
 }
@@ -959,9 +960,18 @@ function gearViz(gb) {
   return `<svg class="gearviz" viewBox="0 0 ${cogs.length * 9 + 14 + gb.d.rings.length * 14} 24">${bars}${rings}</svg><span>ratio ${gb.ratio.toFixed(2)}</span>`;
 }
 
+function renderPaused(s) {
+  $('#r-paused').classList.toggle('hidden', !s.paused);
+  if (s.paused) {
+    $('#r-paused-title').textContent = !s.started ? 'Ready' : 'Paused';
+    $('#r-paused-sub').textContent = !s.started ? 'Start pedaling to begin' : s.autoPaused ? 'Start pedaling to resume' : isPhone() ? 'Tap Resume or press A' : 'Press A or Space to resume';
+  }
+}
+
 function renderRide() {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
+  if (isPhone()) { renderPhone(s); renderPaused(s); return; }
   const td = s.trainer.data || {};
   const hr = Math.round(app.hr?.bpm || td.hr || 0);
   $('#r-elapsed').textContent = fmtTime(s.elapsed);
@@ -1020,11 +1030,7 @@ function renderRide() {
   }
   renderSegList(s);
 
-  $('#r-paused').classList.toggle('hidden', !s.paused);
-  if (s.paused) {
-    $('#r-paused-title').textContent = !s.started ? 'Ready' : 'Paused';
-    $('#r-paused-sub').textContent = !s.started ? 'Start pedaling to begin' : s.autoPaused ? 'Start pedaling to resume' : 'Press A or Space to resume';
-  }
+  renderPaused(s);
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
   $('#r-hints').innerHTML = s.mode === 'erg'
     ? '<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
@@ -1095,6 +1101,215 @@ function drawChart() {
   ctx.stroke();
   ctx.fillStyle = '#8b93a1'; ctx.fillText('last 10 min', 6 * dpr, 16 * dpr);
 }
+
+
+// ------------------------------------------------------------------ phone ride screen (Zwift Companion style)
+// Keep this query identical to the phone @media rule in css/app.css.
+const PHONE_MQ = matchMedia('(pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px)');
+function isPhone() { return PHONE_MQ.matches; }
+const rpCanvas = $('#rp-chart');
+function sizePhoneChart() {
+  const r = rpCanvas.parentElement.getBoundingClientRect();
+  rpCanvas.width = Math.max(200, Math.round(r.width * devicePixelRatio));
+  rpCanvas.height = Math.max(60, Math.round(r.height * devicePixelRatio));
+}
+new ResizeObserver(() => { if (app.screen === 'ride' && isPhone()) { sizePhoneChart(); drawPhoneChart(); } }).observe(rpCanvas.parentElement);
+PHONE_MQ.addEventListener('change', () => { if (app.screen === 'ride') { sizeChart(); sizePhoneChart(); renderRide(); } });
+
+const segColor = (g, s, t = 0.5) => (g.kind === 'erg' ? zoneHex(segTarget(g, t)) : gradeHex(g.grade + (s?.gradeOffset || 0)));
+const segTargetText = (g, s) => (g.kind === 'erg'
+  ? (g.from === g.to ? `${Math.round(g.from * app.settings.ftp * s.intensity)} W` : `${Math.round(g.from * app.settings.ftp * s.intensity)}-${Math.round(g.to * app.settings.ftp * s.intensity)} W`)
+  : `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`);
+
+function renderPhone(s) {
+  const td = s.trainer.data || {};
+  const ftp = app.settings.ftp;
+  const hr = Math.round(app.hr?.bpm || td.hr || 0);
+  const p = Math.round(s.power3s);
+  const seg = s.seg;
+  const set = (id, v) => { const el = document.getElementById(id); if (el.innerHTML !== String(v)) el.innerHTML = v; };
+
+  set('rp-elapsed', fmtTime(s.elapsed));
+  set('rp-name', esc(s.name));
+  if (s.segs) {
+    const last = s.segs.at(-1), est = s.segs.some((g) => g.estDur && s.segs.indexOf(g) >= Math.max(0, s.segIndex));
+    set('rp-left-k', 'Left');
+    set('rp-left', seg ? `${est ? '~' : ''}${fmtTime(last.end - s.chartPos)}` : '0:00');
+  } else {
+    set('rp-left-k', 'Distance');
+    set('rp-left', fmtDist(s.bike.dist));
+  }
+
+  // hero: interval countdown + target
+  const hero = $('#rp');
+  let zc;
+  if (seg) {
+    const rem = s.segRemaining;
+    const tgt = seg.kind === 'erg' ? segTarget(seg, s.segProgress) : null;
+    zc = seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade + s.gradeOffset);
+    set('rp-int-label', `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`);
+    set('rp-count', rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m));
+    const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
+    if (seg.kind === 'erg') {
+      set('rp-target', `${s.target || Math.round(tgt * ftp * s.intensity)} W`);
+      set('rp-target-sub', `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`);
+    } else {
+      set('rp-target', `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`);
+      set('rp-target-sub', `grade, use your gears${cad}`);
+    }
+  } else if (s.segs) {
+    zc = '#3ccf7a';
+    set('rp-int-label', 'Workout complete');
+    set('rp-count', 'Done');
+    set('rp-target', '');
+    set('rp-target-sub', 'Keep riding, or End ride from &middot;&middot;&middot;');
+  } else {
+    zc = gradeHex(s.grade);
+    set('rp-int-label', 'Free slope');
+    set('rp-count', `${(s.grade * 100).toFixed(1)}%`);
+    set('rp-target', '');
+    set('rp-target-sub', `set ${fmtGradeSet(s)} &middot; D-pad or &middot;&middot;&middot; to change`);
+  }
+  hero.style.setProperty('--zc', zc);
+
+  // power + on-target gauge (centre = target, ends = ±20%)
+  set('rp-power', p);
+  const gauge = $('#rp-gauge');
+  gauge.classList.toggle('off', !s.target);
+  if (s.target) gauge.querySelector('b').style.left = `${Math.max(0, Math.min(1, (p / s.target - 0.8) / 0.4)) * 100}%`;
+
+  set('rp-hr', hr || '--');
+  set('rp-cad', Math.round(td.cadence || 0));
+  const cs = s.cadStatus, cb = $('#rp-cad-box');
+  cb.classList.toggle('ok', cs === 'ok');
+  cb.classList.toggle('bad', cs === 'low' || cs === 'high');
+  set('rp-cad-sub', !seg?.cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : seg.cad.label);
+
+  const m3 = $('#rp-m3').parentElement;
+  if (s.mode === 'erg') {
+    set('rp-m3-k', 'Effort');
+    set('rp-m3', `${Math.round(s.intensity * 100)}%`);
+    set('rp-m3-sub', s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned');
+    m3.classList.toggle('up', s.intensity > 1.001);
+    m3.classList.toggle('down', s.intensity < 0.999);
+  } else {
+    set('rp-m3-k', 'Gear');
+    set('rp-m3', s.gb.seq ? s.gb.label : s.gb.label.replace('x', '×'));
+    set('rp-m3-sub', `${(s.bike.v * 3.6).toFixed(1)} km/h`);
+    m3.classList.remove('up', 'down');
+  }
+
+  const next = s.segs && s.segIndex >= 0 ? s.segs[s.segIndex + 1] : null;
+  set('rp-next', next
+    ? `Next <span class="sw" style="background:${segColor(next, s)}"></span><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`
+    : seg ? 'Last interval' : `${(s.bike.v * 3.6).toFixed(1)} km/h &middot; ${fmtDist(s.bike.dist)}`);
+
+  // buttons
+  const erg = s.mode === 'erg';
+  set('rp-minus', erg ? '&minus;1%' : 'Gear &minus;');
+  set('rp-plus', erg ? '+1%' : 'Gear +');
+  set('rp-pause', !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause');
+  $('#rp-grade-row').classList.toggle('hidden', erg);
+  $('#rp-skip').classList.toggle('hidden', !seg);
+  $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
+  set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off for this interval');
+  if (app.endArmed && Date.now() - app.endArmed > 3000) app.endArmed = 0;
+  set('rp-end', app.endArmed ? 'Tap again to end ride' : 'End ride');
+
+  drawPhoneChart();
+}
+
+/** Workout bars like Zwift: solid zone-coloured blocks, done part dimmed under the power trace. */
+function drawPhoneChart() {
+  const s = app.session;
+  if (!s || !isPhone()) return;
+  const ctx = rpCanvas.getContext('2d');
+  const W = rpCanvas.width, H = rpCanvas.height, dpr = devicePixelRatio;
+  ctx.clearRect(0, 0, W, H);
+  const top = 14 * dpr, bot = H - 2 * dpr, plotH = bot - top;
+  const ftp = app.settings.ftp;
+  ctx.font = `600 ${10.5 * dpr}px -apple-system, sans-serif`;
+
+  if (!s.segs) {
+    // free slope: last 10 minutes of power over the grade
+    const win = 600, data = s.samples.slice(-win);
+    const maxP = Math.max(ftp * 1.5, ...data.map((x) => x.power + 20));
+    const Y = (v) => bot - (Math.min(v, maxP) / maxP) * plotH;
+    data.forEach((x, i) => {
+      const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.7);
+      ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect((i / win) * W, bot - h, W / win + 1, h);
+    });
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+    data.forEach((x, i) => { const px = (i / win) * W; i ? ctx.lineTo(px, Y(x.power)) : ctx.moveTo(px, Y(x.power)); });
+    ctx.stroke();
+    ctx.fillStyle = '#8b93a1'; ctx.fillText('LAST 10 MIN', 2 * dpr, 10 * dpr);
+    return;
+  }
+
+  const segs = s.segs, pos = s.chartPos;
+  const T = Math.max(segs.at(-1).end, pos + 1);
+  const X = (t) => (t / T) * W;
+  const ergMax = Math.max(1.3, ...segs.filter((g) => g.kind === 'erg').map((g) => Math.max(g.from, g.to) * s.intensity)) * 1.08;
+  const maxP = Math.max(ergMax * ftp, ...s.samples.slice(-1800).map((x) => x.power + 10));
+  const Yp = (w) => bot - (Math.min(w, maxP) / maxP) * plotH;
+  const gap = segs.length > 60 ? 0 : 1 * dpr;
+  const cur = s.segIndex;
+
+  segs.forEach((g, i) => {
+    const x0 = X(g.start), x1 = X(g.end);
+    const n = g.kind === 'erg' && g.from !== g.to ? Math.max(1, Math.ceil((x1 - x0) / (3 * dpr))) : 1;
+    for (let k = 0; k < n; k++) {
+      const a = k / n, b = (k + 1) / n;
+      const sx0 = Math.round(x0 + (x1 - x0) * a), sx1 = Math.round(x0 + (x1 - x0) * b);
+      let y, col;
+      if (g.kind === 'erg') { const f = segTarget(g, (a + b) / 2); y = Yp(f * ftp * s.intensity); col = zoneHex(f); }
+      else { const gr = g.grade + s.gradeOffset; y = bot - Math.max(4 * dpr, ((gr + 0.03) / 0.15) * plotH * 0.7); col = gradeHex(gr); }
+      const tMid = g.start + (g.end - g.start) * (a + b) / 2;
+      ctx.globalAlpha = tMid < pos ? 0.38 : 1;
+      ctx.fillStyle = col;
+      ctx.fillRect(sx0, y, Math.max(1, sx1 - sx0 - (k === n - 1 ? gap : 0)), bot - y);
+    }
+    ctx.globalAlpha = 1;
+    if (i === cur) { // outline the current block
+      const y = g.kind === 'erg' ? Math.min(Yp(g.from * ftp * s.intensity), Yp(g.to * ftp * s.intensity)) : bot - Math.max(4 * dpr, ((g.grade + s.gradeOffset + 0.03) / 0.15) * plotH * 0.7);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr;
+      ctx.strokeRect(x0 + dpr * 0.75, y - dpr * 0.75, Math.max(2, x1 - x0 - gap - dpr * 1.5), bot - y + dpr * 0.75);
+    }
+  });
+
+  // FTP line
+  ctx.strokeStyle = '#ffffff40'; ctx.lineWidth = dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
+  ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#8b93a1'; ctx.fillText(`FTP ${ftp}`, 2 * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
+
+  // power trace over the done part
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+  s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.stroke();
+
+  // position marker
+  const mx = X(pos);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(mx - dpr, top - 4 * dpr, 2 * dpr, bot - top + 4 * dpr);
+  ctx.beginPath(); ctx.moveTo(mx - 6 * dpr, top - 10 * dpr); ctx.lineTo(mx + 6 * dpr, top - 10 * dpr); ctx.lineTo(mx, top - 2 * dpr); ctx.closePath(); ctx.fill();
+}
+
+// phone buttons
+const rpTap = (id, fn) => { const el = document.getElementById(id); el.onclick = (e) => { e.preventDefault(); fn(); renderRide(); }; };
+rpTap('rp-minus', () => action(app.session?.mode === 'erg' ? 'down' : 'easier'));
+rpTap('rp-plus', () => action(app.session?.mode === 'erg' ? 'up' : 'harder'));
+rpTap('rp-pause', () => app.session?.togglePause());
+rpTap('rp-more', () => $('#rp-sheet').classList.toggle('hidden'));
+rpTap('rp-sheet-close', () => $('#rp-sheet').classList.add('hidden'));
+rpTap('rp-gdown', () => action('down'));
+rpTap('rp-gup', () => action('up'));
+rpTap('rp-skip', () => { action('skip'); $('#rp-sheet').classList.add('hidden'); });
+rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
+rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
+rpTap('rp-end', () => {
+  if (app.endArmed && Date.now() - app.endArmed < 3000) { app.endArmed = 0; $('#rp-sheet').classList.add('hidden'); endSession(); }
+  else app.endArmed = Date.now();
+});
 
 // ------------------------------------------------------------------ toast
 let toastTimer;

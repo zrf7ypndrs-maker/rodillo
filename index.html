@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rodillo</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e1013">
@@ -102,6 +102,48 @@
 
   <!-- ================= RIDE ================= -->
   <section id="ride" class="screen">
+    <!-- phone layout (Zwift Companion style); only shown by the phone media query in app.css -->
+    <div class="rp" id="rp">
+      <div class="rp-top">
+        <div class="rp-elapsed"><span class="rp-k">Elapsed</span><span id="rp-elapsed">0:00</span></div>
+        <div class="rp-name" id="rp-name"></div>
+        <div class="rp-left"><span class="rp-k" id="rp-left-k">Left</span><span id="rp-left">--</span></div>
+      </div>
+      <div class="rp-hero" id="rp-hero">
+        <div class="rp-int-label" id="rp-int-label"></div>
+        <div class="rp-count" id="rp-count"></div>
+        <div class="rp-target-row">
+          <span class="rp-target" id="rp-target"></span>
+          <span class="rp-target-sub" id="rp-target-sub"></span>
+        </div>
+      </div>
+      <div class="rp-power" id="rp-power-box">
+        <div class="rp-pval"><span id="rp-power">0</span><span class="rp-unit">W</span></div>
+        <div class="rp-gauge" id="rp-gauge"><i></i><b></b></div>
+      </div>
+      <div class="rp-metrics">
+        <div class="rp-m"><span class="rp-k">Heart rate</span><span class="rp-v" id="rp-hr">--</span></div>
+        <div class="rp-m" id="rp-cad-box"><span class="rp-k">Cadence</span><span class="rp-v" id="rp-cad">0</span><span class="rp-s" id="rp-cad-sub"></span></div>
+        <div class="rp-m"><span class="rp-k" id="rp-m3-k">Effort</span><span class="rp-v" id="rp-m3">100%</span><span class="rp-s" id="rp-m3-sub"></span></div>
+      </div>
+      <div class="rp-chart-wrap"><canvas id="rp-chart" class="rp-chart"></canvas></div>
+      <div class="rp-next" id="rp-next"></div>
+      <div class="rp-btns">
+        <button id="rp-minus" aria-label="Easier">&minus;1%</button>
+        <button id="rp-pause" class="rp-main">Start</button>
+        <button id="rp-plus" aria-label="Harder">+1%</button>
+        <button id="rp-more" aria-label="More">&middot;&middot;&middot;</button>
+      </div>
+      <div class="rp-sheet hidden" id="rp-sheet">
+        <div class="rp-sheet-row" id="rp-grade-row"><button id="rp-gdown">Grade &minus;1%</button><button id="rp-gup">Grade +1%</button></div>
+        <button id="rp-skip">Skip interval</button>
+        <button id="rp-lap">Lap</button>
+        <button id="rp-erg">ERG off for this interval</button>
+        <button id="rp-end" class="danger">End ride</button>
+        <button id="rp-sheet-close" class="ghost">Close</button>
+      </div>
+    </div>
+
     <div class="ride-top">
       <div class="ride-name" id="r-name"></div>
       <div class="ride-clock" id="r-elapsed">0:00</div>
