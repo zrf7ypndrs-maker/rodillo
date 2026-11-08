@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082335';
-import { HeartRate } from './ble/hr.js?v=202611082335';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082335';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082335';
-import { log, logMsg } from './ble/base.js?v=202611082335';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082335';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082335';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082335';
-import { encodeActivity } from './fit.js?v=202611082335';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082335';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082335';
-import { ls, rides } from './store.js?v=202611082335';
+import { Trainer } from './ble/trainer.js?v=202611082357';
+import { HeartRate } from './ble/hr.js?v=202611082357';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082357';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082357';
+import { log, logMsg } from './ble/base.js?v=202611082357';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082357';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082357';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082357';
+import { encodeActivity } from './fit.js?v=202611082357';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082357';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082357';
+import { ls, rides } from './store.js?v=202611082357';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -21,9 +21,17 @@ const fmtTime = (s) => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
 };
 const zoneColor = (f) => f < 0.56 ? 'var(--z1)' : f < 0.76 ? 'var(--z2)' : f < 0.88 ? 'var(--z3)' : f < 1.06 ? 'var(--z4)' : f < 1.21 ? 'var(--z5)' : 'var(--z6)';
-const ZC = { z1: '#7d8590', z2: '#3d8bfd', z3: '#3ccf7a', z4: '#ffcc33', z5: '#ff8a33', z6: '#ff4d5e' };
+const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
+// Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
+let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY;
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
+  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay'].map(v);
+}
+readTokens();
+const NUM_FONT = 'Archivo, system-ui, sans-serif';
 const zoneHex = (f) => f < 0.56 ? ZC.z1 : f < 0.76 ? ZC.z2 : f < 0.88 ? ZC.z3 : f < 1.06 ? ZC.z4 : f < 1.21 ? ZC.z5 : ZC.z6;
-const gradeHex = (g) => g < 0 ? '#5aa9a0' : g < 0.03 ? '#6c8db8' : g < 0.06 ? '#c9a640' : g < 0.09 ? '#e07b39' : '#e0484f';
+const gradeHex = (g) => g < 0 ? '#3fa596' : g < 0.03 ? '#6f8fbf' : g < 0.06 ? '#d2a531' : g < 0.09 ? '#e27a35' : '#d9434b';
 
 // ------------------------------------------------------------------ state
 const app = {
@@ -281,7 +289,7 @@ const mondayOf = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setD
 
 function workoutColor(w) {
   const segs = flatten(w);
-  if (segs.every((x) => x.kind === 'sim')) return '#6c8db8';
+  if (segs.every((x) => x.kind === 'sim')) return '#6f8fbf';
   const work = Math.max(...segs.filter((x) => x.kind === 'erg' && x.dur >= 30).map((x) => (x.from + x.to) / 2));
   return zoneHex(work);
 }
@@ -314,7 +322,7 @@ function dayCardHtml(info) {
   else if (info.workout && info.isPast) status = `<div class="d-missed">${info.optional ? 'Skipped (optional)' : 'Missed'}</div>`;
   else if (info.workout && info.optional && !info.isToday) status = '<div class="d-missed">Optional</div>';
   else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
-  return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : '#2a2f37'}" tabindex="0">
+  return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
     <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}${recoveryPill(info.key)}</div>`;
 }
 
@@ -498,12 +506,12 @@ function svgLoad(series) {
   const B = (v) => 190 - (v / maxB) * 35;
   const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2.5" points="${series.map((d, i) => `${X(i)},${Y(d[k])}`).join(' ')}"/>`;
   const bw = Math.max(1, (W - 40) / n - 1);
-  const bars = series.map((d, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(B(d.tsb), 190)}" width="${bw}" height="${Math.abs(B(d.tsb) - 190)}" fill="${d.tsb >= 0 ? '#3ccf7a' : '#ff8a33'}" opacity=".75"/>`).join('');
-  const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="226" fill="#8b93a1" font-size="12">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
+  const bars = series.map((d, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(B(d.tsb), 190)}" width="${bw}" height="${Math.abs(B(d.tsb) - 190)}" fill="${d.tsb >= 0 ? ZC.z3 : ZC.z5}" opacity=".8"/>`).join('');
+  const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="226" fill="${MUTED}" font-size="12">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
-    <text x="0" y="14" fill="#8b93a1" font-size="12">${Math.round(maxL)}</text>
-    <line x1="30" x2="${W - 10}" y1="190" y2="190" stroke="#2a2f37"/>${bars}${line('atl', '#ff6b9a')}${line('ctl', '#3d8bfd')}${ticks}
-    <text x="${W - 10}" y="14" text-anchor="end" font-size="11"><tspan fill="#3d8bfd">&#9632; Fitness</tspan> <tspan fill="#ff6b9a">&#9632; Fatigue</tspan> <tspan fill="#3ccf7a">&#9632; Form</tspan></text></svg>`;
+    <text x="0" y="14" fill="${MUTED}" font-size="12">${Math.round(maxL)}</text>
+    <line x1="30" x2="${W - 10}" y1="190" y2="190" stroke="${RULE}"/>${bars}${line('atl', '#c2255c')}${line('ctl', INK)}${ticks}
+    <text x="${W - 10}" y="14" text-anchor="end" font-size="11"><tspan fill="${INK}">&#9632; Fitness</tspan> <tspan fill="#c2255c">&#9632; Fatigue</tspan> <tspan fill="${ZC.z3}">&#9632; Form</tspan></text></svg>`;
 }
 
 function svgWeekly(weeks) {
@@ -512,9 +520,9 @@ function svgWeekly(weeks) {
   const bw = (W - 20) / n;
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">${weeks.map((w, i) => {
     const h = (w.tss / max) * 120, x = 10 + i * bw;
-    return `<rect x="${x + 6}" y="${165 - h}" width="${bw - 12}" height="${h}" rx="4" fill="${i === n - 1 ? '#ff5a36' : '#3d8bfd'}" opacity=".85"/>
-      ${w.tss ? `<text x="${x + bw / 2}" y="${158 - h}" text-anchor="middle" fill="#eef1f5" font-size="13">${w.tss}</text><text x="${x + bw / 2}" y="${144 - h}" text-anchor="middle" fill="#8b93a1" font-size="11">${w.hours}h</text>` : ''}
-      ${i % 2 === n % 2 ? '' : `<text x="${x + bw / 2}" y="190" text-anchor="middle" fill="#8b93a1" font-size="11">${new Date(w.start + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>`}`;
+    return `<rect x="${x + 6}" y="${165 - h}" width="${bw - 12}" height="${h}" rx="2" fill="${i === n - 1 ? INK : FAINT}"/>
+      ${w.tss ? `<text x="${x + bw / 2}" y="${158 - h}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text><text x="${x + bw / 2}" y="${144 - h}" text-anchor="middle" fill="${MUTED}" font-size="11">${w.hours}h</text>` : ''}
+      ${i % 2 === n % 2 ? '' : `<text x="${x + bw / 2}" y="190" text-anchor="middle" fill="${MUTED}" font-size="11">${new Date(w.start + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>`}`;
   }).join('')}</svg>`;
 }
 
@@ -526,10 +534,10 @@ function svgCurve(c90, cAll) {
   const pts = (c) => CURVE_DURS.map((d, i) => (c[d] ? `${X(i)},${Y(c[d])}` : null)).filter(Boolean).join(' ');
   const dots = (c, col) => CURVE_DURS.map((d, i) => (c[d] ? `<circle cx="${X(i)}" cy="${Y(c[d])}" r="4" fill="${col}"/><text x="${X(i)}" y="${Y(c[d]) - 9}" text-anchor="middle" fill="${col}" font-size="12">${c[d]}</text>` : '')).join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
-    <polyline fill="none" stroke="#5b6472" stroke-width="2" stroke-dasharray="5 5" points="${pts(cAll)}"/>
-    <polyline fill="none" stroke="#ff5a36" stroke-width="2.5" points="${pts(c90)}"/>${dots(c90, '#ff5a36')}
-    ${labels.map((l, i) => `<text x="${X(i)}" y="210" text-anchor="middle" fill="#8b93a1" font-size="12">${l}</text>`).join('')}
-    <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="#ff5a36">&#9632; Last 90 days</tspan> <tspan fill="#8b93a1">- - All time</tspan></text></svg>`;
+    <polyline fill="none" stroke="${FAINT}" stroke-width="2" stroke-dasharray="5 5" points="${pts(cAll)}"/>
+    <polyline fill="none" stroke="${INK}" stroke-width="2.5" points="${pts(c90)}"/>${dots(c90, INK)}
+    ${labels.map((l, i) => `<text x="${X(i)}" y="210" text-anchor="middle" fill="${MUTED}" font-size="12">${l}</text>`).join('')}
+    <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="${INK}">&#9632; Last 90 days</tspan> <tspan fill="${MUTED}">- - All time</tspan></text></svg>`;
 }
 
 async function renderTraining() {
@@ -997,8 +1005,8 @@ function segRows(s) {
 function gearViz(gb) {
   if (gb.seq) return `gear ${gb.rear + 1}/${gb.nRear} &middot; ratio ${gb.ratio.toFixed(2)}`;
   const cogs = gb.cogsEasyFirst, max = cogs[0];
-  const bars = cogs.map((c, i) => `<rect x="${i * 9}" y="${22 - (c / max) * 20}" width="6" height="${(c / max) * 20}" rx="1.5" fill="${i === gb.rear ? '#ff5a36' : '#3a414c'}"/>`).join('');
-  const rings = gb.d.rings.map((r, i) => `<circle cx="${cogs.length * 9 + 10 + i * 14}" cy="12" r="${3 + (r / gb.d.rings.at(-1)) * 6}" fill="none" stroke="${i === gb.front ? '#ff5a36' : '#3a414c'}" stroke-width="2.5"/>`).join('');
+  const bars = cogs.map((c, i) => `<rect x="${i * 9}" y="${22 - (c / max) * 20}" width="6" height="${(c / max) * 20}" rx="1.5" fill="${i === gb.rear ? INK : RULE}"/>`).join('');
+  const rings = gb.d.rings.map((r, i) => `<circle cx="${cogs.length * 9 + 10 + i * 14}" cy="12" r="${3 + (r / gb.d.rings.at(-1)) * 6}" fill="none" stroke="${i === gb.front ? INK : RULE}" stroke-width="2.5"/>`).join('');
   return `<svg class="gearviz" viewBox="0 0 ${cogs.length * 9 + 14 + gb.d.rings.length * 14} 24">${bars}${rings}</svg><span>ratio ${gb.ratio.toFixed(2)}</span>`;
 }
 
@@ -1057,14 +1065,14 @@ function renderRide() {
   if (seg) {
     const rem = s.segRemaining;
     const tgt = seg.kind === 'erg' ? segTarget(seg, s.segProgress) : null;
-    card.style.borderLeftColor = seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade);
+    card.style.setProperty('--zc', seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade));
     $('#r-int-label').textContent = `${seg.label}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`;
     $('#r-int-text').textContent = seg.text || (seg.kind === 'erg' ? `${Math.round(tgt * 100)}% FTP` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}% grade, use your gears`);
     $('#r-int-left').textContent = rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m);
     const next = s.segs[s.segIndex + 1];
     $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${segAmount(next)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`}</b>` : 'Last interval';
   } else {
-    card.style.borderLeftColor = '#3d8bfd';
+    card.style.setProperty('--zc', s.segs ? ZC.z3 : gradeHex(s.grade));
     $('#r-int-label').textContent = s.segs ? 'Workout complete' : `Free slope: ${fmtGradeSet(s)}`;
     $('#r-int-text').textContent = s.segs ? 'Keep riding or press B twice to finish' : 'Up/down changes the grade by 1%. Shift to hold your cadence.';
     $('#r-int-left').textContent = '';
@@ -1098,7 +1106,7 @@ function drawChart() {
   ctx.clearRect(0, 0, W, H);
   const pad = 10 * dpr;
   const plotH = H - pad * 2;
-  ctx.font = `${11 * dpr}px -apple-system, sans-serif`;
+  ctx.font = `600 ${12 * dpr}px ${NUM_FONT}`;
 
   const ftp = app.settings.ftp;
   const maxP = Math.max(ftp * 1.6, ...s.samples.slice(-1200).map((x) => x.power + 20));
@@ -1109,39 +1117,39 @@ function drawChart() {
     const X = (t) => (t / T) * W;
     for (const g of s.segs) {
       if (g.kind === 'erg') {
-        ctx.fillStyle = zoneHex((g.from + g.to) / 2) + '55';
+        ctx.fillStyle = zoneHex((g.from + g.to) / 2) + (g.end <= s.chartPos ? '66' : 'cc');
         ctx.beginPath(); ctx.moveTo(X(g.start), H - pad);
         ctx.lineTo(X(g.start), Yp(g.from * ftp * s.intensity)); ctx.lineTo(X(g.end), Yp(g.to * ftp * s.intensity));
         ctx.lineTo(X(g.end), H - pad); ctx.closePath(); ctx.fill();
       } else {
-        ctx.fillStyle = gradeHex(g.grade) + '55';
+        ctx.fillStyle = gradeHex(g.grade) + (g.end <= s.chartPos ? '66' : 'cc');
         const h = Math.max(6 * dpr, ((g.grade + 0.03) / 0.15) * plotH * 0.6);
         ctx.fillRect(X(g.start), H - pad - h, X(g.end) - X(g.start), h);
       }
     }
     // FTP line
-    ctx.strokeStyle = '#ffffff22'; ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
     ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#8b93a1'; ctx.fillText(`FTP ${ftp}`, 6 * dpr, Yp(ftp) - 4 * dpr);
+    ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, 6 * dpr, Yp(ftp) - 4 * dpr);
     // power trace
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
     ctx.stroke();
-    ctx.fillStyle = '#ff5a36'; ctx.fillRect(X(s.chartPos) - dpr, 0, 2 * dpr, H);
+    ctx.fillStyle = INK; ctx.fillRect(X(s.chartPos) - dpr, 0, 2 * dpr, H);
     return;
   }
 
   // free ride: last 10 minutes of power with grade underlay
   const win = 600, data = s.samples.slice(-win);
   const X = (i) => (i / win) * W;
-  ctx.fillStyle = '#26303d';
+  ctx.fillStyle = UNDERLAY;
   data.forEach((x, i) => { const g = (x.grade || 0) / 100; const h = Math.max(0, ((g + 0.03) / 0.15) * plotH * 0.6); ctx.fillRect(X(i), H - pad - h, W / win + 1, h); });
-  ctx.strokeStyle = '#ffffff22'; ctx.setLineDash([4 * dpr, 4 * dpr]);
+  ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6 * dpr; ctx.beginPath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   data.forEach((x, i) => { i ? ctx.lineTo(X(i), Yp(x.power)) : ctx.moveTo(X(i), Yp(x.power)); });
   ctx.stroke();
-  ctx.fillStyle = '#8b93a1'; ctx.fillText('last 10 min', 6 * dpr, 16 * dpr);
+  ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 6 * dpr, 16 * dpr);
 }
 
 
@@ -1200,7 +1208,7 @@ function renderPhone(s) {
       set('rp-target-sub', `grade, use your gears${cad}`);
     }
   } else if (s.segs) {
-    zc = '#3ccf7a';
+    zc = ZC.z3;
     set('rp-int-label', 'Workout complete');
     set('rp-count', 'Done');
     set('rp-target', '');
@@ -1310,7 +1318,7 @@ function drawPhoneChart() {
   ctx.clearRect(0, 0, W, H);
   const top = 14 * dpr, bot = H - 2 * dpr, plotH = bot - top;
   const ftp = app.settings.ftp;
-  ctx.font = `600 ${10.5 * dpr}px -apple-system, sans-serif`;
+  ctx.font = `600 ${11.5 * dpr}px ${NUM_FONT}`;
 
   if (!s.segs) {
     // free slope: last 10 minutes of power over the grade
@@ -1321,10 +1329,10 @@ function drawPhoneChart() {
       const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.7);
       ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect((i / win) * W, bot - h, W / win + 1, h);
     });
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     data.forEach((x, i) => { const px = (i / win) * W; i ? ctx.lineTo(px, Y(x.power)) : ctx.moveTo(px, Y(x.power)); });
     ctx.stroke();
-    ctx.fillStyle = '#8b93a1'; ctx.fillText('LAST 10 MIN', 2 * dpr, 10 * dpr);
+    ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 2 * dpr, 10 * dpr);
     return;
   }
 
@@ -1354,24 +1362,24 @@ function drawPhoneChart() {
     ctx.globalAlpha = 1;
     if (i === cur) { // outline the current block
       const y = g.kind === 'erg' ? Math.min(Yp(g.from * ftp * s.intensity), Yp(g.to * ftp * s.intensity)) : bot - Math.max(4 * dpr, ((g.grade + s.gradeOffset + 0.03) / 0.15) * plotH * 0.7);
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr;
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5 * dpr;
       ctx.strokeRect(x0 + dpr * 0.75, y - dpr * 0.75, Math.max(2, x1 - x0 - gap - dpr * 1.5), bot - y + dpr * 0.75);
     }
   });
 
   // FTP line
-  ctx.strokeStyle = '#ffffff40'; ctx.lineWidth = dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
+  ctx.strokeStyle = FTP_LINE; ctx.lineWidth = dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#8b93a1'; ctx.fillText(`FTP ${ftp}`, 2 * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
+  ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, 2 * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
 
   // power trace over the done part
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.8 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
   ctx.stroke();
 
   // position marker
   const mx = X(pos);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = INK;
   ctx.fillRect(mx - dpr, top - 4 * dpr, 2 * dpr, bot - top + 4 * dpr);
   ctx.beginPath(); ctx.moveTo(mx - 6 * dpr, top - 10 * dpr); ctx.lineTo(mx + 6 * dpr, top - 10 * dpr); ctx.lineTo(mx, top - 2 * dpr); ctx.closePath(); ctx.fill();
 }
@@ -1388,6 +1396,7 @@ rpTap('rp-gup', () => action('up'));
 rpTap('rp-skip', () => { action('skip'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
+rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-end', () => {
   if (app.endArmed && Date.now() - app.endArmed < 3000) { app.endArmed = 0; $('#rp-sheet').classList.add('hidden'); endSession(); }
   else app.endArmed = Date.now();
@@ -1467,6 +1476,22 @@ $('#btn-token').onclick = async () => {
     st.textContent = 'Connected and synced';
   } catch (e) { st.textContent = e.message; }
 };
+// ------------------------------------------------------------------ theme (light default, dark optional; index.html sets it before first paint)
+function setTheme(t) {
+  app.theme = t === 'dark' ? 'dark' : 'light';
+  ls.set('theme', app.theme);
+  document.documentElement.dataset.theme = app.theme;
+  document.querySelector('meta[name="theme-color"]').content = app.theme === 'dark' ? '#0c0e0d' : '#e6e9e5';
+  const label = app.theme === 'dark' ? 'Light mode' : 'Dark mode';
+  $('#btn-theme').textContent = app.theme === 'dark' ? 'Light' : 'Dark';
+  $('#btn-theme').title = `Switch to ${label.toLowerCase()}`;
+  $('#rp-theme').textContent = label;
+  readTokens();
+  if (app.tab === 'training') renderTraining();
+  if (app.screen === 'ride') renderRide();
+}
+setTheme(ls.get('theme', 'light'));
+$('#btn-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
 $('#btn-log').onclick = () => { $('#log-body').textContent = logLines.join('\n'); $('#log').classList.remove('hidden'); };
 $$('[data-close]').forEach((b) => (b.onclick = () => b.closest('.panel').classList.add('hidden')));
 $('#btn-diag').onclick = async () => {

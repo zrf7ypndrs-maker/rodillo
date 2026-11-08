@@ -1,16 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
-<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-  <stop offset="0" stop-color="#262b33"/><stop offset="1" stop-color="#0b0d10"/>
-</linearGradient>
-<linearGradient id="ring" x1="0.2" y1="0" x2="0.8" y2="1">
-  <stop offset="0" stop-color="#ff8a5c"/><stop offset="0.55" stop-color="#ff5a36"/><stop offset="1" stop-color="#e8401f"/>
-</linearGradient>
-<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-  <stop offset="0" stop-color="#ff5a36" stop-opacity="0.28"/><stop offset="1" stop-color="#ff5a36" stop-opacity="0"/>
-</radialGradient>
-<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
-  <stop offset="0" stop-color="#fff" stop-opacity="0.10"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
-</linearGradient>
-</defs><rect x="0" y="0" width="1024" height="1024" rx="230" fill="#14171c"/>
-<circle cx="512" cy="512" r="300" fill="none" stroke="#ff5a36" stroke-width="140"/>
-<circle cx="512" cy="512" r="95" fill="#ff5a36"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+<rect width="32" height="32" rx="7" fill="#e6e9e5"/>
+<circle cx="16" cy="14" r="7.5" fill="none" stroke="#16181b" stroke-width="3.2"/>
+<rect x="6" y="24" width="20" height="3" rx="1.5" fill="#16181b"/>
+</svg>

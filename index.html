@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rodillo</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0e1013">
+<meta name="theme-color" content="#e6e9e5">
+<script>try { if (JSON.parse(localStorage.getItem('rodillo.theme')) === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
+<link rel="preload" href="fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=202611082335">
+<link rel="stylesheet" href="css/app.css?v=202611082357">
 </head>
 <body>
 <div id="app">
@@ -19,6 +21,7 @@
     <header class="topbar">
       <div class="brand"><span class="logo"></span>Rodillo</div>
       <div class="top-actions">
+        <button class="ghost" id="btn-theme">Dark</button>
         <button class="ghost" id="btn-settings">Settings</button>
         <button class="ghost" id="btn-log">Log</button>
       </div>
@@ -148,6 +151,7 @@
         <button id="rp-skip">Skip interval</button>
         <button id="rp-lap">Lap</button>
         <button id="rp-erg">ERG off for this interval</button>
+        <button id="rp-theme">Dark mode</button>
         <button id="rp-end" class="danger">End ride</button>
         <button id="rp-sheet-close" class="ghost">Close</button>
       </div>
@@ -246,6 +250,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611082335"></script>
+<script type="module" src="js/app.js?v=202611082357"></script>
 </body>
 </html>
