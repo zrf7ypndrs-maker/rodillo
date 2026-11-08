@@ -1,0 +1,77 @@
+{
+  "id": "sim-rolling-45",
+  "name": "Rolling hills, 55 min",
+  "tags": [
+    "sim",
+    "endurance"
+  ],
+  "description": "Endurance in slope mode. Rollers from -2% to 5%: shift to stay at 85-95 rpm and keep power mostly in zone 2, letting it rise on the kickers.",
+  "steps": [
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 240,
+      "grade": 2
+    },
+    {
+      "dur": 180,
+      "grade": 4
+    },
+    {
+      "dur": 120,
+      "grade": -2
+    },
+    {
+      "dur": 240,
+      "grade": 1
+    },
+    {
+      "dur": 180,
+      "grade": 5
+    },
+    {
+      "dur": 120,
+      "grade": -1
+    },
+    {
+      "dur": 300,
+      "grade": 3
+    },
+    {
+      "dur": 180,
+      "grade": 0
+    },
+    {
+      "dur": 240,
+      "grade": 4
+    },
+    {
+      "dur": 120,
+      "grade": -2
+    },
+    {
+      "dur": 300,
+      "grade": 2
+    },
+    {
+      "dur": 180,
+      "grade": 5
+    },
+    {
+      "dur": 120,
+      "grade": -1
+    },
+    {
+      "dur": 240,
+      "grade": 1
+    },
+    {
+      "dur": 180,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

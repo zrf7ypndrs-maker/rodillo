@@ -1,0 +1,38 @@
+{
+  "id": "sim-climb-repeats",
+  "name": "Climb repeats 4 x 6 min at 6%",
+  "tags": [
+    "sim",
+    "climb"
+  ],
+  "description": "Slope mode with gears. Pick a gear that puts you at 80-90 rpm and hold roughly 100% FTP on each climb. Use the shifters, not the effort, to manage cadence. Flat roll between reps.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 1,
+      "label": "Warm-up roll"
+    },
+    {
+      "repeat": 4,
+      "steps": [
+        {
+          "dur": 360,
+          "grade": 6,
+          "label": "Climb",
+          "cadence": "80-90",
+          "text": "Hold ~100% FTP"
+        },
+        {
+          "dur": 240,
+          "grade": 0,
+          "label": "Flat roll"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

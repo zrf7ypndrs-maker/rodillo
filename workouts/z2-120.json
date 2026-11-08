@@ -1,0 +1,39 @@
+{
+  "id": "z2-120",
+  "name": "Zone 2, 2 hours",
+  "tags": [
+    "z2",
+    "saturday",
+    "long"
+  ],
+  "description": "Long day. 68-72% FTP, mostly steady. The hour mark is where the adaptation starts, so the second hour is the point of the session.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "repeat": 2,
+      "steps": [
+        {
+          "dur": 2700,
+          "power": 0.7,
+          "label": "Zone 2"
+        },
+        {
+          "dur": 300,
+          "power": 0.8,
+          "label": "Tempo pickup"
+        }
+      ]
+    },
+    {
+      "dur": 600,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

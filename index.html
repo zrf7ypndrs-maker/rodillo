@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rodillo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ff5a36' stroke-width='14'/><circle cx='50' cy='50' r='8' fill='%23ff5a36'/></svg>">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= HOME ================= -->
+  <section id="home" class="screen active">
+    <header class="topbar">
+      <div class="brand"><span class="logo"></span>Rodillo</div>
+      <div class="top-actions">
+        <button class="ghost" id="btn-settings">Settings</button>
+        <button class="ghost" id="btn-log">Log</button>
+      </div>
+    </header>
+
+    <div class="devices">
+      <div class="device" data-kind="trainer">
+        <div class="dev-head"><span class="dot"></span><span class="dev-title">Trainer</span></div>
+        <div class="dev-name">Not connected</div>
+        <div class="dev-meta"></div>
+        <button class="primary small" data-connect="trainer">Connect</button>
+      </div>
+      <div class="device" data-kind="hr">
+        <div class="dev-head"><span class="dot"></span><span class="dev-title">Heart rate</span></div>
+        <div class="dev-name">Not connected</div>
+        <div class="dev-meta"></div>
+        <button class="primary small" data-connect="hr">Connect</button>
+      </div>
+      <div class="device" data-kind="controller">
+        <div class="dev-head"><span class="dot"></span><span class="dev-title">Zwift Ride controllers</span></div>
+        <div class="dev-name">Not connected</div>
+        <div class="dev-meta"></div>
+        <div class="row-btns">
+          <button class="primary small" data-connect="controller">Connect</button>
+          <button class="ghost small hidden" data-connect="controller2">+ Other side</button>
+        </div>
+      </div>
+      <div class="device demo">
+        <div class="dev-head"><span class="dev-title">No hardware?</span></div>
+        <div class="dev-meta">Simulated trainer and HR strap, for trying the app at your desk.</div>
+        <button class="ghost small" id="btn-demo">Demo mode</button>
+      </div>
+    </div>
+
+    <div id="today" class="today hidden"></div>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="workouts" class="active">Workouts</button>
+      <button data-tab="free">Free ride &amp; routes</button>
+      <button data-tab="history">History</button>
+    </nav>
+
+    <div class="tab-body">
+      <div id="tab-workouts" class="tab active">
+        <div id="workout-list" class="workout-list"></div>
+        <div class="import-row">
+          <label class="ghost small file-btn">Import .zwo / .json<input type="file" id="import-workout" accept=".zwo,.json,.xml" hidden></label>
+          <span class="muted" id="library-source"></span>
+        </div>
+      </div>
+      <div id="tab-free" class="tab">
+        <div class="free-grid">
+          <div class="card">
+            <h3>Free ride</h3>
+            <p class="muted">Slope mode with virtual gears. Set the grade from the controller (up/down) or the keyboard.</p>
+            <button class="primary" id="btn-free">Start free ride</button>
+          </div>
+          <div class="card">
+            <h3>Ride a route</h3>
+            <p class="muted">Load any GPX (Strava, Garmin, Komoot). Grade follows the route by distance.</p>
+            <label class="ghost file-btn">Load GPX<input type="file" id="import-gpx" accept=".gpx" hidden></label>
+            <div id="route-list" class="route-list"></div>
+          </div>
+        </div>
+      </div>
+      <div id="tab-history" class="tab">
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RIDE ================= -->
+  <section id="ride" class="screen">
+    <div class="ride-top">
+      <div class="ride-name" id="r-name"></div>
+      <div class="ride-clock" id="r-elapsed">0:00</div>
+      <div class="ride-status" id="r-status"></div>
+    </div>
+
+    <div class="interval" id="r-interval">
+      <div class="int-main">
+        <div class="int-label" id="r-int-label">Free ride</div>
+        <div class="int-text" id="r-int-text"></div>
+      </div>
+      <div class="int-left" id="r-int-left"></div>
+      <div class="int-next" id="r-int-next"></div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile power"><div class="t-label">Power</div><div class="t-val" id="r-power">0</div><div class="t-sub" id="r-target"></div></div>
+      <div class="tile"><div class="t-label">Heart rate</div><div class="t-val" id="r-hr">--</div><div class="t-sub" id="r-hrzone"></div></div>
+      <div class="tile"><div class="t-label">Cadence</div><div class="t-val" id="r-cad">0</div><div class="t-sub" id="r-cadtarget"></div></div>
+      <div class="tile gear"><div class="t-label" id="r-gear-label">Gear</div><div class="t-val" id="r-gear">12</div><div class="t-sub" id="r-ratio"></div></div>
+      <div class="tile"><div class="t-label">Grade</div><div class="t-val" id="r-grade">0.0<span class="unit">%</span></div><div class="t-sub" id="r-gradesub"></div></div>
+      <div class="tile"><div class="t-label">Speed km/h</div><div class="t-val" id="r-speed">0.0</div><div class="t-sub" id="r-dist">0.00 km</div></div>
+    </div>
+
+    <canvas id="r-chart" class="chart"></canvas>
+
+    <div class="ride-bottom">
+      <div class="hints" id="r-hints"></div>
+      <div class="ride-btns">
+        <button class="ghost" id="r-pause">Start</button>
+        <button class="ghost" id="r-end">End ride</button>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="paused-overlay hidden" id="r-paused">
+      <div><div class="big">Paused</div><div class="muted">Press A or Space to ride</div></div>
+    </div>
+  </section>
+
+  <!-- ================= SUMMARY ================= -->
+  <section id="summary" class="screen">
+    <div class="summary-card">
+      <h2 id="s-name"></h2>
+      <div class="muted" id="s-date"></div>
+      <div class="stats" id="s-stats"></div>
+      <div id="s-extra"></div>
+      <div class="row-btns">
+        <button class="primary" id="s-fit">Download .FIT</button>
+        <button class="ghost" id="s-home">Done</button>
+      </div>
+      <p class="muted small-print">Upload the .FIT to Strava or Garmin Connect. It's saved as a virtual ride.</p>
+    </div>
+  </section>
+
+  <!-- ================= PANELS ================= -->
+  <aside id="settings" class="panel hidden">
+    <div class="panel-head"><h3>Settings</h3><button class="ghost small" data-close>Close</button></div>
+    <form id="settings-form" class="settings-form"></form>
+    <h4>Controls</h4>
+    <table class="keys">
+      <tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>
+      <tr><td>Easier gear</td><td>Left shifter / paddle</td><td>&larr;</td></tr>
+      <tr><td>Harder gear</td><td>Right shifter / paddle</td><td>&rarr;</td></tr>
+      <tr><td>ERG intensity or grade &plusmn;</td><td>D-pad up / down</td><td>&uarr; / &darr;</td></tr>
+      <tr><td>Start / pause</td><td>A</td><td>Space</td></tr>
+      <tr><td>End ride (press twice)</td><td>B</td><td>Esc</td></tr>
+      <tr><td>Skip interval</td><td>Y</td><td>S</td></tr>
+      <tr><td>Lap</td><td>Z</td><td>L</td></tr>
+      <tr><td>ERG off/on for this interval</td><td>Left power-up</td><td>E</td></tr>
+      <tr><td>Menus: move / select / back</td><td>D-pad / A / B</td><td>&uarr;&darr; / Enter / Esc</td></tr>
+    </table>
+  </aside>
+
+  <aside id="log" class="panel hidden">
+    <div class="panel-head"><h3>Log</h3><div><button class="ghost small" id="btn-diag">Device details</button> <button class="ghost small" data-close>Close</button></div></div>
+    <pre id="log-body"></pre>
+  </aside>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

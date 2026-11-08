@@ -1,0 +1,105 @@
+{
+  "id": "ramp-test",
+  "name": "Ramp FTP test",
+  "tags": [
+    "test"
+  ],
+  "description": "1-minute steps, +6% FTP each minute. When you can't hold the target, press B twice to end. The summary shows your best 1-minute power and a new FTP (75% of it), with a button to apply it.",
+  "steps": [
+    {
+      "dur": 300,
+      "power": 0.5,
+      "label": "Easy spin"
+    },
+    {
+      "dur": 120,
+      "power": 0.5
+    },
+    {
+      "dur": 60,
+      "power": 0.5,
+      "label": "Step 1"
+    },
+    {
+      "dur": 60,
+      "power": 0.56,
+      "label": "Step 2"
+    },
+    {
+      "dur": 60,
+      "power": 0.62,
+      "label": "Step 3"
+    },
+    {
+      "dur": 60,
+      "power": 0.68,
+      "label": "Step 4"
+    },
+    {
+      "dur": 60,
+      "power": 0.74,
+      "label": "Step 5"
+    },
+    {
+      "dur": 60,
+      "power": 0.8,
+      "label": "Step 6"
+    },
+    {
+      "dur": 60,
+      "power": 0.86,
+      "label": "Step 7"
+    },
+    {
+      "dur": 60,
+      "power": 0.92,
+      "label": "Step 8"
+    },
+    {
+      "dur": 60,
+      "power": 0.98,
+      "label": "Step 9"
+    },
+    {
+      "dur": 60,
+      "power": 1.04,
+      "label": "Step 10"
+    },
+    {
+      "dur": 60,
+      "power": 1.1,
+      "label": "Step 11"
+    },
+    {
+      "dur": 60,
+      "power": 1.16,
+      "label": "Step 12"
+    },
+    {
+      "dur": 60,
+      "power": 1.22,
+      "label": "Step 13"
+    },
+    {
+      "dur": 60,
+      "power": 1.28,
+      "label": "Step 14"
+    },
+    {
+      "dur": 60,
+      "power": 1.34,
+      "label": "Step 15"
+    },
+    {
+      "dur": 60,
+      "power": 1.4,
+      "label": "Step 16"
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

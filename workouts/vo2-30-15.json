@@ -1,0 +1,80 @@
+{
+  "id": "vo2-30-15",
+  "name": "VO2max 30/15 x 3 sets",
+  "tags": [
+    "vo2",
+    "tuesday"
+  ],
+  "description": "Ronnestad-style short intervals. 30 s hard / 15 s easy keeps oxygen uptake near max for longer than long reps. Three sets of 10, 5 min easy between sets.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "repeat": 10,
+      "steps": [
+        {
+          "dur": 30,
+          "power": 1.25,
+          "cadence": "100+"
+        },
+        {
+          "dur": 15,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "power": 0.5,
+      "label": "Set recovery"
+    },
+    {
+      "repeat": 10,
+      "steps": [
+        {
+          "dur": 30,
+          "power": 1.25,
+          "cadence": "100+"
+        },
+        {
+          "dur": 15,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "power": 0.5,
+      "label": "Set recovery"
+    },
+    {
+      "repeat": 10,
+      "steps": [
+        {
+          "dur": 30,
+          "power": 1.25,
+          "cadence": "100+"
+        },
+        {
+          "dur": 15,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "power": 0.5,
+      "label": "Set recovery"
+    },
+    {
+      "dur": 180,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

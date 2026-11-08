@@ -1,0 +1,39 @@
+{
+  "id": "z2-90",
+  "name": "Zone 2, 90 min",
+  "tags": [
+    "z2",
+    "saturday",
+    "long"
+  ],
+  "description": "Long aerobic ride. 70% FTP with three 5-min pickups to tempo to break it up. Eat 40-60 g carbs per hour.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "repeat": 3,
+      "steps": [
+        {
+          "dur": 1200,
+          "power": 0.7,
+          "label": "Zone 2"
+        },
+        {
+          "dur": 300,
+          "power": 0.82,
+          "label": "Tempo pickup"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

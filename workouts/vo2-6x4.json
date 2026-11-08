@@ -1,0 +1,46 @@
+{
+  "id": "vo2-6x4",
+  "name": "VO2max 6 x 4 min",
+  "tags": [
+    "vo2",
+    "tuesday"
+  ],
+  "description": "Progression of the 5 x 4. Same intensity, one more rep, slightly shorter recoveries.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 60,
+      "power": 0.95,
+      "label": "Opener"
+    },
+    {
+      "dur": 180,
+      "power": 0.5
+    },
+    {
+      "repeat": 6,
+      "steps": [
+        {
+          "dur": 240,
+          "power": 1.12,
+          "cadence": "95-105"
+        },
+        {
+          "dur": 210,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

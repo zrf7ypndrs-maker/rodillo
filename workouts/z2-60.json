@@ -1,0 +1,29 @@
+{
+  "id": "z2-60",
+  "name": "Zone 2, 60 min",
+  "tags": [
+    "z2",
+    "thursday"
+  ],
+  "description": "Steady aerobic base at 68% FTP. Nose-breathing pace: you should be able to talk in full sentences. Keep HR stable; if it drifts more than 5 bpm in the last 20 min, the next one goes 5 W lower.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.68,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 2700,
+      "power": 0.68,
+      "label": "Zone 2",
+      "cadence": "85-95"
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

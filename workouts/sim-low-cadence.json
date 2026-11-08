@@ -1,0 +1,39 @@
+{
+  "id": "sim-low-cadence",
+  "name": "Low-cadence grind 5 x 5 min at 8%",
+  "tags": [
+    "sim",
+    "strength"
+  ],
+  "description": "Torque work that plays to your low-cadence strength. Heavy gear, 55-65 rpm, seated, about 90% FTP. Stop if your knees complain.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 1,
+      "label": "Warm-up roll"
+    },
+    {
+      "repeat": 5,
+      "steps": [
+        {
+          "dur": 300,
+          "grade": 8,
+          "label": "Grind",
+          "cadence": "55-65",
+          "text": "Seated, heavy gear"
+        },
+        {
+          "dur": 180,
+          "grade": 0,
+          "label": "Spin easy",
+          "cadence": "95+"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

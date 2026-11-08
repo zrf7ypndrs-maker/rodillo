@@ -1,0 +1,15 @@
+{
+  "workouts": [
+    "vo2-5x4.json",
+    "vo2-6x4.json",
+    "vo2-30-15.json",
+    "z2-60.json",
+    "z2-90.json",
+    "z2-120.json",
+    "sweetspot-3x12.json",
+    "ramp-test.json",
+    "sim-climb-repeats.json",
+    "sim-low-cadence.json",
+    "sim-rolling-45.json"
+  ]
+}

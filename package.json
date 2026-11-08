@@ -1,0 +1,19 @@
+{
+  "name": "rodillo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node test/run.mjs && node test/ble-mock.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@garmin/fitsdk": "^21.221.0"
+  },
+  "type": "module"
+}

@@ -1,0 +1,47 @@
+{
+  "id": "vo2-5x4",
+  "name": "VO2max 5 x 4 min",
+  "tags": [
+    "vo2",
+    "tuesday"
+  ],
+  "description": "Classic VO2max session. 4 min at 112% FTP with equal recovery. The last minute of each rep should feel like you could hold it for 60 more seconds, not 3 minutes. Cadence 95+, it keeps the load on your lungs, not your quads.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 60,
+      "power": 0.95,
+      "label": "Opener"
+    },
+    {
+      "dur": 180,
+      "power": 0.5
+    },
+    {
+      "repeat": 5,
+      "steps": [
+        {
+          "dur": 240,
+          "power": 1.12,
+          "cadence": "95-105",
+          "text": "Smooth and high cadence"
+        },
+        {
+          "dur": 240,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}
