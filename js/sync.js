@@ -69,8 +69,17 @@ export class GitHubSync {
   async putJson(path, obj, message, sha) {
     return this.api(`/contents/${path}`, {
       method: 'PUT',
-      body: JSON.stringify({ message, content: b64(JSON.stringify(obj, null, path.endsWith('index.json') ? 2 : 0)), branch: this.branch, ...(sha ? { sha } : {}) }),
+      body: JSON.stringify({ message, content: b64(JSON.stringify(obj, null, path.endsWith('index.json') || path.startsWith('coach/') ? 2 : 0)), branch: this.branch, ...(sha ? { sha } : {}) }),
     });
+  }
+
+  /** Overwrite a file whatever its current sha (retries once if it changed underneath). */
+  async putJsonFresh(path, obj, message) {
+    for (let attempt = 0; ; attempt++) {
+      const cur = await this.api(`/contents/${path}?ref=${this.branch}`);
+      try { return await this.putJson(path, obj, message, cur?.sha); }
+      catch (e) { if (attempt >= 1 || (e.status !== 409 && e.status !== 422)) throw e; }
+    }
   }
 
   /** Write the full ride file, then upsert its summary into index.json. */
