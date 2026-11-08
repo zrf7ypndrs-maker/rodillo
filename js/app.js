@@ -8,9 +8,8 @@ import { DRIVETRAINS } from './engine/drivetrain.js';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js';
 import { encodeActivity } from './fit.js';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js';
-import { GitHubSync, DEFAULT_REPO } from './sync.js';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js';
 import { ls, rides } from './store.js';
-import { CoachClient, COACH_MODELS, DEFAULT_MODEL, PLAN_PATH, WORKOUTS_PATH, costOf, restoreSnapshot, trimHistory, mdToHtml } from './coach.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -239,7 +238,7 @@ function workoutCard(w, i) {
     <div class="wo" data-i="${i}" tabindex="0">
       <div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
-      <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${w._source === 'coach' ? '<span class="tag coach">from chat</span>' : ''}${(w.tags || []).filter((t) => !['sim'].includes(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${w._source === 'coach' ? '<span class="tag coach">coach</span>' : ''}${(w.tags || []).filter((t) => !['sim'].includes(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       <div class="wo-desc">${esc(w.description)}</div>
       <div class="start-row"><button class="primary small" data-start="${i}">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}">Remove</button>` : ''}</div>
     </div>`;
@@ -364,10 +363,8 @@ function renderCalendar() {
   for (const r of info.ridden) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)} &middot; NP ${r.np} W &middot; TSS ${r.tss}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
   }
-  if (!info.isPast) html += `<button class="ghost small cal-ask" id="cal-ask">Ask the coach about this day</button>`;
   $('#cal-detail').innerHTML = html;
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
-  if ($('#cal-ask')) $('#cal-ask').onclick = () => openCoach(`About ${new Date(sel + 'T12:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}: `);
 }
 
 // ------------------------------------------------------------------ WHOOP recovery
@@ -1146,221 +1143,11 @@ function renderSettings() {
   };
 }
 
-// ------------------------------------------------------------------ coach chat
-const coach = {
-  messages: ls.get('coachChat', []), changes: ls.get('coachChanges', {}), cost: ls.get('coachCost', 0),
-  snapshots: {}, lastChangeId: null, notes: [], busy: false, status: '', error: '', setup: false,
-};
-const coachCfg = () => ls.get('coach', {});
-function saveCoach() {
-  coach.messages = trimHistory(coach.messages);
-  ls.set('coachChat', coach.messages); ls.set('coachChanges', coach.changes); ls.set('coachCost', coach.cost);
-}
-
-const coachHost = {
-  today: () => dkey(new Date()),
-  settings: () => app.settings,
-  plan: () => app.plan,
-  library: () => app.library,
-  customWorkouts: () => app.coachWorkouts || [],
-  rides: () => (app.rows || []).filter((r) => !r.demo && r.summary.source !== 'demo').map((r) => r.summary).sort((a, b) => (a.id < b.id ? -1 : 1)),
-  recovery: () => (app.whoop ? Object.entries(app.whoop).slice(-5) : null),
-  riding: () => !!app.session && !app.session.finished,
-  async getRide(id) {
-    const gh = syncClient();
-    if (gh) { const r = await gh.getJson(`rides/${id.slice(0, 4)}/${id}.json`); if (r) return r.json; }
-    const row = (app.rows || []).find((x) => x.summary.id === id);
-    if (row?.local) { const full = await rides.get(row.local.id); if (full?.samples) return rideDoc(full); }
-    return row ? { summary: row.summary } : null;
-  },
-  async savePlan(plan, msg) {
-    const gh = syncClient();
-    if (gh) await gh.putJsonFresh(PLAN_PATH, plan, msg);
-    app.coachPlan = plan; ls.set('coachPlan', plan);
-    applyLibrary();
-  },
-  async saveWorkouts(list, msg) {
-    const gh = syncClient();
-    if (gh) await gh.putJsonFresh(WORKOUTS_PATH, { version: 1, workouts: list }, msg);
-    app.coachWorkouts = list; ls.set('coachWorkouts', list);
-    applyLibrary();
-  },
-  async setFtp(ftp) {
-    app.settings.ftp = ftp; ls.set('settings', app.settings);
-    renderLibrary(); refreshPlanViews();
-  },
-};
-
-const STARTERS = [
-  'How did this week go?',
-  'I slept badly. Make today easier',
-  "Move Saturday's ride to Sunday",
-  'Give me a 45 min sweet spot session for today',
-];
-
-function openCoach(prefill) {
-  $$('.panel').forEach((p) => p.classList.add('hidden'));
-  $('#coach').classList.remove('hidden');
-  renderCoach();
-  const t = $('#coach-text');
-  if (prefill && t) { t.value = prefill; }
-  if (t && !t.closest('.hidden')) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
-}
-
-function coachSetupHtml(cfg) {
-  const opts = Object.entries(COACH_MODELS).map(([id, m]) => `<option value="${id}" ${(cfg.model || DEFAULT_MODEL) === id ? 'selected' : ''}>${m.label}</option>`).join('');
-  return `<div class="coach-setup">
-    <h3>Connect Claude</h3>
-    <p class="muted">The chat calls Claude with your own Anthropic API key. Usage is billed to that key, separate from your Claude subscription: roughly 1 to 3 cents per message with Opus.</p>
-    <ol class="muted"><li>Open <b>platform.claude.com</b>, then <b>API keys</b>, then <b>Create key</b>.</li><li>Add a few dollars of credit under <b>Billing</b>.</li><li>Paste the key below.</li></ol>
-    <div class="settings-form">
-      <label for="coach-key">API key</label><input id="coach-key" type="password" placeholder="sk-ant-..." autocomplete="off" value="${esc(cfg.key || '')}">
-      <label for="coach-model">Model</label><select id="coach-model">${opts}</select>
-      <div class="help">Stored in Chrome on this Mac only. Plan and workout edits are saved to rodillo-data, so the GitHub token in Settings needs to be set too.</div>
-    </div>
-    <div class="row-btns"><button class="primary small" id="coach-save">Save &amp; test</button>${cfg.key ? '<button class="ghost small" id="coach-back">Back to chat</button><button class="ghost small danger" id="coach-forget">Remove key</button>' : ''}</div>
-    <p class="muted" id="coach-key-status"></p>
-  </div>`;
-}
-
-function coachMessagesHtml() {
-  const out = [];
-  const lastUndoable = coach.lastChangeId && coach.snapshots[coach.lastChangeId] && !coach.changes[coach.lastChangeId]?.undone ? coach.lastChangeId : null;
-  for (const m of coach.messages) {
-    const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
-    for (const b of blocks) {
-      if (b.type === 'text' && b.text.trim()) {
-        if (m.role === 'user' && b.text.startsWith('[App note')) continue;
-        out.push(m.role === 'user' ? `<div class="msg user">${esc(b.text)}</div>` : `<div class="msg bot">${mdToHtml(b.text)}</div>`);
-      } else if (b.type === 'tool_use' && coach.changes[b.id]) {
-        const c = coach.changes[b.id];
-        out.push(`<div class="change ${c.undone ? 'undone' : ''}"><div class="change-label">${esc(c.label).replace(/\n/g, '<br>')}</div>${c.undone ? '<span class="muted">Undone</span>' : b.id === lastUndoable ? `<button class="ghost small" data-undo="${b.id}">${coach.snapshots[b.id].ids.length > 1 ? `Undo all ${coach.snapshots[b.id].ids.length}` : 'Undo'}</button>` : ''}</div>`);
-      }
-    }
-  }
-  return out.join('');
-}
-
-function renderCoach() {
-  const cfg = coachCfg();
-  const body = $('#coach-msgs');
-  const form = $('#coach-form');
-  if (!cfg.key || coach.setup) {
-    form.classList.add('hidden');
-    $('#coach-foot').textContent = '';
-    body.innerHTML = coachSetupHtml(cfg);
-    $('#coach-save').onclick = async () => {
-      const key = $('#coach-key').value.trim(), model = $('#coach-model').value;
-      const st = $('#coach-key-status');
-      if (!key) { st.textContent = 'Paste a key first.'; return; }
-      st.textContent = 'Testing...';
-      try {
-        await new CoachClient({ apiKey: key, model }).test();
-        ls.set('coach', { key, model });
-        coach.setup = false; renderCoach();
-        $('#coach-text')?.focus();
-      } catch (e) { st.textContent = e.message; }
-    };
-    if ($('#coach-back')) $('#coach-back').onclick = () => { coach.setup = false; renderCoach(); };
-    if ($('#coach-forget')) $('#coach-forget').onclick = () => { ls.set('coach', {}); coach.setup = false; renderCoach(); };
-    return;
-  }
-  form.classList.remove('hidden');
-  let html = coach.messages.length ? coachMessagesHtml()
-    : `<div class="coach-empty"><p class="muted">Ask about your training or tell me what to change. I can read your rides and edit your plan and sessions directly.</p><div class="chips">${STARTERS.map((t) => `<button class="ghost small chip" data-starter="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
-  if (coach.busy) html += `<div class="msg bot typing"><span class="dots"><i></i><i></i><i></i></span> ${esc(coach.status || 'Thinking')}...</div>`;
-  if (coach.error) html += `<div class="msg err">${esc(coach.error)}</div>`;
-  body.innerHTML = html;
-  body.scrollTop = body.scrollHeight;
-  body.querySelectorAll('[data-starter]').forEach((b) => (b.onclick = () => coachSend(b.dataset.starter)));
-  body.querySelectorAll('[data-undo]').forEach((b) => (b.onclick = () => coachUndo(b.dataset.undo)));
-  $('#coach-send').disabled = coach.busy;
-  const m = COACH_MODELS[cfg.model || DEFAULT_MODEL];
-  $('#coach-foot').innerHTML = `${esc(m?.label || cfg.model)} &middot; spent so far $${coach.cost.toFixed(2)}${syncClient() ? '' : ' &middot; <span class="warn-text">no GitHub token: edits stay on this Mac</span>'} &middot; <a href="#" id="coach-keys">API key</a>`;
-  $('#coach-keys').onclick = (e) => { e.preventDefault(); coach.setup = true; renderCoach(); };
-}
-
-async function coachSend(text) {
-  text = String(text || '').trim();
-  if (coach.busy || !text) return;
-  const cfg = coachCfg();
-  if (!cfg.key) { coach.setup = true; renderCoach(); return; }
-  coach.error = '';
-  const blocks = [...coach.notes.map((n) => ({ type: 'text', text: n })), { type: 'text', text }];
-  coach.notes = [];
-  const last = coach.messages.at(-1);
-  if (last?.role === 'user') last.content = [...(typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content), ...blocks];
-  else coach.messages.push({ role: 'user', content: blocks.length === 1 ? text : blocks });
-  const sentAt = coach.messages.length;
-  coach.busy = true; coach.status = 'Thinking';
-  $('#coach-text').value = '';
-  renderCoach();
-  try { app.rows = await trainingRows(); } catch { /* keep old rows */ }
-  const client = new CoachClient({ apiKey: cfg.key, model: cfg.model || DEFAULT_MODEL });
-  let turnSnap = null;
-  const turnIds = [];
-  try {
-    await client.turn(coach.messages, coachHost, (ev) => {
-      if (ev.type === 'status') coach.status = ev.text;
-      else if (ev.type === 'usage') coach.cost += costOf(ev.usage, ev.model);
-      else if (ev.type === 'change') {
-        // one Undo per reply: it restores the state from before the reply's first edit
-        turnSnap ||= ev.snapshot;
-        turnIds.push(ev.id);
-        coach.changes[ev.id] = { label: ev.label, group: turnIds[0] };
-        coach.snapshots = { [ev.id]: { snap: turnSnap, ids: [...turnIds] } };
-        coach.lastChangeId = ev.id;
-      }
-      saveCoach();
-      renderCoach();
-    });
-  } catch (e) {
-    coach.error = e.message;
-    // nothing came back for this message: take it out and give the text back
-    if (coach.messages.length === sentAt && coach.messages.at(-1)?.role === 'user' && typeof coach.messages.at(-1).content === 'string') {
-      coach.messages.pop();
-      $('#coach-text').value = text;
-    }
-  }
-  coach.busy = false;
-  saveCoach();
-  renderCoach();
-}
-
-async function coachUndo(id) {
-  const snap = coach.snapshots[id];
-  if (!snap || coach.busy) return;
-  coach.busy = true; coach.status = 'Undoing'; renderCoach();
-  try {
-    await restoreSnapshot(snap.snap, coachHost);
-    for (const x of snap.ids) coach.changes[x].undone = true;
-    delete coach.snapshots[id];
-    coach.notes.push(`[App note: the rider pressed Undo, so these changes are reverted: ${snap.ids.map((x) => coach.changes[x].label).join('; ')}]`);
-    toast(snap.ids.length > 1 ? 'Changes undone' : 'Change undone');
-  } catch (e) { coach.error = `Undo failed: ${e.message}`; }
-  coach.busy = false; saveCoach(); renderCoach();
-}
-
-function newCoachChat() {
-  if (coach.busy) return;
-  coach.messages = []; coach.changes = {}; coach.snapshots = {}; coach.lastChangeId = null; coach.notes = []; coach.error = '';
-  saveCoach(); renderCoach();
-  $('#coach-text')?.focus();
-}
-
 // ------------------------------------------------------------------ wiring
-$('#btn-coach').onclick = () => openCoach();
-$('#coach-new').onclick = newCoachChat;
-$('#coach-form').onsubmit = (e) => { e.preventDefault(); coachSend($('#coach-text').value); };
-$('#coach-text').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); coachSend(e.target.value); }
-  if (e.key === 'Escape') $('#coach').classList.add('hidden');
-});
 $$('[data-connect]').forEach((b) => (b.onclick = () => connect(b.dataset.connect)));
 $('#btn-demo').onclick = enterDemo;
 $('#btn-free').onclick = startFree;
 $('#btn-settings').onclick = () => {
-  $('#coach').classList.add('hidden');
   renderSettings();
   const cfg = ls.get('sync', {});
   $('#set-token').value = cfg.token || '';

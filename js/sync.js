@@ -1,6 +1,9 @@
 // Push rides to the private rodillo-data repo through the GitHub contents API.
 
 export const DEFAULT_REPO = 'zrf7ypndrs-maker/rodillo-data';
+// Plan and custom workouts the coach writes into the data repo; they override the public library.
+export const PLAN_PATH = 'coach/plan.json';
+export const WORKOUTS_PATH = 'coach/workouts.json';
 
 function b64(str) {
   const bytes = new TextEncoder().encode(str);

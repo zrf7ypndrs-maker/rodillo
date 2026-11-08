@@ -9,11 +9,10 @@ A Zwift replacement for one rider: a KICKR CORE (Zwift Ride), Zwift Ride handleb
 - **Slope mode with 24 virtual gears:** grade comes from a structured slope session, or you set it with the D-pad in free slope (1% steps). Up/down also shifts a structured profile by 1%. Gear ratios run 0.75 to 5.49, same range as Zwift.
 - **Coach library:** `workouts/*.json`, listed in `workouts/index.json`. The plan in `plans/current.json` puts today's session at the top of the home screen.
 - **Imports:** Zwift `.zwo` workouts.
-- **Coach chat:** the **Coach** button opens a chat with Claude. It reads your rides, load and plan, and edits sessions directly (new workouts, moved days, notes, FTP), each with an Undo. Needs an Anthropic API key (pasted once in the chat panel, billed per use) and the GitHub token for saving.
 - **Recording:** rides are saved locally (IndexedDB) and exported as `.FIT` virtual rides for Strava or Garmin Connect.
 
 ## Where the plan lives
-The coach's edits are saved in the private data repo: `coach/plan.json` and `coach/workouts.json` in rodillo-data. When those exist they win over `plans/current.json` and same-id workouts here. Coach workouts are tagged "from chat" in the library.
+The coach (Claude, from a Claude chat) edits the plan in the private data repo: `coach/plan.json` and `coach/workouts.json` in rodillo-data. When those exist they win over `plans/current.json` and same-id workouts here. Coach workouts are tagged "coach" in the library.
 
 ## How the virtual gears work
 The app runs its own bike physics: mass, rolling resistance, aero and grade. Speed is integrated from measured power. The selected gear sets how fast the pedals turn at that speed, so the trainer is commanded with an equivalent grade:

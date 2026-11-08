@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/run.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/coach.mjs"
+    "test": "node test/run.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs"
   },
   "keywords": [],
   "author": "",
