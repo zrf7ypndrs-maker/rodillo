@@ -74,15 +74,13 @@ export class ZwiftRide extends BleDevice {
   }
 
   /**
-   * The Ride shows up as two Bluetooth devices, both named "Zwift Ride". Only the LEFT
-   * one (manufacturer data 0x08) reports the buttons of both hoods, so filter to it.
-   * broad=true lists every Zwift device as a fallback.
+   * The Ride shows up as two Bluetooth devices, both named "Zwift Ride": left hood
+   * (manufacturer data 0x08) and right hood (0x07). side = 'left' | 'right' | 'all'.
    */
-  static requestOptions(broad = false) {
+  static requestOptions(side = 'left') {
+    const md = (b) => [{ manufacturerData: [{ companyIdentifier: 0x094a, dataPrefix: new Uint8Array([b]) }] }];
     return {
-      filters: broad
-        ? [{ namePrefix: 'Zwift' }, { services: [RIDE_SERVICE] }]
-        : [{ manufacturerData: [{ companyIdentifier: 0x094a, dataPrefix: new Uint8Array([0x08]) }] }],
+      filters: side === 'all' ? [{ namePrefix: 'Zwift' }, { services: [RIDE_SERVICE] }] : md(side === 'right' ? 0x07 : 0x08),
       optionalServices: [RIDE_SERVICE, LEGACY_SERVICE, uuid16(0x180a), uuid16(0x180f)],
     };
   }

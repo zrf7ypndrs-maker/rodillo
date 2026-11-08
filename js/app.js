@@ -64,14 +64,15 @@ async function connect(kind) {
       await h.pick(HeartRate.requestOptions());
       ls.set('dev.hr', h.device.id);
     } else {
-      for (const old of app.controllers) old.disconnect();
-      app.controllers = [];
+      const side = kind === 'controllerR' ? 'right' : kind === 'controller2' ? 'all' : 'left';
+      if (side === 'left') { for (const old of app.controllers) old.disconnect(); app.controllers = []; }
       const c = new ZwiftRide();
+      c.side = side;
       bindDevice(c);
-      c.on('press', (b) => onButton(b));
+      c.on('press', (b) => onButton(b, c));
       c.on('release', onRelease);
       app.controllers.push(c);
-      await c.pick(ZwiftRide.requestOptions(kind === 'controller2'));
+      await c.pick(ZwiftRide.requestOptions(side));
       ls.set('dev.controllers', app.controllers.map((x) => x.device?.id).filter(Boolean));
     }
   } catch (e) {
@@ -98,7 +99,7 @@ async function autoReconnect() {
       let obj = null;
       if (d.id === ids.trainer) { obj = app.trainer = new Trainer(); }
       else if (d.id === ids.hr) { obj = app.hr = new HeartRate(); }
-      else if (ids.ctl.includes(d.id)) { obj = new ZwiftRide(); obj.on('press', onButton); obj.on('release', onRelease); app.controllers.push(obj); }
+      else if (ids.ctl.includes(d.id)) { obj = new ZwiftRide(); obj.on('press', (b) => onButton(b, obj)); obj.on('release', onRelease); app.controllers.push(obj); }
       if (!obj) continue;
       bindDevice(obj);
       obj.device = d;
@@ -145,8 +146,11 @@ function renderDevices() {
   card('hr', app.hr);
   const ctl = app.controllers.find((c) => c.state === 'connected') || app.controllers[0];
   const names = app.controllers.filter((c) => c.state === 'connected').map((c) => c.name);
-  card('controller', ctl, names.length > 1 ? `<br>${names.length} connected` : '');
-  $('[data-connect="controller2"]').classList.toggle('hidden', app.controllers.some((c) => c.state === 'connected'));
+  const sides = app.controllers.filter((c) => c.state === 'connected').map((c) => c.side || 'left');
+  card('controller', ctl, sides.length ? `<br>Connected: ${sides.join(' + ')}` : '');
+  const anyCtl = app.controllers.some((c) => c.state === 'connected');
+  $('[data-connect="controller2"]').classList.toggle('hidden', anyCtl);
+  $('[data-connect="controllerR"]').classList.toggle('hidden', !anyCtl || app.controllers.some((c) => c.side === 'right' && c.state === 'connected'));
   const fw = ctl?.info?.firmware;
   if (fw && /^(\d+)\.(\d+)/.test(fw)) {
     const [, a, b] = fw.match(/^(\d+)\.(\d+)/).map(Number);
@@ -746,10 +750,15 @@ function doShift(kind, dir) {
 
 const REPEATABLE = new Set(['up', 'down']);
 const holdTimers = {};
-function onButton(b) {
-  if (SHIFT_BUTTONS.has(b)) { logMsg('controller', b); return onShiftButton(b); }
+const lastPress = {};
+function onButton(b, dev) {
+  // with both hoods connected, a button may arrive from both devices: keep the first
+  const now = performance.now();
+  if (now - (lastPress[b] || 0) < 90) return;
+  lastPress[b] = now;
+  if (SHIFT_BUTTONS.has(b)) { logMsg('controller', `${dev?.side || ''} ${b}`); return onShiftButton(b); }
   const a = BUTTON_ACTIONS[b];
-  logMsg('controller', `${b}${a ? ' -> ' + a : ''}`);
+  logMsg('controller', `${dev?.side || ''} ${b}${a ? ' -> ' + a : ''}`);
   if (!a) return;
   action(a);
   if (REPEATABLE.has(a) && app.screen === 'ride') {
