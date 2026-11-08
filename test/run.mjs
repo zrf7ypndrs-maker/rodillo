@@ -272,3 +272,12 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.ok(ints[0].cadTarget === '100 rpm' && ints[0].cadInRange > 0 && ints[0].cadInRange < 60, JSON.stringify(ints[0]));
   console.log(`ok - cadence targets (${ints[0].cadInRange}% in range)`);
 }
+{
+  const w = JSON.parse(fs.readFileSync(new URL('../workouts/test-100w-85rpm.json', import.meta.url)));
+  const trainer = new SimTrainer(); const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { ftp: 263 }, workout: w });
+  s.start(); trainer.ergCadence = 85; ride(s, trainer, hr, 20);
+  assert.equal(trainer.erg, 100, 'absolute watts ignore FTP');
+  assert.equal(s.cadStatus, 'ok');
+  console.log('ok - absolute-watts test session (100 W @ 85 rpm)');
+}

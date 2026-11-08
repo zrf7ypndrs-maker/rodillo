@@ -6,7 +6,8 @@
 //   "tags": ["vo2"],
 //   "steps": [
 //     { "dur": 600, "from": 0.50, "to": 0.75, "label": "Warm-up" },   // ERG ramp (fraction of FTP)
-//     { "dur": 300, "power": 0.65 },                                    // ERG steady
+//     { "dur": 300, "power": 0.65 },                                    // ERG steady (fraction of FTP)
+//     { "dur": 300, "watts": 150 },                                     // ERG steady, absolute watts
 //     { "repeat": 5, "steps": [ { "dur": 240, "power": 1.05 }, { "dur": 240, "power": 0.50 } ] },
 //     { "dur": 360, "grade": 7, "cadence": 65, "text": "Seated grind" },   // SIM: grade in %; cadence target ±5 rpm
 //     (cadence can also be a range "80-90" or a floor "100+"; omit it for no target)
@@ -19,7 +20,7 @@ import { speedForPower } from './physics.js';
 
 const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
 
-export function flatten(workout) {
+export function flatten(workout, ftp = 200) {
   const out = [];
   const walk = (steps, rep) => {
     for (const s of steps) {
@@ -38,6 +39,7 @@ export function flatten(workout) {
       };
       if (s.grade !== undefined) { seg.kind = 'sim'; seg.grade = Number(s.grade) / 100; }
       else if (s.free) { seg.kind = 'sim'; seg.grade = 0; seg.free = true; }
+      else if (s.watts !== undefined) { seg.kind = 'erg'; seg.watts = Number(s.watts); seg.from = seg.to = seg.watts / ftp; }
       else if (s.from !== undefined) { seg.kind = 'erg'; seg.from = Number(s.from); seg.to = Number(s.to); }
       else { seg.kind = 'erg'; seg.from = seg.to = Number(s.power); }
       if (seg.dur == null && seg.dist) {
@@ -58,6 +60,7 @@ export function flatten(workout) {
 function defaultLabel(s) {
   if (s.grade !== undefined) return s.grade > 2 ? `${s.grade}% climb` : s.grade < 0 ? 'Descent' : 'Flat';
   if (s.free) return 'Free ride';
+  if (s.watts !== undefined) return 'Steady';
   if (s.from !== undefined) return s.from < s.to ? 'Ramp up' : 'Ramp down';
   const p = Number(s.power);
   if (p < 0.56) return 'Recovery';

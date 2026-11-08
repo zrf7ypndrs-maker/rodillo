@@ -174,7 +174,7 @@ async function loadLibrary() {
 }
 
 function profileSvg(w, width = 340, height = 54) {
-  const segs = flatten(w);
+  const segs = flatten(w, app.settings.ftp);
   const T = segs.length ? segs[segs.length - 1].end : 1;
   const maxF = 1.5;
   let out = '';

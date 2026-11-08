@@ -33,7 +33,7 @@ export class Session extends Emitter {
     this.gb = new Gearbox(this.s.drivetrain);
     this.s.wheelCirc = this.gb.wheel;
     this.workout = workout;
-    this.segs = workout ? flatten(workout) : null;
+    this.segs = workout ? flatten(workout, this.s.ftp) : null;
     this.name = name || workout?.name || 'Free slope';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);

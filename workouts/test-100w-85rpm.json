@@ -1,0 +1,17 @@
+{
+  "id": "test-100w-85rpm",
+  "name": "Test: 100 W at 85 rpm",
+  "tags": [
+    "test-session"
+  ],
+  "description": "Equipment test. 15 minutes at a fixed 100 W in ERG with a cadence target of 85 rpm (80-90). Try drifting out of range on purpose to check the cadence card turns red and pulses, then settle back in.",
+  "steps": [
+    {
+      "dur": 900,
+      "watts": 100,
+      "cadence": 85,
+      "label": "Steady 100 W",
+      "text": "Hold 85 rpm"
+    }
+  ]
+}
