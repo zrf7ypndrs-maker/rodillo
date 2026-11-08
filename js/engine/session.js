@@ -59,7 +59,7 @@ export class Session extends Emitter {
     this.powerBuf = [];
     this.lastSentGrade = 0;
     this.maxed = false;
-    this.mode = 'sim';
+    this.mode = this.segs?.[0]?.kind === 'erg' ? 'erg' : 'sim'; // known before the ride starts so the layout is right
     this.target = null;
     this._sampleAcc = 0;
     this._lowCad = 0;
