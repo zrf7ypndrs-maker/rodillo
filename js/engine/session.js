@@ -114,6 +114,13 @@ export class Session extends Emitter {
     return last ? last.end + (this.elapsed - this.segT0) : this.elapsed;
   }
   _advance() { this.segI++; this.segT0 = this.elapsed; this.segD0 = this.bike.dist; this.emit('segment', this.segI); }
+  /** Cadence vs the current segment's target: null (no target / settling), 'ok', 'low' or 'high'. */
+  get cadStatus() {
+    const g = this.seg;
+    if (!g?.cad || this.paused || !this.started || this.segElapsed < 8 || !this.cadBuf?.length) return null;
+    const c = this.cadBuf.reduce((a, x) => a + x, 0) / this.cadBuf.length;
+    return c < g.cad.lo ? 'low' : c > g.cad.hi ? 'high' : 'ok';
+  }
   get power3s() { const b = this.powerBuf; return b.length ? b.reduce((a, x) => a + x, 0) / b.length : 0; }
   get ratio() { return this.gb.ratio; }
 
@@ -127,6 +134,9 @@ export class Session extends Emitter {
 
     this.devEst.update(trainerV, cadence);
     this.powerBuf.push(power);
+    this.cadBuf = this.cadBuf || [];
+    this.cadBuf.push(cadence);
+    while (this.cadBuf.length > Math.round(3 / dt)) this.cadBuf.shift();
     while (this.powerBuf.length > Math.round(3 / dt)) this.powerBuf.shift();
 
     // ---- auto start / pause / resume ----

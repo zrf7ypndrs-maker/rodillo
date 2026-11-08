@@ -8,7 +8,8 @@
 //     { "dur": 600, "from": 0.50, "to": 0.75, "label": "Warm-up" },   // ERG ramp (fraction of FTP)
 //     { "dur": 300, "power": 0.65 },                                    // ERG steady
 //     { "repeat": 5, "steps": [ { "dur": 240, "power": 1.05 }, { "dur": 240, "power": 0.50 } ] },
-//     { "dur": 360, "grade": 7, "cadence": "60-70", "text": "Seated grind" }, // SIM: grade in %
+//     { "dur": 360, "grade": 7, "cadence": 65, "text": "Seated grind" },   // SIM: grade in %; cadence target ±5 rpm
+//     (cadence can also be a range "80-90" or a floor "100+"; omit it for no target)
 //     { "dist": 1500, "grade": 6 },                                   // SIM step by distance (metres)
 //     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0%
 //   ]
@@ -31,7 +32,8 @@ export function flatten(workout) {
         dist: s.dist != null ? Number(s.dist) : null,
         label: s.label || defaultLabel(s),
         text: s.text || '',
-        cadence: s.cadence || '',
+        cadence: s.cadence ?? '',
+        cad: parseCadence(s.cadence),
         rep,
       };
       if (s.grade !== undefined) { seg.kind = 'sim'; seg.grade = Number(s.grade) / 100; }
@@ -65,6 +67,17 @@ function defaultLabel(s) {
   if (p < 1.06) return 'Threshold';
   if (p < 1.21) return 'VO2max';
   return 'Anaerobic';
+}
+
+/** Cadence target: 90 -> 85..95 (±5 rpm), "80-90" -> range, "100+" -> floor. null if none. */
+export function parseCadence(c) {
+  if (c === undefined || c === null || c === '') return null;
+  const str = String(c).trim();
+  let m;
+  if ((m = str.match(/^(\d+)$/))) { const n = +m[1]; return { lo: n - 5, hi: n + 5, label: `${n} rpm` }; }
+  if ((m = str.match(/^(\d+)\s*-\s*(\d+)$/))) return { lo: +m[1], hi: +m[2], label: `${m[1]}-${m[2]} rpm` };
+  if ((m = str.match(/^(\d+)\s*\+$/))) return { lo: +m[1], hi: Infinity, label: `${m[1]}+ rpm` };
+  return null;
 }
 
 export function totalDuration(workout) {

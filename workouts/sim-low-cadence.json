@@ -19,7 +19,7 @@
           "dur": 300,
           "grade": 8,
           "label": "Grind",
-          "cadence": "55-65",
+          "cadence": 60,
           "text": "Seated, heavy gear"
         },
         {

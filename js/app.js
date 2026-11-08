@@ -608,7 +608,7 @@ function showSummary(ride) {
   if (work.length) {
     extra += `<h4>Work intervals</h4><table class="ints"><tr><th>Interval</th><th>Target</th><th>Actual</th><th></th><th>HR</th><th>Cadence</th></tr>
       ${work.map((x) => `<tr><td>${esc(x.label)}${x.rep ? ' ' + x.rep : ''}</td><td>${x.target ? x.target + ' W' : (x.grade ?? '') + (x.grade != null ? '%' : '')}</td><td>${x.avgP} W</td>
-      <td>${x.pct ? `<span class="pct ${x.pct < 95 ? 'low' : x.pct > 105 ? 'high' : 'ok'}">${x.pct}%</span>` : ''}</td><td>${x.avgHr ?? '-'}</td><td>${x.avgCad}</td></tr>`).join('')}</table>`;
+      <td>${x.pct ? `<span class="pct ${x.pct < 95 ? 'low' : x.pct > 105 ? 'high' : 'ok'}">${x.pct}%</span>` : ''}</td><td>${x.avgHr ?? '-'}</td><td>${x.avgCad}${x.cadTarget ? ` <span class="muted">(${x.cadTarget}, ${x.cadInRange ?? '-'}% in range)</span>` : ''}</td></tr>`).join('')}</table>`;
   }
   if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
   $('#s-extra').innerHTML = extra;
@@ -817,6 +817,12 @@ function renderSegList(s) {
     const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
     const a = s.segAgg[i];
     const avgP = a?.n ? Math.round(a.p / a.n) : null, avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
+    const cadChip = g.cad ? `<span class="cad-chip">${g.cad.label}</span>` : '';
+    if (g.kind === 'erg') {
+      const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
+      const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
+      return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${bar}</div>`;
+    }
     let right;
     if (state === 'todo') right = `<span class="big">${segAmount(g)}</span>`;
     else if (!avgP) right = state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
@@ -825,7 +831,7 @@ function renderSegList(s) {
       right = `<span class="big">${avgP} W</span>${pct}<br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : ''}</span>`;
     }
     const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
-    return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)}</div></div><div class="seg-r">${right}</div>${bar}</div>`;
+    return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${right}</div>${bar}</div>`;
   });
   const el = $('#r-segs');
   el.innerHTML = `<div class="seg-head"><span>Segments</span><span>${doneN}/${s.segs.length} done</span></div>` + rows.join('');
@@ -864,7 +870,10 @@ function renderRide() {
   const hrs = s.samples.filter((x) => x.hr).slice(-600);
   $('#r-hrzone').textContent = hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '';
   $('#r-cad').textContent = Math.round(td.cadence || 0);
-  $('#r-cadtarget').textContent = s.seg?.cadence ? `target ${s.seg.cadence}` : '';
+  const cs = s.cadStatus, ct = $('.tile.cad');
+  ct.classList.toggle('ok', cs === 'ok');
+  ct.classList.toggle('bad', cs === 'low' || cs === 'high');
+  $('#r-cadtarget').innerHTML = !s.seg?.cad ? '' : cs === 'low' ? '<b>&#9650; Pedal faster</b>' : cs === 'high' ? '<b>&#9660; Pedal slower</b>' : `target ${s.seg.cad.label}`;
   const gearTile = $('.tile.gear');
   gearTile.classList.toggle('dim', s.mode === 'erg');
   $('#r-gear').textContent = s.gb.seq ? s.gb.label : s.gb.label.replace('x', '\u00d7');

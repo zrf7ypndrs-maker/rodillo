@@ -252,3 +252,23 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.ok(f.paused, 'stopped on a climb -> auto-paused');
   console.log('ok - auto start / pause / resume');
 }
+{
+  const { parseCadence } = await import('../js/engine/workout.js');
+  assert.deepEqual(parseCadence(90), { lo: 85, hi: 95, label: '90 rpm' });
+  assert.deepEqual(parseCadence('80-90'), { lo: 80, hi: 90, label: '80-90 rpm' });
+  assert.equal(parseCadence('100+').hi, Infinity);
+  assert.equal(parseCadence(''), null);
+  const wo = { steps: [{ dur: 120, power: 1.1, cadence: 100 }, { dur: 60, power: 0.5 }] };
+  const trainer = new SimTrainer(); const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: {}, workout: wo });
+  s.start(); trainer.ergCadence = 90; ride(s, trainer, hr, 5);
+  assert.equal(s.cadStatus, null, 'settling period');
+  ride(s, trainer, hr, 10); assert.equal(s.cadStatus, 'low');
+  trainer.ergCadence = 99; ride(s, trainer, hr, 4); assert.equal(s.cadStatus, 'ok');
+  trainer.ergCadence = 108; ride(s, trainer, hr, 4); assert.equal(s.cadStatus, 'high');
+  ride(s, trainer, hr, 110); assert.equal(s.cadStatus, null, 'no target on recovery');
+  s.finish();
+  const ints = buildRide(s.samples, { name: 'x', ftp: 200, startMs: Date.now(), segs: s.segs }).intervals;
+  assert.ok(ints[0].cadTarget === '100 rpm' && ints[0].cadInRange > 0 && ints[0].cadInRange < 60, JSON.stringify(ints[0]));
+  console.log(`ok - cadence targets (${ints[0].cadInRange}% in range)`);
+}

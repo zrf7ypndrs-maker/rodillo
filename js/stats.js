@@ -65,6 +65,11 @@ export function intervalResults(samples, segs, ftp) {
       avgHr: Math.round(mean(xs.filter((s) => s.hr).map((s) => s.hr))) || undefined,
       avgCad: Math.round(mean(xs.map((s) => s.cadence))),
     };
+    if (seg.cad) {
+      const settled = xs.filter((s) => (s.st ?? s.wt - seg.start) >= 8);
+      res.cadTarget = seg.cad.label;
+      res.cadInRange = settled.length ? Math.round((settled.filter((s) => s.cadence >= seg.cad.lo && s.cadence <= seg.cad.hi).length / settled.length) * 100) : undefined;
+    }
     if (seg.kind === 'erg') {
       const tg = xs.filter((s) => s.target).map((s) => s.target);
       res.target = Math.round(tg.length ? mean(tg) : mean([seg.from, seg.to]) * ftp);

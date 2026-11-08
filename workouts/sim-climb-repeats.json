@@ -19,7 +19,7 @@
           "dur": 360,
           "grade": 6,
           "label": "Climb",
-          "cadence": "80-90",
+          "cadence": 85,
           "text": "Hold ~100% FTP"
         },
         {

@@ -243,3 +243,15 @@ button.danger { color: var(--bad); border-color: #4a2026; }
 .seg .check { color: var(--good); font-weight: 700; }
 .seg .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); }
 .seg-head { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 6px 8px 8px; display: flex; justify-content: space-between; }
+
+/* cadence target */
+.tile.cad { transition: background .2s, box-shadow .2s; }
+.tile.cad.ok { background: #13261b; box-shadow: inset 0 -5px 0 var(--good); }
+.tile.cad.ok .t-val { color: #7be3a6; }
+.tile.cad.bad { background: #2c1316; box-shadow: inset 0 0 0 2px var(--bad); animation: cadpulse 0.9s ease-in-out infinite; }
+.tile.cad.bad .t-val, .tile.cad.bad .t-sub b { color: #ff8a95; }
+@keyframes cadpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+.cad-chip { font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: #20304a; color: #9cc2ff; margin-left: 6px; white-space: nowrap; }
+.seg.erg { padding-top: 10px; padding-bottom: 10px; }
+.seg.erg .big { font-size: 16px; font-weight: 650; }
+.seg-name .big { font-variant-numeric: tabular-nums; }

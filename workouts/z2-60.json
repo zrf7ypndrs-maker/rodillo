@@ -17,7 +17,7 @@
       "dur": 2700,
       "power": 0.68,
       "label": "Zone 2",
-      "cadence": "85-95"
+      "cadence": 90
     },
     {
       "dur": 300,
