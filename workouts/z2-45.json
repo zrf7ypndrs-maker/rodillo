@@ -1,0 +1,29 @@
+{
+  "id": "z2-45",
+  "name": "Zone 2, 45 min",
+  "tags": [
+    "z2",
+    "easy"
+  ],
+  "description": "Steady aerobic ride at 68% FTP. Conversational pace.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.68,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 1800,
+      "power": 0.68,
+      "cadence": 90,
+      "label": "Zone 2"
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

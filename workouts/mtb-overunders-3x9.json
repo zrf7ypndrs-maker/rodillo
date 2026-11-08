@@ -1,0 +1,49 @@
+{
+  "id": "mtb-overunders-3x9",
+  "name": "MTB over-unders 3 x 9 min",
+  "tags": [
+    "mtb",
+    "threshold"
+  ],
+  "description": "Each set: 2 min at 95% FTP, then a 1-min surge at 115%, three times. Like a climb with steep kicks: on the surge, stand and attack, then settle back without easing off.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "repeat": 3,
+      "steps": [
+        {
+          "repeat": 3,
+          "steps": [
+            {
+              "dur": 120,
+              "power": 0.95,
+              "label": "Under"
+            },
+            {
+              "dur": 60,
+              "power": 1.15,
+              "label": "Over",
+              "text": "Stand and attack"
+            }
+          ]
+        },
+        {
+          "dur": 240,
+          "power": 0.5,
+          "label": "Recovery"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

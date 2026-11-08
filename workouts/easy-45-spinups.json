@@ -1,0 +1,50 @@
+{
+  "id": "easy-45-spinups",
+  "name": "Easy 45 + spin-ups",
+  "tags": [
+    "z2",
+    "easy"
+  ],
+  "description": "Easy aerobic ride with three 1-minute high-cadence spin-ups. Doubles as a hardware check: trainer, HR strap, both Ride hoods and the FR970 should all be reading in the first 5 minutes.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.65,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 900,
+      "power": 0.65,
+      "cadence": 90,
+      "label": "Easy",
+      "text": "Check every sensor is reading"
+    },
+    {
+      "repeat": 3,
+      "steps": [
+        {
+          "dur": 60,
+          "power": 0.85,
+          "cadence": "100+",
+          "label": "Spin-up"
+        },
+        {
+          "dur": 120,
+          "power": 0.6
+        }
+      ]
+    },
+    {
+      "dur": 360,
+      "power": 0.65,
+      "label": "Easy"
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

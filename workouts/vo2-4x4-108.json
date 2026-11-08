@@ -1,0 +1,46 @@
+{
+  "id": "vo2-4x4-108",
+  "name": "VO2max 4 x 4 min (108%)",
+  "tags": [
+    "vo2"
+  ],
+  "description": "First VO2 session on the new FTP. 4 min at 108% with equal recovery, cadence 95+. Should feel hard but controlled; if rep 4 is easy, the next one goes up.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 60,
+      "power": 0.95,
+      "label": "Opener"
+    },
+    {
+      "dur": 180,
+      "power": 0.5
+    },
+    {
+      "repeat": 4,
+      "steps": [
+        {
+          "dur": 240,
+          "power": 1.08,
+          "cadence": "95+",
+          "text": "Smooth and high cadence"
+        },
+        {
+          "dur": 240,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

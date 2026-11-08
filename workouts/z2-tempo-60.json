@@ -1,0 +1,41 @@
+{
+  "id": "z2-tempo-60",
+  "name": "Zone 2 + 20 min tempo",
+  "tags": [
+    "z2",
+    "tempo"
+  ],
+  "description": "Aerobic ride with one steady 20-minute tempo block at 80% FTP. Garmin only updates cycling VO2max after a steady effort of 20+ minutes, so keep the tempo block smooth and record the ride on the FR970 with the KICKR as power meter.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.68,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 600,
+      "power": 0.68,
+      "cadence": 90,
+      "label": "Zone 2"
+    },
+    {
+      "dur": 1200,
+      "power": 0.8,
+      "cadence": "85-95",
+      "label": "Steady tempo",
+      "text": "Smooth and steady: this is the block Garmin reads"
+    },
+    {
+      "dur": 900,
+      "power": 0.66,
+      "label": "Zone 2"
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

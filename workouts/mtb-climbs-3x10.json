@@ -1,0 +1,46 @@
+{
+  "id": "mtb-climbs-3x10",
+  "name": "MTB climbs 3 x 10 min at 7%",
+  "tags": [
+    "sim",
+    "climb",
+    "mtb",
+    "threshold"
+  ],
+  "description": "Longer version of the 4 x 6: big gear, 60-65 rpm, seated, around 90% FTP. Last 30 s of each climb: stand and push over the top.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 1,
+      "label": "Warm-up roll"
+    },
+    {
+      "repeat": 3,
+      "steps": [
+        {
+          "dur": 570,
+          "grade": 7,
+          "cadence": "60-65",
+          "label": "Climb",
+          "text": "Big gear, seated, ~90% FTP"
+        },
+        {
+          "dur": 30,
+          "grade": 8,
+          "label": "Over the top",
+          "text": "Stand and push"
+        },
+        {
+          "dur": 240,
+          "grade": 0,
+          "label": "Flat roll"
+        }
+      ]
+    },
+    {
+      "dur": 240,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

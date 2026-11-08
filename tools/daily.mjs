@@ -49,6 +49,12 @@ if (check) {
     try { if (!flatten(w).length) errs.push(`workout ${w.id}: no steps`); } catch (e) { errs.push(`workout ${w.id}: ${e.message}`); }
     if (!w.id || !w.name) errs.push('a coach workout is missing id or name');
   }
+  if (plan.maxMinutes) {
+    for (const [k, v] of Object.entries(plan.days || {})) {
+      const w = library.get(v);
+      if (w && totalDuration(w) > plan.maxMinutes * 60 + 30) errs.push(`plan ${k}: ${v} is ${Math.round(totalDuration(w) / 60)} min, over the ${plan.maxMinutes}-min cap`);
+    }
+  }
   for (const [k, v] of Object.entries(plan.daily || {})) {
     if (!['kept', 'scaled', 'swapped', 'moved', 'rest'].includes(v.action)) errs.push(`daily ${k}: bad action "${v.action}"`);
     if (!v.reason) errs.push(`daily ${k}: missing reason`);
@@ -92,6 +98,12 @@ for (const r of recent) {
   const c = r.compliance ? ` intervals ${r.compliance.avg}% (min ${r.compliance.min}%, ${r.compliance.reps} reps)` : '';
   console.log(`  ${r.id.slice(0, 10)} ${dow(r.id.slice(0, 10))}  ${r.name}${r.workoutId ? ` [${r.workoutId}]` : ''}  ${Math.round(r.durSec / 60)} min  TSS ${r.tss}  IF ${r.if}  HR ${r.avgHr ?? '-'}${c}${r.decoupling != null ? ` drift ${r.decoupling}%` : ''}`);
 }
+const lastRamp = rides.filter((r) => r.workoutId === 'ramp-test' && r.bests?.[60]).at(-1);
+if (lastRamp) {
+  const newFtp = Math.round(lastRamp.bests[60] * 0.75);
+  const pending = !plan.ftpSetAt || plan.ftpSetAt < lastRamp.id.slice(0, 10);
+  console.log(`  Last ramp test ${lastRamp.id.slice(0, 10)}: best 1-min ${lastRamp.bests[60]} W -> FTP ${newFtp} W${pending ? '  >> NOT YET IN PLAN: set plan.ftp and plan.ftpSetAt (see DAILY.md step 3)' : ''}`);
+}
 const rodeToday = rides.some((r) => r.id.slice(0, 10) === today && r.durSec >= 600);
 if (rodeToday) console.log(`  >> Already rode today: do NOT change today.`);
 
@@ -105,7 +117,7 @@ for (let i = -7; i < 0; i++) {
 }
 
 // ---- Next 7 days
-console.log(`\nPlan "${plan.name}" (FTP ${plan.ftp} W), today + 6:`);
+console.log(`\nPlan "${plan.name}" (FTP ${plan.ftp} W${plan.ftpSetAt ? `, set ${plan.ftpSetAt}` : ', not tested yet'}${plan.maxMinutes ? `, max ${plan.maxMinutes} min per ride` : ''}), today + 6:`);
 for (let i = 0; i < 7; i++) {
   const k = addDays(today, i), v = plan.days?.[k];
   const w = v && library.get(v);

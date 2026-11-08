@@ -1,0 +1,40 @@
+{
+  "id": "mtb-climbs-4x6",
+  "name": "MTB climbs 4 x 6 min at 7%",
+  "tags": [
+    "sim",
+    "climb",
+    "mtb",
+    "threshold"
+  ],
+  "description": "Slope mode with gears. Pick a big gear that puts you at 60-65 rpm, seated, around 90% FTP (watch the power card). Torque work for steep Santiago climbs. Flat roll between reps.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 1,
+      "label": "Warm-up roll"
+    },
+    {
+      "repeat": 4,
+      "steps": [
+        {
+          "dur": 360,
+          "grade": 7,
+          "cadence": "60-65",
+          "label": "Climb",
+          "text": "Big gear, seated, ~90% FTP"
+        },
+        {
+          "dur": 240,
+          "grade": 0,
+          "label": "Flat roll"
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Cool-down"
+    }
+  ]
+}

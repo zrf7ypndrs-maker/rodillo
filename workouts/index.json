@@ -12,6 +12,15 @@
     "sim-climb-repeats.json",
     "sim-hill-repeats-1500.json",
     "sim-low-cadence.json",
-    "sim-rolling-45.json"
+    "sim-rolling-45.json",
+    "easy-45-spinups.json",
+    "z2-45.json",
+    "z2-tempo-60.json",
+    "vo2-4x4-108.json",
+    "vo2-5x4-110.json",
+    "vo2-6x4-110.json",
+    "mtb-climbs-4x6.json",
+    "mtb-climbs-3x10.json",
+    "mtb-overunders-3x9.json"
   ]
 }

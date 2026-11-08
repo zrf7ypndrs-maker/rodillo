@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082319';
-import { HeartRate } from './ble/hr.js?v=202611082319';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082319';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082319';
-import { log, logMsg } from './ble/base.js?v=202611082319';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082319';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082319';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082319';
-import { encodeActivity } from './fit.js?v=202611082319';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082319';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082319';
-import { ls, rides } from './store.js?v=202611082319';
+import { Trainer } from './ble/trainer.js?v=202611082329';
+import { HeartRate } from './ble/hr.js?v=202611082329';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082329';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082329';
+import { log, logMsg } from './ble/base.js?v=202611082329';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082329';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082329';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082329';
+import { encodeActivity } from './fit.js?v=202611082329';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082329';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082329';
+import { ls, rides } from './store.js?v=202611082329';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -193,6 +193,16 @@ async function loadCoachData() {
   } catch (e) { logMsg('coach', `could not load coach data: ${e.message}`); }
 }
 
+/** FTP set by the coach (plan.ftp + plan.ftpSetAt) wins once per update, so Mac and phone stay in sync. */
+function adoptPlanFtp() {
+  const p = app.coachPlan;
+  if (!p?.ftp || !p.ftpSetAt || ls.get('planFtpAt', null) === p.ftpSetAt) return;
+  app.settings.ftp = p.ftp;
+  ls.set('settings', app.settings);
+  ls.set('planFtpAt', p.ftpSetAt);
+  logMsg('coach', `FTP set to ${p.ftp} W from the plan (${p.ftpSetAt})`);
+}
+
 function applyLibrary() {
   const custom = new Map((app.coachWorkouts || []).map((w) => [w.id, { ...w, _source: 'coach' }]));
   const lib = (app.baseLibrary || []).map((w) => custom.get(w.id) || w);
@@ -200,6 +210,7 @@ function applyLibrary() {
   for (const w of ls.get('imported', [])) lib.push(w);
   app.library = lib;
   app.plan = app.coachPlan || app.basePlan || null;
+  adoptPlanFtp();
   renderLibrary();
   refreshPlanViews();
 }
@@ -278,7 +289,7 @@ function dayInfo(key) {
   const done = w ? ridden.find((r) => r.workoutId === w.id) || ridden[0] : ridden[0];
   return {
     key, workout: w || null, kind: w ? 'ride' : entry || null,
-    note: app.plan?.notes?.[key] || '', ridden, done,
+    note: app.plan?.notes?.[key] || '', ridden, done, optional: (app.plan?.optional || []).includes(key),
     isToday: key === dkey(new Date()), isPast: key < dkey(new Date()),
   };
 }
@@ -295,7 +306,8 @@ function dayCardHtml(info) {
   else if (info.kind === 'rest') body = '<div class="d-name muted">Rest</div>';
   else body = '<div class="d-name muted">Nothing planned</div>';
   if (info.done) status = `<div class="d-done">&#10003; ${info.done.workoutId === info.workout?.id ? 'Done' : esc(info.done.name)} &middot; ${info.done.tss} TSS</div>`;
-  else if (info.workout && info.isPast) status = '<div class="d-missed">Missed</div>';
+  else if (info.workout && info.isPast) status = `<div class="d-missed">${info.optional ? 'Skipped (optional)' : 'Missed'}</div>`;
+  else if (info.workout && info.optional && !info.isToday) status = '<div class="d-missed">Optional</div>';
   else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
   return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : '#2a2f37'}" tabindex="0">
     <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}${recoveryPill(info.key)}</div>`;
@@ -344,7 +356,7 @@ function renderCalendar() {
       const info = dayInfo(dkey(d));
       const chip = info.workout ? `<div class="cal-chip" style="--c:${workoutColor(info.workout)}">${esc(info.workout.name)}<span>${Math.round(totalDuration(info.workout) / 60)}'</span></div>`
         : info.kind === 'strength' ? '<div class="cal-chip ghost">Strength</div>' : info.kind === 'rest' ? '<div class="cal-chip ghost">Rest</div>' : '';
-      const done = info.done ? `<div class="cal-done">&#10003; ${info.done.tss} TSS</div>` : info.workout && info.isPast ? '<div class="cal-missed">missed</div>' : '';
+      const done = info.done ? `<div class="cal-done">&#10003; ${info.done.tss} TSS</div>` : info.workout && info.isPast ? `<div class="cal-missed">${info.optional ? 'optional' : 'missed'}</div>` : info.optional ? '<div class="cal-missed">optional</div>' : '';
       return `<div class="cal-cell ${d.getMonth() !== m - 1 ? 'other' : ''} ${info.isToday ? 'today' : ''} ${info.key === sel ? 'sel' : ''}" data-day="${info.key}">
         <div class="cal-num">${d.getDate()}</div>${chip}${done}</div>`;
     }).join('');

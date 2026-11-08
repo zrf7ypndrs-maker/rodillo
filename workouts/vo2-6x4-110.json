@@ -1,0 +1,46 @@
+{
+  "id": "vo2-6x4-110",
+  "name": "VO2max 6 x 4 min (110%)",
+  "tags": [
+    "vo2"
+  ],
+  "description": "One more rep at the same power as the 5 x 4, recoveries trimmed to 3 min to fit 60 minutes.",
+  "steps": [
+    {
+      "dur": 480,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 60,
+      "power": 0.95,
+      "label": "Opener"
+    },
+    {
+      "dur": 120,
+      "power": 0.5
+    },
+    {
+      "repeat": 6,
+      "steps": [
+        {
+          "dur": 240,
+          "power": 1.1,
+          "cadence": "95+",
+          "text": "Smooth and high cadence"
+        },
+        {
+          "dur": 180,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 240,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}

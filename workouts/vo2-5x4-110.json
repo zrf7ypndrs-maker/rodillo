@@ -1,0 +1,46 @@
+{
+  "id": "vo2-5x4-110",
+  "name": "VO2max 5 x 4 min (110%)",
+  "tags": [
+    "vo2"
+  ],
+  "description": "5 x 4 min at 110% FTP with equal recovery, cadence 95+. The last minute of each rep should feel like you could hold it 60 more seconds, not 3 minutes.",
+  "steps": [
+    {
+      "dur": 600,
+      "from": 0.45,
+      "to": 0.7,
+      "label": "Warm-up"
+    },
+    {
+      "dur": 60,
+      "power": 0.95,
+      "label": "Opener"
+    },
+    {
+      "dur": 180,
+      "power": 0.5
+    },
+    {
+      "repeat": 5,
+      "steps": [
+        {
+          "dur": 240,
+          "power": 1.1,
+          "cadence": "95+",
+          "text": "Smooth and high cadence"
+        },
+        {
+          "dur": 240,
+          "power": 0.5
+        }
+      ]
+    },
+    {
+      "dur": 300,
+      "from": 0.6,
+      "to": 0.4,
+      "label": "Cool-down"
+    }
+  ]
+}
