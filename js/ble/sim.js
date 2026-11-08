@@ -11,7 +11,7 @@ export class SimTrainer extends Emitter {
     this.kind = 'trainer';
     this.name = 'Simulated KICKR';
     this.state = 'connected';
-    this.info = { firmware: 'sim' };
+    this.info = {};
     this.realDev = realDev;
     this.trainerMass = trainerMass;
     this.riderPower = 180;

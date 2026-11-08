@@ -6,7 +6,6 @@ import { log, logMsg } from './ble/base.js';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js';
 import { GEAR_RATIOS } from './engine/physics.js';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js';
-import { parseGpx } from './engine/route.js';
 import { encodeActivity, statsFor } from './fit.js';
 import { ls, rides } from './store.js';
 
@@ -28,7 +27,7 @@ const app = {
   settings: { ...DEFAULT_SETTINGS, ...ls.get('settings', {}) },
   trainer: null, hr: null, controllers: [],
   demo: false,
-  library: [], routes: ls.get('routes', []), plan: null,
+  library: [], plan: null,
   session: null, rideId: null,
   screen: 'home', tab: 'workouts', focus: 0,
   endArmed: 0,
@@ -196,17 +195,25 @@ function woMeta(w) {
   return `${mins} min${isSim(w) ? '' : ` &middot; TSS ~${tss}`}`;
 }
 
-function renderLibrary() {
-  const el = $('#workout-list');
-  el.innerHTML = app.library.map((w, i) => `
+const isSlopeOnly = (w) => flatten(w).every((x) => x.kind === 'sim');
+
+function workoutCard(w, i) {
+  return `
     <div class="wo" data-i="${i}" tabindex="0">
       <div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
       <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${(w.tags || []).filter((t) => !['sim'].includes(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       <div class="wo-desc">${esc(w.description)}</div>
       <div class="start-row"><button class="primary small" data-start="${i}">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}">Remove</button>` : ''}</div>
-    </div>`).join('');
-  el.querySelectorAll('.wo').forEach((c) => c.addEventListener('click', (e) => {
+    </div>`;
+}
+
+function renderLibrary() {
+  const erg = [], slope = [];
+  app.library.forEach((w, i) => (isSlopeOnly(w) ? slope : erg).push(workoutCard(w, i)));
+  $('#workout-list').innerHTML = erg.join('');
+  $('#slope-list').innerHTML = slope.join('') || '<p class="muted">No slope sessions yet.</p>';
+  $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
     c.classList.toggle('expanded');
@@ -242,14 +249,6 @@ function removeImported(w) {
   renderLibrary();
 }
 
-function renderRoutes() {
-  $('#route-list').innerHTML = app.routes.map((r, i) => `
-    <div class="route"><div><b>${esc(r.name)}</b><div class="muted" style="font-size:13px">${(r.total / 1000).toFixed(1)} km &middot; ${Math.round(r.gain)} m climbing</div></div>
-    <div class="row-btns"><button class="primary small" data-route="${i}">Ride</button><button class="ghost small" data-delroute="${i}">Remove</button></div></div>`).join('');
-  $$('[data-route]').forEach((b) => (b.onclick = () => startRoute(app.routes[+b.dataset.route])));
-  $$('[data-delroute]').forEach((b) => (b.onclick = () => { app.routes.splice(+b.dataset.delroute, 1); ls.set('routes', app.routes); renderRoutes(); }));
-}
-
 async function renderHistory() {
   let list = [];
   try { list = await rides.list(); } catch { /* no idb */ }
@@ -282,21 +281,6 @@ $('#import-workout').addEventListener('change', async (e) => {
   renderLibrary();
 });
 
-$('#import-gpx').addEventListener('change', async (e) => {
-  for (const f of e.target.files) {
-    try {
-      const r = parseGpx(await f.text());
-      if (r.name === 'Route') r.name = f.name.replace(/\.gpx$/i, '');
-      r.ele = r.ele.map((x) => Math.round(x * 10) / 10);
-      r.grade = r.grade.map((x) => Math.round(x * 10000) / 10000);
-      app.routes.push(r);
-      ls.set('routes', app.routes);
-    } catch (err) { alert(`Could not read ${f.name}: ${err.message}`); }
-  }
-  e.target.value = '';
-  renderRoutes();
-});
-
 // ------------------------------------------------------------------ rides
 function canRide() {
   if (app.trainer && (app.trainer.state === 'connected')) return true;
@@ -304,7 +288,6 @@ function canRide() {
 }
 function startWorkout(w) { if (canRide()) beginSession({ workout: w }); }
 function startFree() { if (canRide()) beginSession({}); }
-function startRoute(r) { if (canRide()) beginSession({ route: r }); }
 
 let wakeLock = null;
 function beginSession(opts) {
@@ -315,7 +298,6 @@ function beginSession(opts) {
   s.on('shift', (g) => { const t = $('.tile.gear'); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); app.controllers.forEach((c) => c.vibrate?.()); });
   s.on('lap', () => toast('Lap'));
   s.on('workoutDone', () => toast('Workout complete. Free ride, or B twice to finish'));
-  s.on('routeDone', () => toast('Route complete!'));
   show('ride');
   $('#r-name').textContent = s.name;
   sizeChart();
@@ -482,7 +464,7 @@ function focusables() {
     if (!$('#today').classList.contains('hidden') && $('#btn-today')) list.push($('#today'));
     list.push(...$$('#workout-list .wo'));
   } else if (app.tab === 'free') {
-    list.push($('#btn-free'), ...$$('[data-route]'));
+    list.push($('#btn-free'), ...$$('#slope-list .wo'));
   }
   return list;
 }
@@ -539,7 +521,7 @@ function renderRide() {
   $('#r-gear').textContent = s.gear + 1;
   $('#r-ratio').textContent = s.mode === 'erg' ? 'ERG: gears not used' : `ratio ${GEAR_RATIOS[s.gear].toFixed(2)}`;
   $('#r-grade').innerHTML = `${(s.mode === 'sim' ? s.grade * 100 : 0).toFixed(1)}<span class="unit">%</span>`;
-  $('#r-gradesub').textContent = s.mode === 'sim' && !s.route && !s.seg ? `set ${fmtGradeSet(s)} (up/down)` : s.route ? `${Math.round(s.altitude)} m` : '';
+  $('#r-gradesub').textContent = s.mode !== 'sim' ? '' : !s.seg ? 'up/down to change' : s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}%` : '';
   $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
   $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
 
@@ -551,20 +533,14 @@ function renderRide() {
     const tgt = seg.kind === 'erg' ? segTarget(seg, s.workoutTime) : null;
     card.style.borderLeftColor = seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade);
     $('#r-int-label').textContent = `${seg.label}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`;
-    $('#r-int-text').textContent = seg.text || (seg.kind === 'erg' ? `${Math.round(tgt * 100)}% FTP` : `${(seg.grade * 100).toFixed(0)}% grade, use your gears`);
+    $('#r-int-text').textContent = seg.text || (seg.kind === 'erg' ? `${Math.round(tgt * 100)}% FTP` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}% grade, use your gears`);
     $('#r-int-left').textContent = fmtTime(left);
     const next = s.segs[s.segIndex + 1];
-    $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${fmtTime(next.dur)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${(next.grade * 100).toFixed(0)}%`}</b>` : 'Last interval';
-  } else if (s.route) {
-    card.style.borderLeftColor = gradeHex(s.grade);
-    $('#r-int-label').textContent = s.route.name;
-    $('#r-int-text').textContent = `${((s.route.total - s.bike.dist) / 1000).toFixed(1)} km to go`;
-    $('#r-int-left').textContent = `${Math.min(100, (s.bike.dist / s.route.total) * 100).toFixed(0)}%`;
-    $('#r-int-next').textContent = '';
+    $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${fmtTime(next.dur)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`}</b>` : 'Last interval';
   } else {
     card.style.borderLeftColor = '#3d8bfd';
-    $('#r-int-label').textContent = s.segs ? 'Workout complete' : 'Free ride';
-    $('#r-int-text').textContent = s.segs ? 'Keep riding or press B twice to finish' : 'Shift to hold your cadence; up/down changes the grade';
+    $('#r-int-label').textContent = s.segs ? 'Workout complete' : `Free slope: ${fmtGradeSet(s)}`;
+    $('#r-int-text').textContent = s.segs ? 'Keep riding or press B twice to finish' : 'Up/down changes the grade by 1%. Shift to hold your cadence.';
     $('#r-int-left').textContent = '';
     $('#r-int-next').textContent = '';
   }
@@ -573,7 +549,7 @@ function renderRide() {
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
   $('#r-hints').innerHTML = s.mode === 'erg'
     ? '<b>Up/Down</b> intensity &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
-    : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade (free ride) &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>B&times;2</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
+    : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>B&times;2</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
   renderRideStatus();
   drawChart();
 }
@@ -596,25 +572,6 @@ function drawChart() {
   const pad = 10 * dpr;
   const plotH = H - pad * 2;
   ctx.font = `${11 * dpr}px -apple-system, sans-serif`;
-
-  if (s.route) {
-    const r = s.route;
-    const min = Math.min(...r.ele), max = Math.max(...r.ele) + 5;
-    const X = (d) => (d / r.total) * W, Y = (e) => H - pad - ((e - min) / (max - min)) * plotH;
-    ctx.beginPath(); ctx.moveTo(0, H);
-    r.ele.forEach((e, i) => ctx.lineTo(X(i * r.step), Y(e)));
-    ctx.lineTo(W, H); ctx.closePath();
-    ctx.fillStyle = '#26303d'; ctx.fill();
-    const pos = Math.min(r.total, s.bike.dist);
-    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, X(pos), H); ctx.clip();
-    ctx.beginPath(); ctx.moveTo(0, H);
-    r.ele.forEach((e, i) => ctx.lineTo(X(i * r.step), Y(e)));
-    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = 'rgba(255,90,54,.55)'; ctx.fill(); ctx.restore();
-    const i = Math.min(r.ele.length - 1, Math.floor(pos / r.step));
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(X(pos), Y(r.ele[i]), 6 * dpr, 0, 7); ctx.fill();
-    ctx.fillStyle = '#8b93a1'; ctx.fillText(`${Math.round(max)} m`, 6 * dpr, 16 * dpr); ctx.fillText(`${Math.round(min)} m`, 6 * dpr, H - 6 * dpr);
-    return;
-  }
 
   const ftp = app.settings.ftp;
   const maxP = Math.max(ftp * 1.6, ...s.samples.slice(-1200).map((x) => x.power + 20));
@@ -745,7 +702,6 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 renderDevices();
-renderRoutes();
 loadLibrary();
 autoReconnect();
 window.rodillo = app; // for debugging from the console

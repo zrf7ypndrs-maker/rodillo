@@ -82,11 +82,12 @@ button.small, .small { padding: 6px 12px; font-size: 13px; }
 .tag.sim { background: #20304a; color: #9cc2ff; }
 .import-row { margin-top: 14px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
 
-.free-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.free-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 22px; }
+.free-card p { margin: 4px 0 0; }
+.list-title { margin: 0 0 2px; }
+.list-sub { font-size: 13px; margin: 0 0 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
 .card p { font-size: 14px; line-height: 1.45; }
-.route-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.route { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
 
 #history-list table { width: 100%; border-collapse: collapse; font-size: 14px; }
 #history-list td, #history-list th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }

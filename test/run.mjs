@@ -7,7 +7,6 @@ import { SimTrainer, SimHr } from '../js/ble/sim.js';
 import { Session } from '../js/engine/session.js';
 import { powerAt, GEAR_RATIOS } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS } from '../js/engine/workout.js';
-import { buildRoute, routeAt } from '../js/engine/route.js';
 import { encodeActivity } from '../js/fit.js';
 import fs from 'node:fs';
 
@@ -143,13 +142,5 @@ test('ZWO import', () => {
   assert.equal(totalDuration(w), 600 + 360 + 300 + 120 + 300);
 });
 
-test('GPX route grades', () => {
-  const pts = [];
-  for (let i = 0; i <= 200; i++) pts.push({ lat: -33.4 + i * 0.0001, lon: -70.5, ele: 800 + Math.min(i, 100) * 0.0001 * 111195 * 0.08 });
-  const r = buildRoute('ramp', pts);
-  assert.ok(Math.abs(routeAt(r, 500).grade - 0.08) < 0.005);
-  assert.ok(Math.abs(routeAt(r, 1800).grade) < 0.005);
-  assert.ok(Math.abs(r.gain - 89) < 3, `gain ${r.gain}`);
-});
 
 console.log(`\n${passed} tests passed`);

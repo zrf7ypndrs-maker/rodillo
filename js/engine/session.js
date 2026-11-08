@@ -1,9 +1,8 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
-// gears), tracks intervals or route progress, and records 1 Hz samples.
+// gears), tracks intervals, and records 1 Hz samples.
 
 import { GEAR_RATIOS, VirtualBike, DevEstimator, TrainerMassEstimator, gradeToSend, G } from './physics.js';
 import { flatten, segmentAt, segTarget } from './workout.js';
-import { routeAt } from './route.js';
 import { Emitter } from '../ble/base.js';
 
 export const DEFAULT_SETTINGS = {
@@ -22,15 +21,14 @@ export const DEFAULT_SETTINGS = {
 };
 
 export class Session extends Emitter {
-  constructor({ trainer, hr, settings, workout = null, route = null, name }) {
+  constructor({ trainer, hr, settings, workout = null, name }) {
     super();
     this.trainer = trainer;
     this.hr = hr;
     this.s = { ...DEFAULT_SETTINGS, ...settings };
     this.workout = workout;
     this.segs = workout ? flatten(workout) : null;
-    this.route = route;
-    this.name = name || workout?.name || route?.name || 'Free ride';
+    this.name = name || workout?.name || 'Free slope';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);
     this.massEst = new TrainerMassEstimator(this.s.trainerMassKg);
@@ -45,7 +43,7 @@ export class Session extends Emitter {
     this.elapsed = 0;          // active seconds
     this.segOffset = 0;        // time shift from skipped intervals
     this.grade = 0;            // smoothed virtual grade being ridden
-    this.altitude = route ? route.ele[0] : 100;
+    this.altitude = 100;
     this.samples = [];
     this.laps = [];
     this.lapStart = 0;
@@ -125,11 +123,6 @@ export class Session extends Emitter {
     } else if (this.segs && !this.workoutDone) {
       this.workoutDone = true;
       this.emit('workoutDone');
-    }
-    if (this.route) {
-      const r = routeAt(this.route, this.bike.dist);
-      targetGrade = r.grade + this.gradeOffset;
-      if (r.done && !this.routeDone) { this.routeDone = true; this.emit('routeDone'); }
     }
     targetGrade *= targetGrade > 0 ? this.s.gradeScale : 1;
 
