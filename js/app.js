@@ -66,6 +66,7 @@ async function connect(kind) {
       const c = new ZwiftRide();
       bindDevice(c);
       c.on('press', (b) => onButton(b));
+      c.on('release', onRelease);
       app.controllers.push(c);
       await c.pick(ZwiftRide.requestOptions());
       ls.set('dev.controllers', app.controllers.map((x) => x.device?.id).filter(Boolean));
@@ -94,7 +95,7 @@ async function autoReconnect() {
       let obj = null;
       if (d.id === ids.trainer) { obj = app.trainer = new Trainer(); }
       else if (d.id === ids.hr) { obj = app.hr = new HeartRate(); }
-      else if (ids.ctl.includes(d.id)) { obj = new ZwiftRide(); obj.on('press', onButton); app.controllers.push(obj); }
+      else if (ids.ctl.includes(d.id)) { obj = new ZwiftRide(); obj.on('press', onButton); obj.on('release', onRelease); app.controllers.push(obj); }
       if (!obj) continue;
       bindDevice(obj);
       obj.device = d;
@@ -448,11 +449,20 @@ const BUTTON_ACTIONS = {
   up: 'up', down: 'down', left: 'left', right: 'right',
   a: 'select', b: 'back', y: 'skip', z: 'lap', powerUpL: 'ergToggle',
 };
+const REPEATABLE = new Set(['up', 'down']);
+const holdTimers = {};
 function onButton(b) {
   const a = BUTTON_ACTIONS[b];
   logMsg('controller', `${b}${a ? ' -> ' + a : ''}`);
-  if (a) action(a);
+  if (!a) return;
+  action(a);
+  if (REPEATABLE.has(a) && app.screen === 'ride') {
+    clearTimeout(holdTimers[b]);
+    const rep = () => { action(a); holdTimers[b] = setTimeout(rep, 120); };
+    holdTimers[b] = setTimeout(rep, 450);
+  }
 }
+function onRelease(b) { clearTimeout(holdTimers[b]); delete holdTimers[b]; }
 
 document.addEventListener('keydown', (e) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;

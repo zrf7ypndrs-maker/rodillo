@@ -5,7 +5,7 @@ A Zwift replacement for one rider: a KICKR CORE (Zwift Ride), Zwift Ride handleb
 **Open it:** https://zrf7ypndrs-maker.github.io/rodillo in **Google Chrome** (Safari has no Web Bluetooth).
 
 ## What it does
-- **ERG workouts:** the trainer holds the target power. Intensity can be adjusted ±5% from the controller.
+- **ERG workouts:** the trainer holds the target power. Intensity can be adjusted in 1% steps from the controller (hold the button to repeat).
 - **Slope mode with 24 virtual gears:** grade comes from a workout step, a GPX route, or the D-pad in free ride. Gear ratios run 0.75 to 5.49, same range as Zwift.
 - **Coach library:** `workouts/*.json`, listed in `workouts/index.json`. The plan in `plans/current.json` puts today's session at the top of the home screen.
 - **Imports:** Zwift `.zwo` workouts and `.gpx` routes.
@@ -24,7 +24,7 @@ That makes trainer power equal road force × virtual speed. The app learns two v
 | Action | Zwift Ride | Keyboard |
 |---|---|---|
 | Easier / harder gear | Left / right shifters and paddles | ← / → |
-| ERG intensity or free-ride grade | D-pad up / down | ↑ / ↓ |
+| ERG intensity (1%) or free-ride grade (1%), hold to repeat | D-pad up / down | ↑ / ↓ |
 | Start / pause | A | Space |
 | End ride (twice) | B | Esc |
 | Skip interval | Y | S |

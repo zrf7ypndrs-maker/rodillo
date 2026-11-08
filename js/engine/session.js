@@ -67,7 +67,7 @@ export class Session extends Emitter {
     if (g !== this.gear) { this.gear = g; this.emit('shift', g); this.emit('change'); }
   }
   bump(dir) {
-    if (this.mode === 'erg') this.intensity = Math.max(0.5, Math.min(1.5, Math.round((this.intensity + 0.05 * dir) * 100) / 100));
+    if (this.mode === 'erg') this.intensity = Math.max(0.5, Math.min(1.5, Math.round((this.intensity + 0.01 * dir) * 100) / 100));
     else this.gradeOffset = Math.max(-0.1, Math.min(0.2, Math.round((this.gradeOffset + 0.01 * dir) * 100) / 100));
     this.emit('change');
   }
