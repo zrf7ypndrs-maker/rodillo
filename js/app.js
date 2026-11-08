@@ -1,16 +1,17 @@
-import { Trainer } from './ble/trainer.js';
-import { HeartRate } from './ble/hr.js';
-import { ZwiftRide } from './ble/zwiftride.js';
-import { SimTrainer, SimHr } from './ble/sim.js';
-import { log, logMsg } from './ble/base.js';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js';
-import { DRIVETRAINS } from './engine/drivetrain.js';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js';
-import { encodeActivity } from './fit.js';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js';
-import { ls, rides } from './store.js';
+import { Trainer } from './ble/trainer.js?v=202611082133';
+import { HeartRate } from './ble/hr.js?v=202611082133';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611082133';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611082133';
+import { log, logMsg } from './ble/base.js?v=202611082133';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082133';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082133';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082133';
+import { encodeActivity } from './fit.js?v=202611082133';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082133';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082133';
+import { ls, rides } from './store.js?v=202611082133';
 
+const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1432,6 +1433,7 @@ window.addEventListener('beforeunload', (e) => {
   if (app.session && !app.session.finished && app.session.samples.length > 10) { saveRide('inprogress'); e.preventDefault(); }
 });
 
+$("#build-id").textContent = `build ${BUILD}`;
 renderDevices();
 loadLibrary();
 autoReconnect();

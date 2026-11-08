@@ -51,3 +51,5 @@ That makes trainer power equal road force × virtual speed. The app learns two v
 
 ## Development
 `npm install && npm test` runs the protocol, physics, workout and FIT tests (no hardware needed). Demo mode on the home screen simulates a trainer and HR strap.
+
+**Before every push:** `node tools/stamp.mjs`. It stamps a build id on the CSS and every JS import so browsers (especially Bluefy on iPhone) never mix a new page with old cached code. The build id shows next to Settings.

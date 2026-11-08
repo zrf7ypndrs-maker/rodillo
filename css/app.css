@@ -113,6 +113,7 @@ table.ints { margin-bottom: 14px; }
 .keys { width: 100%; border-collapse: collapse; font-size: 13px; }
 .keys td, .keys th { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
 .keys th { color: var(--muted); font-weight: 500; }
+.build-id { font-size: 11px; font-weight: 500; margin-left: 6px; }
 .tag.coach { background: #3a2119; color: #ffb39e; }
 
 #log-body { font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: #c9d1d9; }

@@ -2,8 +2,8 @@
 // The simulated rider holds a chosen power; cadence emerges from the
 // resistance the app commands, exactly like on the real trainer.
 
-import { Emitter } from './base.js';
-import { G } from '../engine/physics.js';
+import { Emitter } from './base.js?v=202611082133';
+import { G } from '../engine/physics.js?v=202611082133';
 
 export class SimTrainer extends Emitter {
   constructor({ realDev = 5.1, trainerMass = 75, c1 = 2.9, c3 = 0.51 } = {}) {
