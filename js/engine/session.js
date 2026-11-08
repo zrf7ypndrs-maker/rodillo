@@ -58,7 +58,7 @@ export class Session extends Emitter {
   }
 
   // ---------- controls ----------
-  start() { this.started = true; this.paused = false; this.emit('change'); }
+  start() { this.started = true; this.paused = false; this.startMs ||= Date.now(); this.emit('change'); }
   togglePause() { if (!this.started) return this.start(); this.paused = !this.paused; this.emit('change'); }
   shift(dir) {
     const g = Math.max(0, Math.min(GEAR_RATIOS.length - 1, this.gear + dir));

@@ -89,9 +89,22 @@ button.small, .small { padding: 6px 12px; font-size: 13px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
 .card p { font-size: 14px; line-height: 1.45; }
 
-#history-list table { width: 100%; border-collapse: collapse; font-size: 14px; }
-#history-list td, #history-list th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
-#history-list th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.ride-table table, table.ints { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ride-table td, .ride-table th, table.ints td, table.ints th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.ride-table th, table.ints th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+table.ints { margin-bottom: 14px; }
+.nowrap { white-space: nowrap; }
+.pct { font-weight: 650; }
+.pct.ok { color: var(--good); } .pct.low { color: var(--warn); } .pct.high { color: #ff8a9a; }
+.tag.warn { background: #3a2a10; color: var(--warn); }
+.sync-status { font-size: 13px; margin-bottom: 10px; line-height: 2; }
+.sync-status button { margin-left: 8px; }
+.stats.tcards { grid-template-columns: repeat(5, 1fr); margin: 0 0 14px; }
+.stat .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.tgrid .wide { grid-column: 1 / -1; }
+.tgrid h3, .card h3 { font-size: 15px; }
+.svgchart { width: 100%; height: auto; display: block; }
 
 /* ---------- panels ---------- */
 .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 100vw; background: var(--panel); border-left: 1px solid var(--line); padding: 18px; overflow: auto; z-index: 20; box-shadow: -20px 0 40px rgba(0,0,0,.4); }
@@ -161,3 +174,6 @@ button.small, .small { padding: 6px 12px; font-size: 13px; }
   .today { grid-template-columns: 1fr; }
   .tiles { grid-template-columns: repeat(3, 1fr); }
 }
+
+.sync-form { grid-template-columns: 110px 1fr; }
+.sync-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; font-size: 13px; }

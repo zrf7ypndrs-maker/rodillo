@@ -54,7 +54,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="workouts" class="active">Workouts</button>
       <button data-tab="free">Slope mode</button>
-      <button data-tab="history">History</button>
+      <button data-tab="training">Training</button>
     </nav>
 
     <div class="tab-body">
@@ -77,8 +77,15 @@
         <p class="muted list-sub">Grade profiles from the coach. Up/down still shifts the whole profile by 1% if you want it harder or easier.</p>
         <div id="slope-list" class="workout-list"></div>
       </div>
-      <div id="tab-history" class="tab">
-        <div id="history-list"></div>
+      <div id="tab-training" class="tab">
+        <div class="sync-status muted" id="sync-status"></div>
+        <div class="stats tcards" id="training-cards"></div>
+        <div class="tgrid">
+          <div class="card"><h3>Fitness, fatigue &amp; form</h3><div id="chart-load"></div></div>
+          <div class="card"><h3>Weekly load</h3><div id="chart-weekly"></div></div>
+          <div class="card wide"><h3>Power curve</h3><div id="chart-curve"></div></div>
+        </div>
+        <div class="card"><h3>Rides</h3><div id="ride-table" class="ride-table"></div></div>
       </div>
     </div>
   </section>
@@ -135,6 +142,7 @@
         <button class="primary" id="s-fit">Download .FIT</button>
         <button class="ghost" id="s-home">Done</button>
       </div>
+      <p class="muted small-print" id="s-sync"></p>
       <p class="muted small-print">Upload the .FIT to Strava or Garmin Connect. It's saved as a virtual ride.</p>
     </div>
   </section>
@@ -143,6 +151,13 @@
   <aside id="settings" class="panel hidden">
     <div class="panel-head"><h3>Settings</h3><button class="ghost small" data-close>Close</button></div>
     <form id="settings-form" class="settings-form"></form>
+    <h4>Training history sync</h4>
+    <div class="settings-form sync-form">
+      <label for="set-token">GitHub token</label><input id="set-token" type="password" placeholder="github_pat_..." autocomplete="off">
+      <label for="set-repo">Data repo</label><input id="set-repo" type="text">
+      <div class="help">Fine-grained token with Contents: Read and write on rodillo-data only. Stored in Chrome on this Mac, never in the app repo.</div>
+      <div class="sync-actions"><button class="primary small" id="btn-token">Save &amp; test</button> <span class="muted" id="token-status"></span></div>
+    </div>
     <h4>Controls</h4>
     <table class="keys">
       <tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>

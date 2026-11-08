@@ -1,0 +1,107 @@
+// Push rides to the private rodillo-data repo through the GitHub contents API.
+
+export const DEFAULT_REPO = 'zrf7ypndrs-maker/rodillo-data';
+
+function b64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function unb64(s) {
+  const bin = atob(s.replace(/\n/g, ''));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+export class GitHubSync {
+  constructor({ token, repo = DEFAULT_REPO, branch = 'main', fetchImpl } = {}) {
+    this.token = token;
+    this.repo = repo;
+    this.branch = branch;
+    this.fetch = fetchImpl || ((...a) => fetch(...a));
+  }
+
+  get configured() { return !!this.token; }
+
+  async api(path, opts = {}) {
+    const res = await this.fetch(`https://api.github.com/repos/${this.repo}${path}`, {
+      ...opts,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      cache: 'no-store',
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      const err = new Error(`GitHub ${res.status}: ${body.slice(0, 200)}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  /** Verifies the token can write to the repo. */
+  async test() {
+    const r = await this.api('');
+    if (!r) throw new Error(`Repo ${this.repo} not found (or the token has no access to it)`);
+    if (r.permissions && !r.permissions.push) throw new Error('Token can read but not write. Set Contents to "Read and write".');
+    return r;
+  }
+
+  async getJson(path) {
+    const r = await this.api(`/contents/${path}?ref=${this.branch}`);
+    if (!r) return null;
+    let text;
+    if (r.content) text = unb64(r.content);
+    else if (r.download_url || r.git_url) {
+      // files > 1 MB come back without inline content: use the blob API
+      const blob = await this.api(`/git/blobs/${r.sha}`);
+      text = unb64(blob.content);
+    }
+    return { sha: r.sha, json: JSON.parse(text) };
+  }
+
+  async putJson(path, obj, message, sha) {
+    return this.api(`/contents/${path}`, {
+      method: 'PUT',
+      body: JSON.stringify({ message, content: b64(JSON.stringify(obj, null, path.endsWith('index.json') ? 2 : 0)), branch: this.branch, ...(sha ? { sha } : {}) }),
+    });
+  }
+
+  /** Write the full ride file, then upsert its summary into index.json. */
+  async pushRide(ride) {
+    const s = ride.summary;
+    const path = `rides/${s.id.slice(0, 4)}/${s.id}.json`;
+    try {
+      await this.putJson(path, ride, `Ride ${s.id}: ${s.name}`);
+    } catch (e) {
+      if (e.status !== 422 && e.status !== 409) throw e;
+      const cur = await this.getJson(path); // already exists: overwrite
+      await this.putJson(path, ride, `Ride ${s.id}: ${s.name} (update)`, cur?.sha);
+    }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const cur = await this.getJson('index.json');
+      const index = cur?.json || { version: 1, rides: [] };
+      index.rides = index.rides.filter((r) => r.id !== s.id);
+      index.rides.push(s);
+      index.rides.sort((a, b) => (a.id < b.id ? -1 : 1));
+      try {
+        await this.putJson('index.json', index, `Index: ${s.id}`, cur?.sha);
+        return index;
+      } catch (e) {
+        if (e.status !== 409 && e.status !== 422) throw e; // stale sha: retry
+      }
+    }
+    throw new Error('Could not update index.json after 3 attempts');
+  }
+
+  async fetchIndex() {
+    const r = await this.getJson('index.json');
+    return r?.json?.rides || [];
+  }
+}
