@@ -465,8 +465,8 @@ table.ints { margin-bottom: 14px; }
 .hero-prof .profile { height: 100%; display: block; }
 /* Hover readout on today's profile: the interval under the pointer stays full color, the rest fades,
    and an ink tag above it gives watts and time. */
-.hero-prof { position: relative; cursor: crosshair; touch-action: pan-y; }
-.hero-prof .profile [data-i] { transition: opacity .15s; }
+.hero-prof { position: relative; touch-action: pan-y; }
+.hero-prof .profile [data-i] { transition: opacity .15s; cursor: crosshair; }
 .hero-prof.hov .profile [data-i] { opacity: .35; }
 .hero-prof.hov .profile [data-i].on { opacity: 1; }
 .prof-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); z-index: 3;

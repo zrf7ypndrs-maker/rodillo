@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092157';
-import { HeartRate } from './ble/hr.js?v=202611092157';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092157';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092157';
-import { log, logMsg } from './ble/base.js?v=202611092157';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092157';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092157';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092157';
-import { encodeActivity } from './fit.js?v=202611092157';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092157';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092157';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092157';
-import { ls, rides } from './store.js?v=202611092157';
+import { Trainer } from './ble/trainer.js?v=202611092200';
+import { HeartRate } from './ble/hr.js?v=202611092200';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092200';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092200';
+import { log, logMsg } from './ble/base.js?v=202611092200';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092200';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092200';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092200';
+import { encodeActivity } from './fit.js?v=202611092200';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092200';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092200';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092200';
+import { ls, rides } from './store.js?v=202611092200';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -532,8 +532,16 @@ function bindProfileHover(box, w) {
   let cur = -1;
   const show = (e) => {
     const r = svg.getBoundingClientRect();
-    const t = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999) * T;
-    const i = segs.findIndex((g) => t >= g.start && t < g.end);
+    let i;
+    if (e.pointerType === 'touch') {
+      // A finger is imprecise: anywhere in the interval's column counts.
+      const t = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999) * T;
+      i = segs.findIndex((g) => t >= g.start && t < g.end);
+    } else {
+      // Mouse: only inside the filled area under the curve, not the empty space above it.
+      const hit = e.target.closest?.('[data-i]');
+      i = hit ? +hit.dataset.i : -1;
+    }
     if (i < 0) return hide();
     if (i !== cur) {
       cur = i;
