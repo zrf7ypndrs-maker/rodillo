@@ -16,7 +16,7 @@
 //   ]
 // }
 
-import { speedForPower } from './physics.js?v=202611090206';
+import { speedForPower } from './physics.js?v=202611091508';
 
 const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
 

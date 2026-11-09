@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611090206';
-import { HeartRate } from './ble/hr.js?v=202611090206';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090206';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090206';
-import { log, logMsg } from './ble/base.js?v=202611090206';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090206';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090206';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090206';
-import { encodeActivity } from './fit.js?v=202611090206';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090206';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090206';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090206';
-import { ls, rides } from './store.js?v=202611090206';
+import { Trainer } from './ble/trainer.js?v=202611091508';
+import { HeartRate } from './ble/hr.js?v=202611091508';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091508';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091508';
+import { log, logMsg } from './ble/base.js?v=202611091508';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091508';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091508';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091508';
+import { encodeActivity } from './fit.js?v=202611091508';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091508';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091508';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091508';
+import { ls, rides } from './store.js?v=202611091508';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -165,8 +165,21 @@ function renderDevices() {
     const [, a, b] = fw.match(/^(\d+)\.(\d+)/).map(Number);
     if (a > 1 || (a === 1 && b > 2)) $('.device[data-kind="controller"] .dev-meta').innerHTML += '<br><span style="color:var(--warn)">Firmware above 1.2 is locked to Zwift</span>';
   }
+  // status dots on the top-bar link button
+  const dotState = (d) => (app.demo && d ? 'on' : d?.state === 'connected' ? 'on' : d?.state === 'connecting' ? 'wait' : '');
+  const states = { trainer: dotState(app.trainer), hr: dotState(app.hr), controller: anyCtl ? 'on' : app.controllers.some((c) => c.state === 'connecting') ? 'wait' : '' };
+  $$('#btn-devices .ldots i').forEach((i) => { i.className = states[i.dataset.k]; });
+  const n = Object.values(states).filter((v) => v === 'on').length;
+  $('#btn-devices').title = `Bluetooth connections (${n} of 3 connected)`;
   renderRideStatus();
 }
+
+// connections popover
+function setDevPop(open) {
+  $('#devpop').classList.toggle('hidden', !open);
+  $('#btn-devices').setAttribute('aria-expanded', String(open));
+}
+const devPopOpen = () => !$('#devpop').classList.contains('hidden');
 
 // ------------------------------------------------------------------ library
 async function loadLibrary() {
@@ -865,7 +878,7 @@ function action(a) {
       else el.click();
       break;
     }
-    case 'back': $$('.panel').forEach((p) => p.classList.add('hidden')); break;
+    case 'back': $$('.panel').forEach((p) => p.classList.add('hidden')); setDevPop(false); break;
   }
 }
 const fmtGradeSet = (s) => `${(s.gradeOffset * 100).toFixed(0)}%`;
@@ -1548,6 +1561,10 @@ function renderSettings() {
 // ------------------------------------------------------------------ wiring
 $$('[data-connect]').forEach((b) => (b.onclick = () => connect(b.dataset.connect)));
 $('#btn-demo').onclick = enterDemo;
+$('#btn-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!devPopOpen()); };
+$('#devpop-close').onclick = () => setDevPop(false);
+// click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
+document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
 $('#btn-free').onclick = startFree;
 $('#btn-settings').onclick = () => {
   renderSettings();
@@ -1581,6 +1598,7 @@ function setTheme(t) {
   const label = app.theme === 'dark' ? 'Light mode' : 'Dark mode';
   $('#btn-theme').textContent = app.theme === 'dark' ? 'Light' : 'Dark';
   $('#btn-theme').title = `Switch to ${label.toLowerCase()}`;
+  $('#btn-theme').setAttribute('aria-label', label);
   $('#rp-theme').textContent = label;
   readTokens();
   if (app.tab === 'training') renderTraining();

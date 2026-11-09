@@ -135,13 +135,26 @@ button.danger:hover { border-color: var(--bad); }
 #btn-theme { display: inline-flex; align-items: center; gap: 7px; }
 #btn-theme::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 
-/* sensor strip: one surface, fields split by rules */
-.devices { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--sheet); border-radius: var(--r); margin-bottom: 28px; }
-.device { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 118px; border-left: 1px solid var(--rule); }
-.device:first-child { border-left: none; }
-.device button { margin-top: auto; align-self: flex-start; }
-.device .row-btns { margin-top: auto; gap: 6px; }
-.device .row-btns button { margin-top: 0; }
+/* connections: a link button in the top bar (one status dot per sensor) opens a popover with one row per sensor */
+.topbar { position: relative; }
+#btn-devices { display: inline-flex; align-items: center; gap: 7px; padding-left: 12px; padding-right: 13px; }
+#btn-devices svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+#btn-devices[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
+.ldots { display: inline-flex; gap: 4px; }
+.ldots i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--faint); }
+.ldots i.on { background: var(--good); border-color: var(--good); }
+.ldots i.wait { background: var(--warn); border-color: var(--warn); animation: pulse 1s infinite; }
+#btn-devices[aria-expanded="true"] .ldots i:not(.on):not(.wait) { border-color: var(--sheet); opacity: .6; }
+.devpop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 25; width: 400px; max-width: calc(100vw - 28px);
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 18px 44px var(--shadow); }
+.devpop-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--rule); }
+.devpop-head h3 { margin: 0; font-size: 16px; }
+.devices { display: flex; flex-direction: column; }
+.device { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 3px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--rule); }
+.device:first-child { border-top: none; }
+.device > :not(button):not(.row-btns) { grid-column: 1; }
+.device > button { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+.device .row-btns { grid-column: 1 / -1; gap: 6px; margin-top: 6px; }
 .dev-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); font-weight: 500; }
 .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--faint); flex: none; }
 .device.connected .dot { background: var(--good); border-color: var(--good); }
@@ -150,7 +163,8 @@ button.danger:hover { border-color: var(--bad); }
 .dev-name { font-weight: 650; font-size: 16px; }
 .device.connected .dev-name { color: var(--ink); }
 .dev-meta { font-size: 13px; color: var(--muted); }
-.device.demo { background: transparent; border-radius: 0 var(--r) var(--r) 0; background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--hatch) 7px 8px); }
+.dev-name:empty, .dev-meta:empty { display: none; }
+.device.demo { border-radius: 0 0 var(--r) var(--r); background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--hatch) 7px 8px); }
 
 .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
 .tabs button { border: none; background: none; border-radius: 0; padding: 10px 0; color: var(--muted); font-size: 16px; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; }
@@ -325,9 +339,6 @@ table.ints { margin-bottom: 14px; }
 .small-print { font-size: 13px; margin-top: 14px; }
 
 @media (max-width: 1100px) {
-  .devices { grid-template-columns: repeat(2, 1fr); }
-  .device:nth-child(3) { border-left: none; border-top: 1px solid var(--rule); }
-  .device:nth-child(4) { border-top: 1px solid var(--rule); }
   .tiles { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -448,7 +459,7 @@ table.ints { margin-bottom: 14px; }
 .coach-call .tag { margin-right: 6px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile.cad.bad, .rp-m.bad, .device.connecting .dot { animation: none !important; }
+  .tile.cad.bad, .rp-m.bad, .device.connecting .dot, .ldots i.wait { animation: none !important; }
   * { transition: none !important; }
 }
 
@@ -463,21 +474,25 @@ table.ints { margin-bottom: 14px; }
   /* ---------- home ---------- */
   #home { padding: calc(12px + env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom)); }
   .topbar { margin-bottom: 14px; }
-  .brand { font-size: 22px; }
-  .top-actions button { padding: 6px 10px; }
-  /* one row per sensor: label + status on the left, button on the right */
-  .devices { grid-template-columns: 1fr; margin-bottom: 20px; }
-  .device, .device:nth-child(n) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 0; align-items: center; min-height: 0; padding: 9px 12px; border-left: none; border-top: 1px solid var(--rule); }
-  .device:first-child { border-top: none; }
-  .device > :not(button):not(.row-btns) { grid-column: 1; }
-  .device > button, .device > .row-btns { grid-column: 2; grid-row: 1 / span 3; margin: 0; align-self: center; justify-content: flex-end; }
-  .device .row-btns { flex-wrap: nowrap; }
-  .device.demo { border-radius: 0 0 var(--r) var(--r); }
-  .device.demo .dev-head { display: none; }
-  .dev-head { font-size: 12.5px; }
+  .brand { font-size: 21px; }
+  .top-actions { gap: 0; }
+  .top-actions button { padding: 6px 9px; }
+  /* phone: theme toggle is just its half-moon icon, so the link button fits */
+  #btn-theme { font-size: 0; gap: 0; padding: 6px 10px; }
+  #btn-theme::before { width: 15px; height: 15px; }
+  /* connections popover: full width under the top bar */
+  .devpop { left: 0; right: 0; width: auto; max-width: none; max-height: calc(100dvh - 90px - env(safe-area-inset-top)); overflow: auto; overscroll-behavior: contain; }
+  #btn-devices { padding: 6px 9px; gap: 5px; }
+  #btn-devices svg { width: 17px; height: 17px; }
+  .ldots { gap: 3px; }
+  .brand { gap: 8px; }
+  .logo { width: 36px; height: 15px; }
+  .device { padding: 10px 14px; }
+  .dev-head, .dev-meta { font-size: 12.5px; }
   .dev-name { font-size: 15px; }
-  .dev-name:empty, .dev-meta:empty { display: none; }
-  .dev-meta { font-size: 12.5px; }
+  @media (orientation: landscape) { .devpop { left: auto; width: 420px; } }
+  /* narrow phones (SE, mini): logo only, so the actions never clip */
+  @media (max-width: 385px) { .brand { font-size: 0; gap: 0; } }
   .tabs { overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { white-space: nowrap; font-size: 15px; }

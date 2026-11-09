@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611090206">
+<link rel="stylesheet" href="css/app.css?v=202611091508">
 </head>
 <body>
 <div id="app">
@@ -21,41 +21,44 @@
     <header class="topbar">
       <div class="brand"><span class="logo"></span>rodillo</div>
       <div class="top-actions">
+        <button class="ghost" id="btn-devices" aria-label="Bluetooth connections" aria-haspopup="dialog" aria-expanded="false" title="Bluetooth connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1"/></svg><span class="ldots"><i data-k="trainer"></i><i data-k="hr"></i><i data-k="controller"></i></span></button>
         <button class="ghost" id="btn-theme">Dark</button>
         <button class="ghost" id="btn-settings">Settings</button>
         <button class="ghost" id="btn-log">Log</button>
       </div>
-    </header>
-
-    <div class="devices">
-      <div class="device" data-kind="trainer">
-        <div class="dev-head"><span class="dot"></span><span class="dev-title">Trainer</span></div>
-        <div class="dev-name">Not connected</div>
-        <div class="dev-meta"></div>
-        <button class="primary small" data-connect="trainer">Connect</button>
-      </div>
-      <div class="device" data-kind="hr">
-        <div class="dev-head"><span class="dot"></span><span class="dev-title">Heart rate</span></div>
-        <div class="dev-name">Not connected</div>
-        <div class="dev-meta"></div>
-        <button class="primary small" data-connect="hr">Connect</button>
-      </div>
-      <div class="device" data-kind="controller">
-        <div class="dev-head"><span class="dot"></span><span class="dev-title">Zwift Ride controllers</span></div>
-        <div class="dev-name">Not connected</div>
-        <div class="dev-meta"></div>
-        <div class="row-btns">
-          <button class="primary small" data-connect="controller">Connect</button>
-          <button class="ghost small hidden" data-connect="controllerR" title="Connect the right hood too (A/B/Y/Z and right shifters)">+ Right side</button>
-          <button class="ghost small" data-connect="controller2" title="Show every Zwift device">Not listed?</button>
+      <div class="devpop hidden" id="devpop" role="dialog" aria-label="Bluetooth connections">
+        <div class="devpop-head"><h3>Connections</h3><button class="ghost small" id="devpop-close">Close</button></div>
+        <div class="devices">
+          <div class="device" data-kind="trainer">
+            <div class="dev-head"><span class="dot"></span><span class="dev-title">Trainer</span></div>
+            <div class="dev-name">Not connected</div>
+            <div class="dev-meta"></div>
+            <button class="primary small" data-connect="trainer">Connect</button>
+          </div>
+          <div class="device" data-kind="hr">
+            <div class="dev-head"><span class="dot"></span><span class="dev-title">Heart rate</span></div>
+            <div class="dev-name">Not connected</div>
+            <div class="dev-meta"></div>
+            <button class="primary small" data-connect="hr">Connect</button>
+          </div>
+          <div class="device" data-kind="controller">
+            <div class="dev-head"><span class="dot"></span><span class="dev-title">Zwift Ride controllers</span></div>
+            <div class="dev-name">Not connected</div>
+            <div class="dev-meta"></div>
+            <div class="row-btns">
+              <button class="primary small" data-connect="controller">Connect</button>
+              <button class="ghost small hidden" data-connect="controllerR" title="Connect the right hood too (A/B/Y/Z and right shifters)">+ Right side</button>
+              <button class="ghost small" data-connect="controller2" title="Show every Zwift device">Not listed?</button>
+            </div>
+          </div>
+          <div class="device demo">
+            <div class="dev-head"><span class="dev-title">No hardware?</span></div>
+            <div class="dev-meta">Simulated trainer and HR strap, for trying the app at your desk.</div>
+            <button class="ghost small" id="btn-demo">Demo mode</button>
+          </div>
         </div>
       </div>
-      <div class="device demo">
-        <div class="dev-head"><span class="dev-title">No hardware?</span></div>
-        <div class="dev-meta">Simulated trainer and HR strap, for trying the app at your desk.</div>
-        <button class="ghost small" id="btn-demo">Demo mode</button>
-      </div>
-    </div>
+    </header>
 
     <div id="week" class="week hidden"></div>
 
@@ -252,6 +255,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611090206"></script>
+<script type="module" src="js/app.js?v=202611091508"></script>
 </body>
 </html>
