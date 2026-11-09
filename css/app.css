@@ -473,7 +473,9 @@ table.ints { margin-bottom: 14px; }
 .week-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .eyebrow { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); margin: 0; }
 .week-head .muted { font-size: 15px; }
-.week-strip { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 0 4px; scrollbar-width: none; }
+.week-strip { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  /* room around the cards so a hovered card can grow without being clipped by the scroller; the negative margin keeps the layout where it was */
+  padding: 6px 8px 8px; margin: -4px -8px -4px; scroll-padding-inline: 8px; }
 .week-strip::-webkit-scrollbar { display: none; } /* arrows + trackpad scroll it; no bar */
 /* seven days fill the row on a wide screen; the arrows page to week two */
 .day { flex: 0 0 calc((100% - 48px) / 7); scroll-snap-align: start; background: var(--sheet); border-radius: var(--r); padding: 9px 12px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-height: 92px; box-shadow: inset 0 4px 0 var(--c); outline: none; }
@@ -482,6 +484,15 @@ table.ints { margin-bottom: 14px; }
 .day.nowo:hover { background: var(--hi); }
 .day.past:not(.done) { opacity: .5; }
 .day.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Next days cards grow a little on hover / controller focus, same springy curve as the hero buttons */
+@media (prefers-reduced-motion: no-preference) {
+  .day { transition: background .12s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+  .day.focus { transform: scale(1.05); }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .day:hover { transform: scale(1.05); }
+  .day:hover:active { transform: scale(1.02); transition-duration: .12s; }
+}
 .d-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; padding-top: 4px; }
 .d-dow { color: var(--ink); font-weight: 750; }
 .d-name { font-weight: 700; font-size: 14.5px; line-height: 1.2; margin-top: 2px; }
