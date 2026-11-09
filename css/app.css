@@ -97,7 +97,7 @@ b { font-weight: 650; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* numbers everywhere share one voice */
-.t-val, .int-left, .ride-clock, .stat .v, .rp-count, .rp-pval, .rp-v, .rp-top > div > span:last-child,
+.t-val, .ride-clock, .stat .v, .rp-count, .rp-pval, .rp-v, .rp-top > div > span:last-child,
 .rp-target, .seg-r .big, .seg-name .big, .t-pct, .cal-num, .wo-meta, .pct {
   font-family: var(--num); font-stretch: 68%; font-variant-numeric: tabular-nums;
 }
@@ -225,20 +225,32 @@ table.ints { margin-bottom: 14px; }
 /* ---------- ride ---------- */
 #ride { padding: 16px 22px; display: none; flex-direction: column; gap: 12px; height: 100vh; position: relative; overflow: hidden; background: var(--paper); }
 #ride.active { display: flex; }
-.ride-top { display: flex; align-items: center; gap: 16px; }
-.ride-name { font-weight: 700; font-size: 18px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ride-clock { font-size: 40px; font-weight: 800; line-height: 1; }
-.ride-status { font-size: 13px; color: var(--muted); display: flex; gap: 6px; flex: 1; justify-content: flex-end; }
+/* top row: name + elapsed | the current interval, centered | sensors + next */
+.ride-top { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(0, 820px) minmax(170px, 1fr); gap: 22px; align-items: center; }
+.rt-side { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rt-right { align-items: flex-end; text-align: right; }
+.ride-name { font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ride-clock { font-size: 48px; font-weight: 800; line-height: 1; }
+.ride-status { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .ride-status .pill { padding: 2px 9px; border-radius: 99px; border: 1px solid var(--rule); font-weight: 600; }
 .ride-status .pill.off { color: var(--bad); border-color: var(--bad-line); }
 
-/* the interval band is the one big block of color: it is the zone */
-.interval { --zc: var(--z2); display: grid; grid-template-columns: 1fr auto auto; gap: 26px; align-items: center; background: var(--zc); color: var(--on-zone); border-radius: var(--r); padding: 10px 22px; transition: background .4s; }
-.int-label { font-size: 26px; font-weight: 800; letter-spacing: -0.015em; }
-.int-text { font-size: 15.5px; margin-top: 1px; min-height: 18px; font-weight: 500; opacity: .82; }
-.int-left { font-size: 64px; font-weight: 850; line-height: .95; }
-.int-next { font-size: 14px; text-align: right; min-width: 170px; opacity: .82; }
-.int-next b { font-family: var(--num); font-stretch: 75%; font-size: 18px; color: var(--on-zone) !important; }
+/* the interval card is the one big block of color: it is the zone */
+.interval { --zc: var(--z2); position: relative; overflow: hidden; container-type: inline-size; text-align: center; background: var(--zc); color: var(--on-zone); border-radius: var(--r); padding: 10px 22px 20px; transition: background .4s; }
+.int-head { font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.int-head b { font-weight: 800; font-size: 18px; }
+.int-head span:not(:empty)::before { content: " \00b7  "; opacity: .6; }
+.int-head span { opacity: .82; }
+.int-big { font-size: min(92px, 11.5cqi); line-height: 1; font-weight: 850; margin-top: 4px; white-space: nowrap; letter-spacing: -0.01em; }
+.int-big .num { font-family: var(--num); font-stretch: 68%; font-variant-numeric: tabular-nums; }
+.int-big .w { font-size: .46em; font-weight: 650; letter-spacing: 0; margin: 0 .28em; opacity: .78; }
+.int-big .u { font-size: .5em; font-weight: 750; margin-left: .08em; }
+.int-big .msg { font-size: .62em; font-weight: 800; letter-spacing: -0.015em; }
+.int-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; background: color-mix(in srgb, var(--on-zone) 16%, transparent); }
+.int-bar i { display: block; height: 100%; width: 0; background: var(--on-zone); opacity: .85; transition: width .3s linear; }
+.int-bar.hidden { display: none; }
+.int-next { font-size: 14px; color: var(--muted); }
+.int-next b { font-family: var(--num); font-stretch: 75%; font-size: 20px; color: var(--ink); }
 
 /* tiles: bike-computer data fields on one surface */
 .tiles { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.35fr 1fr 1fr; background: var(--sheet); border-radius: var(--r); }

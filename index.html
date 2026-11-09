@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=202611082357">
+<link rel="stylesheet" href="css/app.css?v=202611090130">
 </head>
 <body>
 <div id="app">
@@ -158,18 +158,19 @@
     </div>
 
     <div class="ride-top">
-      <div class="ride-name" id="r-name"></div>
-      <div class="ride-clock" id="r-elapsed">0:00</div>
-      <div class="ride-status" id="r-status"></div>
-    </div>
-
-    <div class="interval" id="r-interval">
-      <div class="int-main">
-        <div class="int-label" id="r-int-label">Free ride</div>
-        <div class="int-text" id="r-int-text"></div>
+      <div class="rt-side">
+        <div class="ride-name" id="r-name"></div>
+        <div class="ride-clock" id="r-elapsed">0:00</div>
       </div>
-      <div class="int-left" id="r-int-left"></div>
-      <div class="int-next" id="r-int-next"></div>
+      <div class="interval" id="r-interval">
+        <div class="int-head"><b id="r-int-label">Free ride</b><span id="r-int-text"></span></div>
+        <div class="int-big" id="r-int-big"></div>
+        <div class="int-bar" id="r-int-bar"><i></i></div>
+      </div>
+      <div class="rt-side rt-right">
+        <div class="ride-status" id="r-status"></div>
+        <div class="int-next" id="r-int-next"></div>
+      </div>
     </div>
 
     <div class="ride-body" id="r-body">
@@ -250,6 +251,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611082357"></script>
+<script type="module" src="js/app.js?v=202611090130"></script>
 </body>
 </html>

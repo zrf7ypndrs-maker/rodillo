@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611082357';
-import { HeartRate } from './ble/hr.js?v=202611082357';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611082357';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611082357';
-import { log, logMsg } from './ble/base.js?v=202611082357';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611082357';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611082357';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611082357';
-import { encodeActivity } from './fit.js?v=202611082357';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611082357';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611082357';
-import { ls, rides } from './store.js?v=202611082357';
+import { Trainer } from './ble/trainer.js?v=202611090130';
+import { HeartRate } from './ble/hr.js?v=202611090130';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090130';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090130';
+import { log, logMsg } from './ble/base.js?v=202611090130';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090130';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090130';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090130';
+import { encodeActivity } from './fit.js?v=202611090130';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090130';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090130';
+import { ls, rides } from './store.js?v=202611090130';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1061,22 +1061,53 @@ function renderRide() {
   // interval card
   $('.tiles').classList.toggle('erg', s.mode === 'erg');
   const seg = s.seg;
-  const card = $('#r-interval');
+  const card = $('#r-interval'), bar = $('#r-int-bar');
+  const num = (v, u = '') => `<span class="num">${v}</span>${u ? `<span class="u">${u}</span>` : ''}`;
+  const word = (w) => `<span class="w">${w}</span>`;
+  const setHTML = (el, v) => { if (el.innerHTML !== v) el.innerHTML = v; };
   if (seg) {
     const rem = s.segRemaining;
-    const tgt = seg.kind === 'erg' ? segTarget(seg, s.segProgress) : null;
-    card.style.setProperty('--zc', seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade));
-    $('#r-int-label').textContent = `${seg.label}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`;
-    $('#r-int-text').textContent = seg.text || (seg.kind === 'erg' ? `${Math.round(tgt * 100)}% FTP` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}% grade, use your gears`);
-    $('#r-int-left').textContent = rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m);
+    const left = rem.sec !== undefined ? num(fmtTime(rem.sec)) : num(fmtDist(rem.m).replace(/ (k?m)$/, ''), rem.m < 1000 ? 'm' : 'km');
+    const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
+    let big, sub;
+    if (seg.kind === 'erg') {
+      const tgt = segTarget(seg, s.segProgress);
+      const w = s.target || Math.round(tgt * app.settings.ftp * s.intensity);
+      card.style.setProperty('--zc', zoneHex(tgt));
+      if (seg.from === seg.to) {
+        big = `${word('Hold')}${num(w, 'W')}${word('for')}${left}`;
+        sub = `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`;
+      } else {
+        big = `${word('Ramp to')}${num(Math.round(seg.to * app.settings.ftp * s.intensity), 'W')}${word('in')}${left}`;
+        sub = `now ${w} W${cad}`;
+      }
+    } else {
+      const g = seg.grade + s.gradeOffset;
+      card.style.setProperty('--zc', gradeHex(g));
+      big = `${num((g * 100).toFixed(0), '%')}${word('grade for')}${left}`;
+      sub = `use your gears${cad}`;
+    }
+    setHTML($('#r-int-label'), `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`);
+    setHTML($('#r-int-text'), seg.text ? `${esc(seg.text)}${cad}` : sub);
+    setHTML($('#r-int-big'), big);
+    bar.classList.remove('hidden');
+    bar.firstElementChild.style.width = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
     const next = s.segs[s.segIndex + 1];
-    $('#r-int-next').innerHTML = next ? `Next<br><b style="color:var(--text)">${segAmount(next)} ${next.kind === 'erg' ? `@ ${Math.round(next.from * app.settings.ftp * s.intensity)} W` : `@ ${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`}</b>` : 'Last interval';
+    setHTML($('#r-int-next'), next ? `Next<br><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}` : 'Last interval');
+  } else if (s.segs) {
+    card.style.setProperty('--zc', ZC.z3);
+    setHTML($('#r-int-label'), 'Workout complete');
+    setHTML($('#r-int-text'), 'keep riding or press B twice to finish');
+    setHTML($('#r-int-big'), '<span class="msg">Done. Nice work.</span>');
+    bar.classList.add('hidden');
+    setHTML($('#r-int-next'), '');
   } else {
-    card.style.setProperty('--zc', s.segs ? ZC.z3 : gradeHex(s.grade));
-    $('#r-int-label').textContent = s.segs ? 'Workout complete' : `Free slope: ${fmtGradeSet(s)}`;
-    $('#r-int-text').textContent = s.segs ? 'Keep riding or press B twice to finish' : 'Up/down changes the grade by 1%. Shift to hold your cadence.';
-    $('#r-int-left').textContent = '';
-    $('#r-int-next').textContent = '';
+    card.style.setProperty('--zc', gradeHex(s.grade));
+    setHTML($('#r-int-label'), 'Free slope');
+    setHTML($('#r-int-text'), 'up/down changes the grade by 1%, shift to hold your cadence');
+    setHTML($('#r-int-big'), `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`);
+    bar.classList.add('hidden');
+    setHTML($('#r-int-next'), '');
   }
   renderSegList(s);
 
