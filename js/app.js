@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092135';
-import { HeartRate } from './ble/hr.js?v=202611092135';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092135';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092135';
-import { log, logMsg } from './ble/base.js?v=202611092135';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092135';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092135';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092135';
-import { encodeActivity } from './fit.js?v=202611092135';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092135';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092135';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092135';
-import { ls, rides } from './store.js?v=202611092135';
+import { Trainer } from './ble/trainer.js?v=202611092138';
+import { HeartRate } from './ble/hr.js?v=202611092138';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092138';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092138';
+import { log, logMsg } from './ble/base.js?v=202611092138';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092138';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092138';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092138';
+import { encodeActivity } from './fit.js?v=202611092138';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092138';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092138';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092138';
+import { ls, rides } from './store.js?v=202611092138';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -305,12 +305,40 @@ function renderLibrary() {
 }
 
 /** Workouts tab: ERG and slope sessions share one list area, switched by a pill toggle. */
-function setWoKind(k) {
+function setWoKind(k, animate = false) {
+  const prev = app.woKind;
   app.woKind = k === 'slope' ? 'slope' : 'erg';
   ls.set('woKind', app.woKind);
   $$('#wo-kind button').forEach((b) => { const on = b.dataset.kind === app.woKind; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
   $('#kind-erg').classList.toggle('hidden', app.woKind !== 'erg');
   $('#kind-slope').classList.toggle('hidden', app.woKind !== 'slope');
+  placeInk($('#wo-kind'), $('#wo-kind button.on'));
+  if (animate && prev !== app.woKind) slideIn($(`#kind-${app.woKind}`), app.woKind === 'slope' ? 1 : -1);
+}
+
+// ------------------------------------------------------------------ sliding indicators (ERG/Slope pill, tab underline)
+/** Moves a container's indicator (CSS ::before/::after reading --ink-x/--ink-w) under the active element.
+ *  The first placement and resizes jump; user switches slide (the .ink-ready class turns the transition on). */
+function placeInk(box, el) {
+  if (!box || !el || !el.offsetWidth) return;
+  box.style.setProperty('--ink-x', `${el.offsetLeft}px`);
+  box.style.setProperty('--ink-w', `${el.offsetWidth}px`);
+  if (!box.classList.contains('ink-ready')) requestAnimationFrame(() => box.classList.add('ink-ready'));
+}
+const inkObserver = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => {
+  for (const { target } of entries) {
+    target.classList.remove('ink-ready'); // fonts loading, rotation, tab shown: jump, don't slide
+    placeInk(target, target.querySelector('.on, .active'));
+  }
+}) : null;
+
+/** Fades a newly shown pane in from the side it came from (dir 1 = from the right). */
+function slideIn(el, dir) {
+  if (!el) return;
+  el.classList.remove('slide-in');
+  el.style.setProperty('--from', `${dir * 14}px`);
+  void el.offsetWidth; // restart the animation
+  el.classList.add('slide-in');
 }
 
 // ------------------------------------------------------------------ rider overview (top of home)
@@ -1697,7 +1725,9 @@ $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
 setWoKind(app.woKind);
-$$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
+if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#tabs')); }
+placeInk($('#tabs'), $('#tabs button.active'));
+$$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind, true); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
 // "Settings" links in notices open the panel (the top-bar button is just a gear)
 document.addEventListener('click', (e) => { const a = e.target.closest('[data-open-settings]'); if (a) { e.preventDefault(); $('#btn-settings').click(); } });
 $('#btn-settings').onclick = () => {
@@ -1748,10 +1778,14 @@ $('#btn-diag').onclick = async () => {
   }
   if (app.trainer?.data) logMsg('trainer', `last data ${JSON.stringify(app.trainer.data)}`);
 };
+const TABS = ['workouts', 'calendar', 'training'];
 function setTab(t) {
+  const prev = app.tab;
   app.tab = t; app.focus = 0;
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
   $$('.tab').forEach((x) => x.classList.toggle('active', x.id === `tab-${t}`));
+  placeInk($('#tabs'), $('#tabs button.active'));
+  if (prev && prev !== t) slideIn($(`#tab-${t}`), TABS.indexOf(t) > TABS.indexOf(prev) ? 1 : -1);
   if (t === 'training') { renderTraining(); refreshRemoteIndex(); }
   if (t === 'calendar') { renderCalendar(); refreshPlanViews(); }
   applyFocus();

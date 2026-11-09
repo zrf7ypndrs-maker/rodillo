@@ -174,10 +174,16 @@ button.danger:hover { border-color: var(--bad); }
 .devpop-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--rule); font-size: 13px; }
 .device.demo { background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--hatch) 7px 8px); }
 
-.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
-.tabs button { border: none; background: none; border-radius: 0; padding: 10px 0; color: var(--muted); font-size: 16px; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs { position: relative; display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
+.tabs button { border: none; background: none; border-radius: 0; padding: 10px 0 13px; color: var(--muted); font-size: 16px; font-weight: 600; transition: color .2s ease; }
 .tabs button:hover { color: var(--ink); }
-.tabs button.active { color: var(--ink); border-bottom-color: var(--ink); }
+.tabs button.active { color: var(--ink); }
+/* the underline is one bar that slides to the active tab (js placeInk sets --ink-x / --ink-w) */
+.tabs::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 3px; width: var(--ink-w, 0); transform: translateX(var(--ink-x, 0)); background: var(--ink); pointer-events: none; }
+.tabs.ink-ready::after { transition: transform .32s cubic-bezier(.2, .7, .2, 1), width .32s cubic-bezier(.2, .7, .2, 1); }
+/* a newly shown tab or ERG/Slope pane drifts in from the side it came from */
+.slide-in { animation: slide-in .26s cubic-bezier(.2, .7, .2, 1); }
+@keyframes slide-in { from { opacity: 0; transform: translateX(var(--from, 0)); } to { opacity: 1; transform: none; } }
 .tab { display: none; }
 .tab.active { display: block; }
 
@@ -228,10 +234,14 @@ button.danger:hover { border-color: var(--bad); }
 /* icons/bike.png (drawn for Rodillo, 3x) used as a mask so it takes the button's text color in both themes */
 .bike-ico { width: 33px; height: 20px; flex: none; transform: translateY(-2px); /* center on the capitals, not the line box */ background: currentColor; -webkit-mask: url(../icons/bike.png?v=1) center / contain no-repeat; mask: url(../icons/bike.png?v=1) center / contain no-repeat; }
 /* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
-.seg-tg { display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
-.seg-tg button { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; }
+.seg-tg { position: relative; display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
+.seg-tg button { position: relative; z-index: 1; background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; transition: color .22s ease; }
 .seg-tg button:hover { color: var(--ink); }
-.seg-tg button.on { background: var(--ink); color: var(--sheet); }
+.seg-tg button.on, .seg-tg button.on:hover { color: var(--sheet); }
+/* the dark pill is one shape that slides under the chosen option (js placeInk) */
+.seg-tg::before { content: ""; position: absolute; top: 2px; bottom: 2px; left: 0; width: var(--ink-w, 0); transform: translateX(var(--ink-x, 0)); background: var(--ink); border-radius: 999px; }
+.seg-tg.ink-ready::before { transition: transform .3s cubic-bezier(.3, .8, .25, 1), width .3s cubic-bezier(.3, .8, .25, 1); }
+@media (prefers-reduced-motion: reduce) { .tabs::after, .seg-tg::before { transition: none !important; } .slide-in { animation: none; } }
 .seg-tg button.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 .wo-kind { margin-bottom: 10px; }
 .list-sub { font-size: 13.5px; margin: 0 0 12px; }
