@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091629';
-import { HeartRate } from './ble/hr.js?v=202611091629';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091629';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091629';
-import { log, logMsg } from './ble/base.js?v=202611091629';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091629';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091629';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091629';
-import { encodeActivity } from './fit.js?v=202611091629';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091629';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091629';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091629';
-import { ls, rides } from './store.js?v=202611091629';
+import { Trainer } from './ble/trainer.js?v=202611091711';
+import { HeartRate } from './ble/hr.js?v=202611091711';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091711';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091711';
+import { log, logMsg } from './ble/base.js?v=202611091711';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091711';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091711';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091711';
+import { encodeActivity } from './fit.js?v=202611091711';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091711';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091711';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091711';
+import { ls, rides } from './store.js?v=202611091711';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -40,7 +40,7 @@ const app = {
   demo: false,
   library: [], plan: null,
   session: null, rideId: null,
-  screen: 'home', tab: 'workouts', focus: 0,
+  screen: 'home', tab: 'workouts', focus: 0, woKind: ls.get('woKind', 'erg'),
   endArmed: 0,
 };
 
@@ -285,14 +285,56 @@ function workoutCard(w, i) {
 function renderLibrary() {
   const erg = [], slope = [];
   app.library.forEach((w, i) => (isSlopeOnly(w) ? slope : erg).push(workoutCard(w, i)));
-  $('#workout-list').innerHTML = erg.join('');
-  $('#slope-list').innerHTML = slope.join('') || '<p class="muted">No slope sessions yet.</p>';
+  $('#workout-list').innerHTML = erg.join('') || '<p class="muted empty-list">No ERG workouts yet.</p>';
+  $('#slope-list').innerHTML = slope.join('') || '<p class="muted empty-list">No slope sessions yet.</p>';
+  setWoKind(app.woKind);
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
     c.classList.toggle('expanded');
   }));
   applyFocus();
+}
+
+/** Workouts tab: ERG and slope sessions share one list area, switched by a pill toggle. */
+function setWoKind(k) {
+  app.woKind = k === 'slope' ? 'slope' : 'erg';
+  ls.set('woKind', app.woKind);
+  $$('#wo-kind button').forEach((b) => { const on = b.dataset.kind === app.woKind; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+  $('#kind-erg').classList.toggle('hidden', app.woKind !== 'erg');
+  $('#kind-slope').classList.toggle('hidden', app.woKind !== 'slope');
+}
+
+// ------------------------------------------------------------------ rider overview (top of home)
+const fmtHours = (sec) => { const m = Math.round(sec / 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+
+/** Recovery, this week's riding vs plan, fatigue/form, FTP. Uses the same numbers as the Training tab. */
+function renderOverview() {
+  const el = $('#overview');
+  const real = (app.rows || []).filter((r) => !r.demo).map((r) => r.summary);
+  const series = loadSeries(real, new Date(), 90);
+  const t = series.at(-1) || { ctl: 0, atl: 0, tsb: 0 };
+  const monday = mondayOf(new Date());
+  const weekKeys = Array.from({ length: 7 }, (_, i) => dkey(addDays(monday, i)));
+  const ridden = real.filter((r) => weekKeys.includes(r.id.slice(0, 10)));
+  const doneSec = ridden.reduce((a, r) => a + (r.durSec || 0), 0);
+  const weekTss = ridden.reduce((a, r) => a + (r.tss || 0), 0);
+  // Planned = this week's plan workouts, optional days left out.
+  const planned = weekKeys.map(dayInfo).filter((d) => d.workout && !d.optional);
+  const planSec = planned.reduce((a, d) => a + totalDuration(d.workout), 0);
+  const tile = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+
+  const w = whoopDay(dkey(new Date()));
+  const rec = w?.recovery != null
+    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', [w.hrv && `HRV ${Math.round(w.hrv)} ms`, w.sleepHours && `slept ${w.sleepHours} h`].filter(Boolean).join(' &middot; '))
+    : tile('-', 'Recovery', app.whoop ? 'not scored yet today' : 'WHOOP not connected');
+  const week = tile(fmtHours(doneSec), 'This week',
+    `${planSec ? `of ${fmtHours(planSec)} planned &middot; ` : ''}${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? `, ${weekTss} TSS` : ''}`);
+  const fat = tile(Math.round(t.atl), 'Fatigue', `Form ${t.tsb > 0 ? '+' : ''}${Math.round(t.tsb)}, ${formLabel(t.tsb).toLowerCase()} &middot; fitness ${Math.round(t.ctl)}`,
+    `${LOAD_INFO.atl}<br><br>${LOAD_INFO.tsb}`);
+  const est = ftpEstimate(real);
+  const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
+  el.innerHTML = rec + week + fat + ftp;
 }
 
 // ------------------------------------------------------------------ plan: week carousel + calendar
@@ -341,6 +383,7 @@ function dayCardHtml(info) {
 
 function renderWeek() {
   const el = $('#week');
+  renderOverview();
   if (!app.plan) { el.classList.add('hidden'); return; }
   // Re-renders (plan reload, tab switch, WHOOP) keep the scroll position;
   // only a new day (or the first render) starts the strip at today again.
@@ -355,7 +398,7 @@ function renderWeek() {
   const src = !syncClient()
     ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to get the coach\'s daily changes on this device.</p>'
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
-  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">next two weeks</span></div>
+  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">Training plan</span> <span class="muted">next two weeks</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip" data-start="${days[0].key}">${days.map(dayCardHtml).join('')}</div>${note}`;
   const strip = $('#week-strip');
@@ -440,13 +483,13 @@ function recoveryAdvice(today) {
   const d = whoopDay(today.key);
   if (d?.recovery == null) return coachDecision(today.key) || (app.whoop ? '<p class="week-note muted">WHOOP: today\'s recovery isn\'t scored yet.</p>' : '');
   const z = recZone(d.recovery), w = today.workout;
-  const facts = `Recovery <b class="rz ${z}">${d.recovery}%</b>${d.hrv ? `, HRV ${Math.round(d.hrv)} ms` : ''}${d.rhr ? `, RHR ${d.rhr}` : ''}${d.sleepHours ? `, slept ${d.sleepHours} h` : ''}.`;
+  const facts = `Recovery <b class="rz ${z}">${d.recovery}%</b>.`; // HRV, sleep: in the overview tiles above
   let advice = '', btns = '';
   // The morning coach run already weighed recovery against the plan: show its call, don't adjust twice.
   const decided = coachDecision(today.key);
   if (decided) return `<div class="rec-advice ${z} stacked"><p>${facts}</p>${decided}</div>`;
-  if (!w || today.done) advice = '';
-  else if (z === 'red' && isHard(w)) {
+  if (!w || today.done) return ''; // nothing to advise: the number is already in the Recovery tile
+  if (z === 'red' && isHard(w)) {
     advice = ` Hard session on a red day is a bad trade. Swap to easy Zone 2, or ride it at 90%.`;
     btns = `<button class="primary small" data-rec="swap">Swap to Zone 2, 60 min</button><button class="ghost small" data-rec="0.9">Ride it at 90%</button>`;
   } else if (z === 'red') {
@@ -869,7 +912,7 @@ function action(a) {
     case 'up': case 'easier': app.focus = Math.max(0, app.focus - 1); applyFocus(); break;
     case 'down': case 'harder': app.focus = Math.min(items.length - 1, app.focus + 1); applyFocus(); break;
     case 'left': case 'right': {
-      const tabs = ['workouts', 'free', 'calendar', 'training'];
+      const tabs = ['workouts', 'calendar', 'training'];
       const i = (tabs.indexOf(app.tab) + (a === 'right' ? 1 : -1) + tabs.length) % tabs.length;
       setTab(tabs[i]);
       break;
@@ -984,9 +1027,7 @@ function focusables() {
   if (app.tab === 'workouts') {
     const t = $('#week .day.today [data-startday]');
     if (t) list.push(t.closest('.day'));
-    list.push(...$$('#workout-list .wo'));
-  } else if (app.tab === 'free') {
-    list.push($('#btn-free'), ...$$('#slope-list .wo'));
+    list.push($('#btn-free'), ...$$('#wo-kind button'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
   }
   return list;
 }
@@ -1163,7 +1204,7 @@ function renderRide() {
     setHTML($('#r-int-next'), '');
   } else {
     card.style.setProperty('--zc', gradeHex(s.grade));
-    setHTML($('#r-int-label'), 'Free slope');
+    setHTML($('#r-int-label'), 'Free ride');
     setHTML($('#r-int-text'), 'up/down changes the grade by 1%, shift to hold your cadence');
     setHTML($('#r-int-big'), `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`);
     bar.classList.add('hidden');
@@ -1328,7 +1369,7 @@ function renderPhone(s) {
     set('rp-target-sub', 'Keep riding, or End ride from &middot;&middot;&middot;');
   } else {
     zc = gradeHex(s.grade);
-    set('rp-int-label', 'Free slope');
+    set('rp-int-label', 'Free ride');
     set('rp-count', `${(s.grade * 100).toFixed(1)}%`);
     set('rp-target', '');
     set('rp-target-sub', `set ${fmtGradeSet(s)} &middot; D-pad or &middot;&middot;&middot; to change`);
@@ -1434,7 +1475,7 @@ function drawPhoneChart() {
   ctx.font = `600 ${11.5 * dpr}px ${NUM_FONT}`;
 
   if (!s.segs) {
-    // free slope: last 10 minutes of power over the grade
+    // free ride: last 10 minutes of power over the grade
     const win = 600, data = s.samples.slice(-win);
     const maxP = Math.max(ftp * 1.5, ...data.map((x) => x.power + 20));
     const Y = (v) => bot - (Math.min(v, maxP) / maxP) * plotH;
@@ -1570,6 +1611,8 @@ $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
 $('#btn-free').onclick = startFree;
+setWoKind(app.woKind);
+$$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
 // "Settings" links in notices open the panel (the top-bar button is just a gear)
 document.addEventListener('click', (e) => { const a = e.target.closest('[data-open-settings]'); if (a) { e.preventDefault(); $('#btn-settings').click(); } });
 $('#btn-settings').onclick = () => {

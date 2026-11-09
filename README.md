@@ -6,7 +6,7 @@ A Zwift replacement for one rider: a KICKR CORE (Zwift Ride), Zwift Ride handleb
 
 ## What it does
 - **ERG workouts:** the trainer holds the target power. Intensity can be adjusted in 1% steps from the controller (hold the button to repeat).
-- **Slope mode with 24 virtual gears:** grade comes from a structured slope session, or you set it with the D-pad in free slope (1% steps). Up/down also shifts a structured profile by 1%. Gear ratios run 0.75 to 5.49, same range as Zwift.
+- **Slope mode with 24 virtual gears:** grade comes from a structured slope session, or you set it with the D-pad in a free ride (1% steps). Up/down also shifts a structured profile by 1%. Gear ratios run 0.75 to 5.49, same range as Zwift.
 - **Coach library:** `workouts/*.json`, listed in `workouts/index.json`. The plan in `plans/current.json` puts today's session at the top of the home screen.
 - **Imports:** Zwift `.zwo` workouts.
 - **Recording:** rides are saved locally (IndexedDB) and exported as `.FIT` virtual rides for Strava or Garmin Connect.

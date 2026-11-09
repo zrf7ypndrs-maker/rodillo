@@ -206,10 +206,23 @@ button.danger:hover { border-color: var(--bad); }
 .tag.warn { color: var(--warn); border-color: var(--warn-line); }
 .import-row { margin-top: 14px; display: flex; gap: 12px; align-items: center; font-size: 13.5px; }
 
-.free-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 26px; }
-.free-card p { margin: 4px 0 0; }
-.list-title { margin: 0 0 2px; font-size: 17px; }
+/* rider overview: one panel split by rules, like the ride tiles */
+.overview { margin: 0 0 22px; }
+.overview > .stat { position: relative; }
+.overview .stat .v { font-size: 34px; }
+.overview:empty { display: none; }
+/* free ride: no workout, just grade + gears, sits under the plan */
+.free-row { display: flex; align-items: center; gap: 14px; margin: 0 0 26px; font-size: 13.5px; }
+.free-row button { flex: none; }
+/* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
+.seg-tg { display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
+.seg-tg button { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; }
+.seg-tg button:hover { color: var(--ink); }
+.seg-tg button.on { background: var(--ink); color: var(--sheet); }
+.seg-tg button.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+.wo-kind { margin-bottom: 10px; }
 .list-sub { font-size: 13.5px; margin: 0 0 12px; }
+.empty-list { padding: 14px 18px; margin: 0; font-size: 14px; }
 .card { background: var(--sheet); border-radius: var(--r); padding: 18px 20px; }
 .card p { font-size: 14px; line-height: 1.5; }
 
@@ -357,7 +370,7 @@ table.ints { margin-bottom: 14px; }
 .gearviz { height: 26px; display: block; margin-bottom: 2px; max-width: 100%; }
 
 /* ---------- week carousel ---------- */
-.week { margin-bottom: 26px; }
+.week { margin-bottom: 18px; }
 .week-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .eyebrow { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 .week-head .muted { font-size: 15px; }
@@ -517,7 +530,13 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .wo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name meta" "prof prof" "tags tags" "desc desc" "start start"; padding: 12px 14px; row-gap: 6px; column-gap: 10px; }
   .wo-meta { font-size: 15px; align-self: baseline; }
   .wo .profile { height: 40px; }
-  .free-card { flex-direction: column; align-items: stretch; }
+  .free-row { flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 20px; }
+  .free-row .muted { font-size: 12.5px; }
+  .overview { margin-bottom: 18px; }
+  .overview .stat .v { font-size: 30px; }
+  .overview > .stat:nth-child(even) .tip { left: auto; right: -8px; }
+  .seg-tg { display: flex; }
+  .seg-tg button { flex: 1; }
   .import-row { flex-wrap: wrap; }
   .week-head { gap: 8px; align-items: flex-start; }
   .eyebrow { font-size: 18px; }

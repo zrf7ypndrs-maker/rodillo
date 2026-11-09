@@ -1,10 +1,10 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { VirtualBike, DevEstimator, G } from './physics.js?v=202611091629';
-import { flatten, segTarget } from './workout.js?v=202611091629';
-import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611091629';
-import { Emitter } from '../ble/base.js?v=202611091629';
+import { VirtualBike, DevEstimator, G } from './physics.js?v=202611091711';
+import { flatten, segTarget } from './workout.js?v=202611091711';
+import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611091711';
+import { Emitter } from '../ble/base.js?v=202611091711';
 
 export const DEFAULT_SETTINGS = {
   ftp: 200,
@@ -34,7 +34,7 @@ export class Session extends Emitter {
     this.s.wheelCirc = this.gb.wheel;
     this.workout = workout;
     this.segs = workout ? flatten(workout, this.s.ftp) : null;
-    this.name = name || workout?.name || 'Free slope';
+    this.name = name || workout?.name || 'Free ride';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);
     this.gOff = this.s.gradeTrim || 0; // closed-loop grade correction (learned per ride)
