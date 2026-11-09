@@ -1,4 +1,4 @@
-import { BleDevice, uuid16 } from './base.js?v=202611091722';
+import { BleDevice, uuid16 } from './base.js?v=202611091723';
 
 const HRS = uuid16(0x180d);
 const HRM = uuid16(0x2a37);

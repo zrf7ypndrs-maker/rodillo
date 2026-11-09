@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091722';
-import { HeartRate } from './ble/hr.js?v=202611091722';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091722';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091722';
-import { log, logMsg } from './ble/base.js?v=202611091722';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091722';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091722';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091722';
-import { encodeActivity } from './fit.js?v=202611091722';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091722';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091722';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091722';
-import { ls, rides } from './store.js?v=202611091722';
+import { Trainer } from './ble/trainer.js?v=202611091723';
+import { HeartRate } from './ble/hr.js?v=202611091723';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091723';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091723';
+import { log, logMsg } from './ble/base.js?v=202611091723';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091723';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091723';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091723';
+import { encodeActivity } from './fit.js?v=202611091723';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091723';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091723';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091723';
+import { ls, rides } from './store.js?v=202611091723';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -271,12 +271,14 @@ function woMeta(w) {
 
 const isSlopeOnly = (w) => flatten(w).every((x) => x.kind === 'sim');
 
+// Not shown as chips: 'sim' has its own chip; weekday tags are leftovers from old plans (the calendar says when).
+const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
 function workoutCard(w, i) {
   return `
     <div class="wo" data-i="${i}" tabindex="0">
       <div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
-      <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${w._source === 'coach' ? '<span class="tag coach">coach</span>' : ''}${(w.tags || []).filter((t) => !['sim'].includes(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${w._source === 'coach' ? '<span class="tag coach">coach</span>' : ''}${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       <div class="wo-desc">${esc(w.description)}</div>
       <div class="start-row"><button class="primary small" data-start="${i}">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}">Remove</button>` : ''}</div>
     </div>`;
