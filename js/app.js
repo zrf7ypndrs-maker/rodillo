@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092133';
-import { HeartRate } from './ble/hr.js?v=202611092133';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092133';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092133';
-import { log, logMsg } from './ble/base.js?v=202611092133';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092133';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092133';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092133';
-import { encodeActivity } from './fit.js?v=202611092133';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092133';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092133';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092133';
-import { ls, rides } from './store.js?v=202611092133';
+import { Trainer } from './ble/trainer.js?v=202611092135';
+import { HeartRate } from './ble/hr.js?v=202611092135';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092135';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092135';
+import { log, logMsg } from './ble/base.js?v=202611092135';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092135';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092135';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092135';
+import { encodeActivity } from './fit.js?v=202611092135';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092135';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092135';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092135';
+import { ls, rides } from './store.js?v=202611092135';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -278,9 +278,11 @@ function workoutCard(w, i) {
     <div class="wo" data-i="${i}" tabindex="0">
       <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
-      <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-      <div class="wo-desc">${esc(w.description)}</div>
-      <div class="start-row"><button class="primary small" data-start="${i}">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}">Remove</button>` : ''}</div>
+      <div class="wo-more"><div class="wo-more-in">
+        <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="wo-desc">${esc(w.description)}</div>
+        <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
+      </div></div>
     </div>`;
 }
 
@@ -295,8 +297,9 @@ function renderLibrary() {
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
     // One open row at a time (across the ERG and slope lists).
     const open = !c.classList.contains('expanded');
-    $$('.wo.expanded').forEach((x) => x.classList.remove('expanded'));
+    $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = -1)); });
     c.classList.toggle('expanded', open);
+    if (open) c.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = 0));
   }));
   applyFocus();
 }

@@ -185,7 +185,7 @@ button.danger:hover { border-color: var(--bad); }
 .workout-list { display: block; background: var(--sheet); border-radius: var(--r); }
 .workout-list:empty { display: none; }
 /* compact rows: name, mini profile, duration. Tap for tags, description and Start. */
-.wo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 30%) 130px; grid-template-areas: "name prof meta" "tags tags tags" "desc desc desc" "start start start";
+.wo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 30%) 130px; grid-template-areas: "name prof meta" "more more more";
   column-gap: 22px; row-gap: 3px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--rule); cursor: pointer; outline: none; position: relative; }
 .wo:first-child { border-top: none; }
 .wo:hover { background: var(--sheet2); }
@@ -195,14 +195,19 @@ button.danger:hover { border-color: var(--bad); }
 .wo-name .tag { margin-left: 4px; vertical-align: 1px; }
 .wo-meta { grid-area: meta; font-size: 15.5px; font-weight: 750; text-align: right; white-space: nowrap; align-self: center; }
 .wo .profile { grid-area: prof; align-self: center; height: 26px; }
-.wo-tags { grid-area: tags; display: none; margin-top: 6px; }
-.wo-tags:empty { display: none !important; }
-.wo.expanded .wo-tags { display: block; }
-.wo-desc { grid-area: desc; font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 72ch; display: none; margin-top: 4px; }
+/* tap to open: tags, description and Start slide down (0fr -> 1fr rows animate the real height) */
+.wo { transition: background .2s ease; }
+.wo-more { grid-area: more; display: grid; grid-template-rows: 0fr; margin-top: -3px; /* cancel the row gap while closed */
+  transition: grid-template-rows .26s cubic-bezier(.2, .7, .2, 1), margin-top .26s cubic-bezier(.2, .7, .2, 1); }
+.wo-more-in { min-height: 0; overflow: hidden; opacity: 0; transform: translateY(-4px); transition: opacity .18s ease, transform .26s cubic-bezier(.2, .7, .2, 1); }
 .wo.expanded { background: var(--sheet2); }
-.wo.expanded .wo-desc { display: block; }
-.wo .start-row { grid-area: start; display: none; }
-.wo.expanded .start-row { display: flex; gap: 8px; margin-top: 10px; }
+.wo.expanded .wo-more { grid-template-rows: 1fr; margin-top: 0; }
+.wo.expanded .wo-more-in { opacity: 1; transform: none; transition-delay: .04s; }
+.wo-tags { padding-top: 6px; }
+.wo-tags:empty { display: none; }
+.wo-desc { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 72ch; margin-top: 4px; }
+.wo .start-row { display: flex; gap: 8px; padding: 10px 0 2px; }
+@media (prefers-reduced-motion: reduce) { .wo, .wo-more, .wo-more-in { transition: none; } }
 .profile { width: 100%; height: 54px; display: block; }
 .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--rule); color: var(--muted); margin-right: 4px; line-height: 1.5; }
 .tag.sim { color: var(--info); border-color: var(--info-line); }
@@ -570,10 +575,11 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   @media (max-width: 340px) { .brand { font-size: 0; gap: 0; } }
   .tabs { margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs button { white-space: nowrap; font-size: 15px; }
-  .wo { grid-template-columns: minmax(0, 1fr) 96px; grid-template-areas: "name prof" "meta prof" "tags tags" "desc desc" "start start"; padding: 10px 14px; row-gap: 1px; column-gap: 12px; }
+  .wo { grid-template-columns: minmax(0, 1fr) 96px; grid-template-areas: "name prof" "meta prof" "more more"; padding: 10px 14px; row-gap: 1px; column-gap: 12px; }
   .wo-name { font-size: 15px; }
   .wo-meta { font-size: 13.5px; text-align: left; color: var(--muted); font-weight: 700; }
   .wo .profile { height: 24px; }
+  .wo-more { margin-top: -1px; } /* phone row gap is 1px */
   /* today hero: text, chart, recovery line, then the buttons across the bottom */
   #today { margin-bottom: 14px; }
   .hero { display: flex; flex-direction: column; padding: 16px 16px 14px; border-radius: 8px;
