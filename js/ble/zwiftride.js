@@ -9,7 +9,7 @@
 //  - battery: opcode 0x19 + protobuf { 2: percent }
 //  - Ride firmware > 1.2.0 hides the service until Zwift unlocks it.
 
-import { BleDevice, uuid16, logMsg, hex } from './base.js?v=202611091823';
+import { BleDevice, uuid16, logMsg, hex } from './base.js?v=202611092002';
 
 export const RIDE_SERVICE = uuid16(0xfc82);
 export const LEGACY_SERVICE = '00000001-19ca-4651-86e5-fa29dcdd09d1';

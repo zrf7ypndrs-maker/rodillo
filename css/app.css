@@ -528,8 +528,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   @media (orientation: landscape) { .devpop { left: auto; width: 420px; } }
   /* tiny phones (320 px): logo only, so the actions never clip */
   @media (max-width: 340px) { .brand { font-size: 0; gap: 0; } }
-  .tabs { overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
-  .tabs::-webkit-scrollbar { display: none; }
+  .tabs { margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs button { white-space: nowrap; font-size: 15px; }
   .wo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name meta" "prof prof" "tags tags" "desc desc" "start start"; padding: 12px 14px; row-gap: 6px; column-gap: 10px; }
   .wo-meta { font-size: 15px; align-self: baseline; }
