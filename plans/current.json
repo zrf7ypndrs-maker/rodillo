@@ -3,7 +3,7 @@
   "ftp": 200,
   "days": {
     "2026-11-08": "rest",
-    "2026-11-09": "strength",
+    "2026-11-09": "z2-60",
     "2026-11-10": "vo2-5x4",
     "2026-11-11": "strength",
     "2026-11-12": "z2-60",
@@ -33,6 +33,7 @@
     "2026-12-06": "rest"
   },
   "notes": {
+    "2026-11-09": "Ride today instead of the gym. Easy Z2: hold 136 W and keep it conversational, VO2 is tomorrow.",
     "2026-11-10": "First week at 112% FTP (up from your usual 105%). If rep 5 falls apart, hold 108% next time.",
     "2026-11-12": "Easy day after Wednesday legs. Hold 136 W and keep it conversational.",
     "2026-11-14": "Long ride. Fuel from minute 30.",
