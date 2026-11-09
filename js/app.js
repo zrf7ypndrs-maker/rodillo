@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092057';
-import { HeartRate } from './ble/hr.js?v=202611092057';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092057';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092057';
-import { log, logMsg } from './ble/base.js?v=202611092057';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092057';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092057';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092057';
-import { encodeActivity } from './fit.js?v=202611092057';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092057';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092057';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092057';
-import { ls, rides } from './store.js?v=202611092057';
+import { Trainer } from './ble/trainer.js?v=202611092100';
+import { HeartRate } from './ble/hr.js?v=202611092100';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092100';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092100';
+import { log, logMsg } from './ble/base.js?v=202611092100';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092100';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092100';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092100';
+import { encodeActivity } from './fit.js?v=202611092100';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092100';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092100';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092100';
+import { ls, rides } from './store.js?v=202611092100';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1564,6 +1564,7 @@ function drawPhoneChart() {
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     data.forEach((x, i) => { const px = (i / win) * W; i ? ctx.lineTo(px, Y(x.power)) : ctx.moveTo(px, Y(x.power)); });
     ctx.stroke();
+    drawHrTrace(ctx, data, (x, i) => (i / win) * W, W, H, top, dpr);
     ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 2 * dpr, 10 * dpr);
     return;
   }
@@ -1608,6 +1609,7 @@ function drawPhoneChart() {
   ctx.strokeStyle = INK; ctx.lineWidth = 1.8 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
   ctx.stroke();
+  drawHrTrace(ctx, s.samples, (x) => X(x.wx ?? x.wt), W, H, top, dpr);
 
   // position marker
   const mx = X(pos);
