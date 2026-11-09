@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611090153';
-import { HeartRate } from './ble/hr.js?v=202611090153';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090153';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090153';
-import { log, logMsg } from './ble/base.js?v=202611090153';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090153';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090153';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090153';
-import { encodeActivity } from './fit.js?v=202611090153';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090153';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090153';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090153';
-import { ls, rides } from './store.js?v=202611090153';
+import { Trainer } from './ble/trainer.js?v=202611090201';
+import { HeartRate } from './ble/hr.js?v=202611090201';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090201';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090201';
+import { log, logMsg } from './ble/base.js?v=202611090201';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090201';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090201';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090201';
+import { encodeActivity } from './fit.js?v=202611090201';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090201';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090201';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090201';
+import { ls, rides } from './store.js?v=202611090201';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -564,6 +564,19 @@ function renderZones(real, thisWeekStart) {
   $('#chart-zones').innerHTML = col('This week', pick(thisWeekStart)) + col('Last 4 weeks', pick(since28));
 }
 
+const LOAD_INFO = {
+  ctl: '<b>Chronic Training Load.</b> Your average daily training stress (TSS) over roughly the last 6 weeks (42-day weighted average, recent days count more). It climbs slowly with consistent training and is the best single number for fitness. A 1-hour ride at FTP is 100 TSS.',
+  atl: '<b>Acute Training Load.</b> The same average over roughly the last week (7 days). It jumps after hard days and drops fast with rest, so it tracks fatigue. ATL above CTL means you are training harder than your recent normal.',
+  tsb: '<b>Training Stress Balance</b> = yesterday\'s CTL minus ATL, so today\'s ride shows up tomorrow. Above +5: fresh, good for a test or race. -10 to +5: balanced. -10 to -30: productive fatigue, normal in a build block. Below -30: overreaching, back off.',
+};
+const infoTip = (html, label) => `<span class="info"><button type="button" class="info-btn" aria-label="What is ${esc(label)}?">i</button><span class="tip" role="tooltip">${html}</span></span>`;
+// Touch screens have no hover: tap (i) to toggle the tip, tap anywhere else to close it.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.info-btn');
+  $$('.info.open').forEach((x) => { if (!btn || x !== btn.parentElement) x.classList.remove('open'); });
+  if (btn) btn.parentElement.classList.toggle('open');
+});
+
 async function renderTraining() {
   const rows = await trainingRows();
   const real = rows.filter((r) => !r.demo).map((r) => r.summary);
@@ -572,7 +585,7 @@ async function renderTraining() {
   const wk = weekly(real, 12);
   const thisWeek = wk.at(-1);
   const est = ftpEstimate(real);
-  const card = (v, l, sub = '') => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  const card = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   const cfg = ls.get('sync', {});
   const at = ls.get('remoteIndexAt');
   $('#sync-status').innerHTML = cfg.token
@@ -580,8 +593,8 @@ async function renderTraining() {
     : 'History is only on this Mac. Add your GitHub token in <b>Settings</b> to sync it to rodillo-data so your coach can see it.';
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
-    card(Math.round(today.ctl), 'Fitness (CTL)'), card(Math.round(today.atl), 'Fatigue (ATL)'),
-    card(`${today.tsb > 0 ? '+' : ''}${Math.round(today.tsb)}`, 'Form (TSB)', formLabel(today.tsb)),
+    card(Math.round(today.ctl), 'Fitness (CTL)', '', LOAD_INFO.ctl), card(Math.round(today.atl), 'Fatigue (ATL)', '', LOAD_INFO.atl),
+    card(`${today.tsb > 0 ? '+' : ''}${Math.round(today.tsb)}`, 'Form (TSB)', formLabel(today.tsb), LOAD_INFO.tsb),
     card(`${thisWeek.hours}h`, 'This week', `${thisWeek.tss} TSS &middot; ${thisWeek.rides} rides`),
     (() => {
       const days = Object.entries(app.whoop || {}).slice(-7).map(([, v]) => v).filter((v) => v.hrv);
