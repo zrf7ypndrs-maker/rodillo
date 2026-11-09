@@ -240,16 +240,16 @@ button.danger:hover { border-color: var(--bad); }
   transition: transform .4s cubic-bezier(.3, 1.6, .5, 1); }
 .bike-ico .crank { transform-origin: 73px 64.5px; animation: bike-crank .6s linear infinite paused; }
 @keyframes bike-crank { to { transform: rotate(360deg); } }
-/* ...and the button grows a little with the same springy curve (press shrinks it back a touch) */
+/* ...and the hero buttons (Start workout too) grow a little with the same springy curve (press shrinks them back a touch) */
 @media (prefers-reduced-motion: no-preference) {
-  .hero-free { transition: background .12s, border-color .12s, color .12s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
-  .hero-free.focus { transform: scale(1.05); }
+  .hero-btns button { transition: background .12s, border-color .12s, color .12s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+  .hero-btns button.focus { transform: scale(1.05); }
   .hero-free.focus .bike-ico { transform: translateY(-2px) rotate(-12deg); }
   .hero-free.focus .bike-ico .crank { animation-play-state: running; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .hero-free:hover { transform: scale(1.05); }
-  .hero-free:hover:active { transform: scale(1.02); transition-duration: .12s; }
+  .hero-btns button:hover { transform: scale(1.05); }
+  .hero-btns button:hover:active { transform: scale(1.02); transition-duration: .12s; }
   .hero-free:hover .bike-ico { transform: translateY(-2px) rotate(-12deg); }
   .hero-free:hover .bike-ico .crank { animation-play-state: running; }
 }
