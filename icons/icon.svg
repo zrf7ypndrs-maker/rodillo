@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<rect width="1024" height="1024" fill="#e6e9e5"/>
-<circle cx="512" cy="452" r="232" fill="none" stroke="#16181b" stroke-width="84"/>
-<rect x="232" y="734" width="560" height="64" rx="32" fill="#16181b"/>
+<rect width="1024" height="1024" fill="#16181b"/>
+<g fill="#f7f9f6" transform="translate(512 512) rotate(-12) scale(4.9) translate(-100 -60)"><rect x="52" y="40" width="96" height="40" rx="10"/><rect x="20" y="52" width="30" height="16" rx="8"/><rect x="150" y="52" width="30" height="16" rx="8"/></g>
 </svg>

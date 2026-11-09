@@ -126,9 +126,9 @@ button.danger:hover { border-color: var(--bad); }
 #home { max-width: 1180px; margin: 0 auto; padding: 22px 28px 64px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .brand { font-size: 26px; font-weight: 850; font-stretch: 125%; letter-spacing: -0.035em; display: flex; align-items: center; gap: 11px; line-height: 1; }
-/* mark: a wheel sitting on the trainer's roller */
-.logo { width: 24px; height: 24px; border-radius: 50%; border: 4px solid var(--ink); position: relative; flex: none; margin-bottom: 5px; }
-.logo::after { content: ""; position: absolute; height: 4px; left: -8px; right: -8px; bottom: -9px; border-radius: 2px; background: var(--ink); }
+/* mark: a rolling pin (rodillo), tilted as if rolling. Masked so it takes --ink in both themes. */
+.logo { width: 46px; height: 19px; flex: none; margin-bottom: 2px; background: var(--ink);
+  -webkit-mask: url("../icons/pin.svg") center / contain no-repeat; mask: url("../icons/pin.svg") center / contain no-repeat; }
 .top-actions { display: flex; gap: 4px; }
 .top-actions button { border-color: transparent; }
 .top-actions button:hover { border-color: var(--rule); }
