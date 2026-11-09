@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092138';
-import { HeartRate } from './ble/hr.js?v=202611092138';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092138';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092138';
-import { log, logMsg } from './ble/base.js?v=202611092138';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092138';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092138';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092138';
-import { encodeActivity } from './fit.js?v=202611092138';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092138';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092138';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092138';
-import { ls, rides } from './store.js?v=202611092138';
+import { Trainer } from './ble/trainer.js?v=202611092139';
+import { HeartRate } from './ble/hr.js?v=202611092139';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092139';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092139';
+import { log, logMsg } from './ble/base.js?v=202611092139';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092139';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092139';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092139';
+import { encodeActivity } from './fit.js?v=202611092139';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092139';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092139';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092139';
+import { ls, rides } from './store.js?v=202611092139';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -434,7 +434,14 @@ function workSummary(w) {
   return reps.every((x) => x.dur === reps[0].dur) ? `${reps.length} x ${fmtSpan(reps[0].dur)} at ${watts} W` : `up to ${watts} W`;
 }
 
-const BIKE_ICO = '<span class="bike-ico" aria-hidden="true"></span>';
+// Inline so the crank can spin on hover / controller focus (css: .bike-ico). Same drawing as the old icons/bike.png.
+const BIKE_ICO = '<svg class="bike-ico" viewBox="0 0 156 96" aria-hidden="true">'
+  + '<g fill="none" stroke="currentColor" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">'
+  + '<circle cx="32.5" cy="64.5" r="25.5"/><circle cx="122.5" cy="64.5" r="25.5"/>'
+  + '<path d="M32.5 64.5H73L106 28H56.5zM32.5 64.5L57 28M73 64.5L54 19M100 15L122.5 64.5M100 15L117 12"/></g>'
+  + '<rect x="43" y="15" width="25" height="7.5" rx="3.75" fill="currentColor"/>'
+  + '<g class="crank"><circle cx="73" cy="64.5" r="7" fill="currentColor"/>'
+  + '<path d="M73 51V78" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></g></svg>';
 const PLAY_ICO = '<svg class="play-ico" viewBox="0 0 16 18" aria-hidden="true"><path d="M2 1.5v15l13-7.5z"/></svg>';
 
 /** Recovery + the coach's call (or the built-in advice), one line under the profile. */

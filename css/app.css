@@ -231,8 +231,28 @@ button.danger:hover { border-color: var(--bad); }
 .overview .stat .sub { font-size: inherit; margin: 0; }
 .overview .stat .sub::before { content: " \00b7  "; }
 .overview:empty { display: none; }
-/* icons/bike.png (drawn for Rodillo, 3x) used as a mask so it takes the button's text color in both themes */
-.bike-ico { width: 33px; height: 20px; flex: none; transform: translateY(-2px); /* center on the capitals, not the line box */ background: currentColor; -webkit-mask: url(../icons/bike.png?v=1) center / contain no-repeat; mask: url(../icons/bike.png?v=1) center / contain no-repeat; }
+/* Free ride bicycle (inline SVG in BIKE_ICO, currentColor so it follows both themes).
+   Hover / controller focus: the bike tilts back onto its rear wheel and the crank spins.
+   The spin is paused rather than removed on leave, so the crank stops where it is instead of snapping back. */
+.bike-ico { width: 33px; height: 20px; flex: none; overflow: visible;
+  transform: translateY(-2px); /* center on the capitals, not the line box */
+  transform-origin: 21% 93%; /* rear tyre contact */
+  transition: transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+.bike-ico .crank { transform-origin: 73px 64.5px; animation: bike-crank .6s linear infinite paused; }
+@keyframes bike-crank { to { transform: rotate(360deg); } }
+/* ...and the button grows a little with the same springy curve (press shrinks it back a touch) */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-free { transition: background .12s, border-color .12s, color .12s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+  .hero-free.focus { transform: scale(1.05); }
+  .hero-free.focus .bike-ico { transform: translateY(-2px) rotate(-12deg); }
+  .hero-free.focus .bike-ico .crank { animation-play-state: running; }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .hero-free:hover { transform: scale(1.05); }
+  .hero-free:hover:active { transform: scale(1.02); transition-duration: .12s; }
+  .hero-free:hover .bike-ico { transform: translateY(-2px) rotate(-12deg); }
+  .hero-free:hover .bike-ico .crank { animation-play-state: running; }
+}
 /* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
 .seg-tg { position: relative; display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
 .seg-tg button { position: relative; z-index: 1; background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; transition: color .22s ease; }
