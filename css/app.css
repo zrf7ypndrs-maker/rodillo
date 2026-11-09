@@ -132,8 +132,8 @@ button.danger:hover { border-color: var(--bad); }
 .top-actions { display: flex; gap: 4px; }
 .top-actions button { border-color: transparent; }
 .top-actions button:hover { border-color: var(--rule); }
-#btn-theme { display: inline-flex; align-items: center; gap: 7px; }
-#btn-theme::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+/* theme toggle: just the half-filled circle, no label */
+#btn-theme::before { content: ""; width: 16px; height: 16px; margin: 2px; border-radius: 50%; border: 2px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 
 /* connections: a link button in the top bar (one status dot per sensor) opens a popover with one row per sensor */
 .topbar { position: relative; }

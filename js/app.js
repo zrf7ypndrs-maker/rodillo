@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091604';
-import { HeartRate } from './ble/hr.js?v=202611091604';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091604';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091604';
-import { log, logMsg } from './ble/base.js?v=202611091604';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091604';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091604';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091604';
-import { encodeActivity } from './fit.js?v=202611091604';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091604';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091604';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091604';
-import { ls, rides } from './store.js?v=202611091604';
+import { Trainer } from './ble/trainer.js?v=202611091607';
+import { HeartRate } from './ble/hr.js?v=202611091607';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091607';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091607';
+import { log, logMsg } from './ble/base.js?v=202611091607';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091607';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091607';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091607';
+import { encodeActivity } from './fit.js?v=202611091607';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091607';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091607';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091607';
+import { ls, rides } from './store.js?v=202611091607';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1598,7 +1598,6 @@ function setTheme(t) {
   document.documentElement.dataset.theme = app.theme;
   document.querySelector('meta[name="theme-color"]').content = app.theme === 'dark' ? '#0c0e0d' : '#e6e9e5';
   const label = app.theme === 'dark' ? 'Light mode' : 'Dark mode';
-  $('#btn-theme').textContent = app.theme === 'dark' ? 'Light' : 'Dark';
   $('#btn-theme').title = `Switch to ${label.toLowerCase()}`;
   $('#btn-theme').setAttribute('aria-label', label);
   $('#rp-theme').textContent = label;
