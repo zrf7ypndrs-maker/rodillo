@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611090204';
-import { HeartRate } from './ble/hr.js?v=202611090204';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090204';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090204';
-import { log, logMsg } from './ble/base.js?v=202611090204';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090204';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090204';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090204';
-import { encodeActivity } from './fit.js?v=202611090204';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090204';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090204';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090204';
-import { ls, rides } from './store.js?v=202611090204';
+import { Trainer } from './ble/trainer.js?v=202611090206';
+import { HeartRate } from './ble/hr.js?v=202611090206';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090206';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090206';
+import { log, logMsg } from './ble/base.js?v=202611090206';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090206';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090206';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090206';
+import { encodeActivity } from './fit.js?v=202611090206';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090206';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090206';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090206';
+import { ls, rides } from './store.js?v=202611090206';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -573,7 +573,7 @@ const LOAD_INFO = {
   atl: '<b>Acute Training Load.</b> The same average over roughly the last week (7 days). It jumps after hard days and drops fast with rest, so it tracks fatigue. ATL above CTL means you are training harder than your recent normal.',
   tsb: '<b>Training Stress Balance</b> = yesterday\'s CTL minus ATL, so today\'s ride shows up tomorrow. Above +5: fresh, good for a test or race. -10 to +5: balanced. -10 to -30: productive fatigue, normal in a build block. Below -30: overreaching, back off.',
 };
-const infoTip = (html, label) => `<span class="info"><button type="button" class="info-btn" aria-label="What is ${esc(label)}?">i</button><span class="tip" role="tooltip">${html}</span></span>`;
+const infoTip = (html, label) => `<span class="info"><button type="button" class="info-btn" aria-label="What is ${esc(label)}?"><svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="3.6" r="1.25"/><rect x="5.95" y="5.9" width="2.1" height="5.5" rx=".6"/></svg></button><span class="tip" role="tooltip">${html}</span></span>`;
 // Touch screens have no hover: tap (i) to toggle the tip, tap anywhere else to close it.
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.info-btn');
