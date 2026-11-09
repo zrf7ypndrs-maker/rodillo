@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092104';
-import { HeartRate } from './ble/hr.js?v=202611092104';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092104';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092104';
-import { log, logMsg } from './ble/base.js?v=202611092104';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092104';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092104';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092104';
-import { encodeActivity } from './fit.js?v=202611092104';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092104';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092104';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092104';
-import { ls, rides } from './store.js?v=202611092104';
+import { Trainer } from './ble/trainer.js?v=202611092133';
+import { HeartRate } from './ble/hr.js?v=202611092133';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092133';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092133';
+import { log, logMsg } from './ble/base.js?v=202611092133';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092133';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092133';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092133';
+import { encodeActivity } from './fit.js?v=202611092133';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092133';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092133';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092133';
+import { ls, rides } from './store.js?v=202611092133';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -293,7 +293,10 @@ function renderLibrary() {
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
-    c.classList.toggle('expanded');
+    // One open row at a time (across the ERG and slope lists).
+    const open = !c.classList.contains('expanded');
+    $$('.wo.expanded').forEach((x) => x.classList.remove('expanded'));
+    c.classList.toggle('expanded', open);
   }));
   applyFocus();
 }
