@@ -1,10 +1,10 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { VirtualBike, DevEstimator, G } from './physics.js?v=202611090201';
-import { flatten, segTarget } from './workout.js?v=202611090201';
-import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611090201';
-import { Emitter } from '../ble/base.js?v=202611090201';
+import { VirtualBike, DevEstimator, G } from './physics.js?v=202611090204';
+import { flatten, segTarget } from './workout.js?v=202611090204';
+import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611090204';
+import { Emitter } from '../ble/base.js?v=202611090204';
 
 export const DEFAULT_SETTINGS = {
   ftp: 200,

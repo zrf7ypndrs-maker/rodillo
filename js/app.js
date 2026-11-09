@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611090201';
-import { HeartRate } from './ble/hr.js?v=202611090201';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090201';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090201';
-import { log, logMsg } from './ble/base.js?v=202611090201';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090201';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090201';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090201';
-import { encodeActivity } from './fit.js?v=202611090201';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090201';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090201';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090201';
-import { ls, rides } from './store.js?v=202611090201';
+import { Trainer } from './ble/trainer.js?v=202611090204';
+import { HeartRate } from './ble/hr.js?v=202611090204';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090204';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090204';
+import { log, logMsg } from './ble/base.js?v=202611090204';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090204';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090204';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090204';
+import { encodeActivity } from './fit.js?v=202611090204';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090204';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090204';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090204';
+import { ls, rides } from './store.js?v=202611090204';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -330,22 +330,26 @@ function renderWeek() {
   const el = $('#week');
   if (!app.plan) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const start = mondayOf(new Date());
+  // Starts at today: no past days here (history lives in Calendar and Training).
+  const start = new Date(); start.setHours(12, 0, 0, 0);
   const days = Array.from({ length: 14 }, (_, i) => dayInfo(dkey(addDays(start, i))));
   const today = days.find((x) => x.isToday);
   const note = (today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '') + recoveryAdvice(today);
   const src = !syncClient()
     ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <b>Settings</b> to get the coach\'s daily changes on this device.</p>'
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <b>Settings</b>.</p>` : '';
-  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">this week and next</span></div>
+  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">next two weeks</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
   const strip = $('#week-strip');
   el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
+  const back = el.querySelector('[data-scroll="-1"]');
+  const syncBack = () => (back.disabled = strip.scrollLeft <= 4);
+  strip.addEventListener('scroll', syncBack, { passive: true });
+  strip.scrollLeft = 0;
+  syncBack();
   bindDayCards(el);
   bindRecoveryAdvice(el);
-  const t = strip.querySelector('.day.today');
-  if (t) strip.scrollLeft = Math.max(0, t.offsetLeft - strip.offsetLeft - 8);
 }
 
 function bindDayCards(root) {
