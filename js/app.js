@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092200';
-import { HeartRate } from './ble/hr.js?v=202611092200';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092200';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092200';
-import { log, logMsg } from './ble/base.js?v=202611092200';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092200';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092200';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092200';
-import { encodeActivity } from './fit.js?v=202611092200';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092200';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092200';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092200';
-import { ls, rides } from './store.js?v=202611092200';
+import { Trainer } from './ble/trainer.js?v=202611092202';
+import { HeartRate } from './ble/hr.js?v=202611092202';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092202';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092202';
+import { log, logMsg } from './ble/base.js?v=202611092202';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092202';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092202';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092202';
+import { encodeActivity } from './fit.js?v=202611092202';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092202';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092202';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092202';
+import { ls, rides } from './store.js?v=202611092202';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -533,7 +533,7 @@ function bindProfileHover(box, w) {
   const show = (e) => {
     const r = svg.getBoundingClientRect();
     let i;
-    if (e.pointerType === 'touch') {
+    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
       // A finger is imprecise: anywhere in the interval's column counts.
       const t = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999) * T;
       i = segs.findIndex((g) => t >= g.start && t < g.end);
@@ -569,6 +569,8 @@ function bindProfileHover(box, w) {
   };
   box.addEventListener('pointermove', show);
   box.addEventListener('pointerdown', show);
+  // Fallback for phone browsers that don't send pointer events for a tap on a plain chart (iOS web views): the click does.
+  if (matchMedia('(hover: none)').matches) box.addEventListener('click', (e) => show({ clientX: e.clientX, pointerType: 'touch' }));
   // A finger lifts right after the tap, so on touch the readout stays until a tap elsewhere.
   box.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') hide(); });
   const outside = (e) => { if (!box.isConnected) return document.removeEventListener('pointerdown', outside); if (!box.contains(e.target)) hide(); };
