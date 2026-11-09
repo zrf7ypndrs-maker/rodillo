@@ -47,6 +47,7 @@
   --on-zone: #16181b; --on-zone-inv: #f7f9f6;
   /* canvas */
   --ftp-line: rgba(22, 24, 27, .32);
+  --hr-line: #c4196e;  /* heart rate trace on the ride chart */
   --underlay: #dde1dc;
 
   /* zones (kept in sync with ZC in js/app.js) */
@@ -82,6 +83,7 @@
   --log: #c9d1c9;
   --inv-muted: #5f666c; --inv-good: #15894a; --inv-yellow: #a86f00; --inv-red: #cf2f3b; --inv-info: #1f5fbf;
   --ftp-line: rgba(238, 241, 236, .35);
+  --hr-line: #ff5fa8;
   --underlay: #262b27;
   color-scheme: dark;
 }

@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611090130';
-import { HeartRate } from './ble/hr.js?v=202611090130';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090130';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090130';
-import { log, logMsg } from './ble/base.js?v=202611090130';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090130';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090130';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090130';
-import { encodeActivity } from './fit.js?v=202611090130';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090130';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090130';
-import { ls, rides } from './store.js?v=202611090130';
+import { Trainer } from './ble/trainer.js?v=202611090133';
+import { HeartRate } from './ble/hr.js?v=202611090133';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090133';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090133';
+import { log, logMsg } from './ble/base.js?v=202611090133';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090133';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090133';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090133';
+import { encodeActivity } from './fit.js?v=202611090133';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090133';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090133';
+import { ls, rides } from './store.js?v=202611090133';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -23,10 +23,10 @@ const fmtTime = (s) => {
 const zoneColor = (f) => f < 0.56 ? 'var(--z1)' : f < 0.76 ? 'var(--z2)' : f < 0.88 ? 'var(--z3)' : f < 1.06 ? 'var(--z4)' : f < 1.21 ? 'var(--z5)' : 'var(--z6)';
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
-let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY;
+let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE;
 function readTokens() {
   const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
-  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay'].map(v);
+  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line'].map(v);
 }
 readTokens();
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
@@ -1166,6 +1166,7 @@ function drawChart() {
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
     ctx.stroke();
+    drawHrTrace(ctx, s.samples, (x) => X(x.wx ?? x.wt), W, H, pad, dpr);
     ctx.fillStyle = INK; ctx.fillRect(X(s.chartPos) - dpr, 0, 2 * dpr, H);
     return;
   }
@@ -1180,7 +1181,34 @@ function drawChart() {
   ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   data.forEach((x, i) => { i ? ctx.lineTo(X(i), Yp(x.power)) : ctx.moveTo(X(i), Yp(x.power)); });
   ctx.stroke();
+  drawHrTrace(ctx, data, (x, i) => X(i), W, H, pad, dpr);
   ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 6 * dpr, 16 * dpr);
+}
+
+// Heart rate on its own scale (at least 80-190 bpm, widened to fit), with a "HR n" tag at the latest point.
+function drawHrTrace(ctx, samples, xOf, W, H, pad, dpr) {
+  const hrs = samples.filter((x) => x.hr > 0);
+  if (!hrs.length) return;
+  let lo = 80, hi = 190;
+  for (const x of hrs) { if (x.hr < lo + 5) lo = x.hr - 5; if (x.hr > hi - 5) hi = x.hr + 5; }
+  const Y = (h) => H - pad - ((h - lo) / (hi - lo)) * (H - pad * 2);
+  ctx.save();
+  ctx.strokeStyle = HR_LINE; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+  let pen = false;
+  samples.forEach((x, i) => {
+    if (!(x.hr > 0)) { pen = false; return; }
+    const px = xOf(x, i), py = Y(x.hr);
+    pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    pen = true;
+  });
+  ctx.stroke();
+  const last = hrs.at(-1), lx = xOf(last, samples.lastIndexOf(last)), ly = Y(last.hr);
+  const label = `HR ${Math.round(last.hr)}`;
+  ctx.font = `700 ${12 * dpr}px ${NUM_FONT}`;
+  const tw = ctx.measureText(label).width;
+  const tx = Math.min(W - tw - 4 * dpr, lx + 6 * dpr), ty = Math.max(14 * dpr, Math.min(H - 4 * dpr, ly - 6 * dpr));
+  ctx.fillStyle = HR_LINE; ctx.fillText(label, tx, ty);
+  ctx.restore();
 }
 
 
