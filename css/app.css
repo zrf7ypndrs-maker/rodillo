@@ -212,8 +212,11 @@ button.danger:hover { border-color: var(--bad); }
 .overview .stat .v { font-size: 34px; }
 .overview:empty { display: none; }
 /* free ride: no workout, just grade + gears, sits under the plan */
-.free-row { display: flex; align-items: center; gap: 14px; margin: 0 0 26px; font-size: 13.5px; }
-.free-row button { flex: none; }
+.free-row { display: flex; align-items: center; gap: 18px; margin: 0 0 28px; font-size: 14px; }
+.free-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 280px; padding: 15px 30px; font-size: 18px; font-weight: 750; letter-spacing: -0.01em;
+  box-shadow: 0 10px 22px -12px var(--today-shadow), 0 2px 4px -1px var(--shadow); }
+.free-btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+.free-btn.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 /* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
 .seg-tg { display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
 .seg-tg button { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; }
@@ -530,8 +533,9 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .wo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name meta" "prof prof" "tags tags" "desc desc" "start start"; padding: 12px 14px; row-gap: 6px; column-gap: 10px; }
   .wo-meta { font-size: 15px; align-self: baseline; }
   .wo .profile { height: 40px; }
-  .free-row { flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 20px; }
-  .free-row .muted { font-size: 12.5px; }
+  .free-row { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 22px; }
+  .free-row .muted { font-size: 12.5px; text-align: center; }
+  .free-btn { min-width: 0; width: 100%; padding: 15px 20px; font-size: 17px; }
   .overview { margin-bottom: 18px; }
   .overview .stat .v { font-size: 30px; }
   .overview > .stat:nth-child(even) .tip { left: auto; right: -8px; }
