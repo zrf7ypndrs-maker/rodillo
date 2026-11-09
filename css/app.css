@@ -213,10 +213,10 @@ button.danger:hover { border-color: var(--bad); }
 .overview:empty { display: none; }
 /* free ride: no workout, just grade + gears, sits under the plan */
 .free-row { display: flex; align-items: center; gap: 18px; margin: 0 0 28px; font-size: 14px; }
-.free-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-width: 280px; padding: 15px 30px; font-size: 18px; font-weight: 750; letter-spacing: -0.01em;
+.free-btn { flex: none; display: inline-flex; align-items: baseline; /* bike's bottom (wheels) sits on the text baseline */ justify-content: center; gap: 14px; min-width: 280px; padding: 15px 30px; font-size: 18px; font-weight: 750; letter-spacing: -0.01em;
   box-shadow: 0 10px 22px -12px var(--today-shadow), 0 2px 4px -1px var(--shadow); }
 /* icons/bike.png (drawn for Rodillo, 3x) used as a mask so it takes the button's text color in both themes */
-.bike-ico { width: 39px; height: 24px; flex: none; background: currentColor; -webkit-mask: url(../icons/bike.png?v=1) center / contain no-repeat; mask: url(../icons/bike.png?v=1) center / contain no-repeat; }
+.bike-ico { width: 39px; height: 24px; flex: none; margin-top: -9px; /* taller than the caps: do not grow the button */ background: currentColor; -webkit-mask: url(../icons/bike.png?v=1) center / contain no-repeat; mask: url(../icons/bike.png?v=1) center / contain no-repeat; }
 .free-btn.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 /* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
 .seg-tg { display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
