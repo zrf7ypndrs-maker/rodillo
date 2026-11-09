@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091627';
-import { HeartRate } from './ble/hr.js?v=202611091627';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091627';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091627';
-import { log, logMsg } from './ble/base.js?v=202611091627';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091627';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091627';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091627';
-import { encodeActivity } from './fit.js?v=202611091627';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091627';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091627';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091627';
-import { ls, rides } from './store.js?v=202611091627';
+import { Trainer } from './ble/trainer.js?v=202611091629';
+import { HeartRate } from './ble/hr.js?v=202611091629';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091629';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091629';
+import { log, logMsg } from './ble/base.js?v=202611091629';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091629';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091629';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091629';
+import { encodeActivity } from './fit.js?v=202611091629';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091629';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091629';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091629';
+import { ls, rides } from './store.js?v=202611091629';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -342,6 +342,10 @@ function dayCardHtml(info) {
 function renderWeek() {
   const el = $('#week');
   if (!app.plan) { el.classList.add('hidden'); return; }
+  // Re-renders (plan reload, tab switch, WHOOP) keep the scroll position;
+  // only a new day (or the first render) starts the strip at today again.
+  const prev = $('#week-strip');
+  const keepScroll = prev && prev.dataset.start === dkey(new Date()) ? prev.scrollLeft : 0;
   el.classList.remove('hidden');
   // Starts at today: no past days here (history lives in Calendar and Training).
   const start = new Date(); start.setHours(12, 0, 0, 0);
@@ -353,13 +357,13 @@ function renderWeek() {
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
   el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">next two weeks</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
-    <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
+    <div class="week-strip" id="week-strip" data-start="${days[0].key}">${days.map(dayCardHtml).join('')}</div>${note}`;
   const strip = $('#week-strip');
   el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
   const back = el.querySelector('[data-scroll="-1"]');
   const syncBack = () => (back.disabled = strip.scrollLeft <= 4);
   strip.addEventListener('scroll', syncBack, { passive: true });
-  strip.scrollLeft = 0;
+  strip.scrollLeft = keepScroll;
   syncBack();
   bindDayCards(el);
   bindRecoveryAdvice(el);
