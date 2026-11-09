@@ -199,7 +199,7 @@ button.danger:hover { border-color: var(--bad); }
 .wo-top { display: contents; }
 .wo-name { grid-area: name; font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; }
 .wo-name .tag { margin-left: 4px; vertical-align: 1px; }
-.wo-meta { grid-area: meta; font-size: 15.5px; font-weight: 750; text-align: right; white-space: nowrap; align-self: center; }
+.wo-meta { grid-area: meta; font-size: 15.5px; font-weight: 750; text-align: right; white-space: nowrap; align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .wo .profile { grid-area: prof; align-self: center; height: 26px; }
 /* tap to open: tags, description and Start slide down (0fr -> 1fr rows animate the real height) */
 .wo { transition: background .2s ease; }

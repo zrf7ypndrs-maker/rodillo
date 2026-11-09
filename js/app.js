@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092142';
-import { HeartRate } from './ble/hr.js?v=202611092142';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092142';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092142';
-import { log, logMsg } from './ble/base.js?v=202611092142';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092142';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092142';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092142';
-import { encodeActivity } from './fit.js?v=202611092142';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092142';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092142';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092142';
-import { ls, rides } from './store.js?v=202611092142';
+import { Trainer } from './ble/trainer.js?v=202611092144';
+import { HeartRate } from './ble/hr.js?v=202611092144';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092144';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092144';
+import { log, logMsg } from './ble/base.js?v=202611092144';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092144';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092144';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092144';
+import { encodeActivity } from './fit.js?v=202611092144';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092144';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092144';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092144';
+import { ls, rides } from './store.js?v=202611092144';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -264,7 +264,7 @@ const isSim = (w) => flatten(w).some((s) => s.kind === 'sim');
 function woMeta(w) {
   const dist = flatten(w).filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
   const mins = Math.round(totalDuration(w) / 60);
-  if (dist) return `${(dist / 1000).toFixed(1)} km of climbing steps &middot; ~${mins} min`;
+  if (dist) return `~${mins} min &middot; ${+(dist / 1000).toFixed(1)} km`; // short: must fit the library's meta column
   const tss = estimateTSS(w);
   return `${mins} min${isSim(w) ? '' : ` &middot; TSS ~${tss}`}`;
 }
