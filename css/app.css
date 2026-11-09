@@ -480,10 +480,9 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .t-pct.down { color: var(--sheet); background: var(--z2); border-color: var(--z2); }
 
 /* WHOOP recovery */
-.rec-pill { font-size: 12.5px; font-weight: 650; margin-top: 3px; }
-.rec-pill.green, .rz.green { color: var(--good); }
-.rec-pill.yellow, .rz.yellow { color: var(--warn); }
-.rec-pill.red, .rz.red { color: var(--bad); }
+.rz.green { color: var(--good); }
+.rz.yellow { color: var(--warn); }
+.rz.red { color: var(--bad); }
 .rec-advice { margin: 10px 2px 0; padding: 11px 16px; border-radius: var(--r); background: var(--sheet); border-left: 5px solid var(--good); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .rec-advice.yellow { border-left-color: var(--z4); }
 .rec-advice.red { border-left-color: var(--z6); }

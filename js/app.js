@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091717';
-import { HeartRate } from './ble/hr.js?v=202611091717';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091717';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091717';
-import { log, logMsg } from './ble/base.js?v=202611091717';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091717';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091717';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091717';
-import { encodeActivity } from './fit.js?v=202611091717';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091717';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091717';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091717';
-import { ls, rides } from './store.js?v=202611091717';
+import { Trainer } from './ble/trainer.js?v=202611091718';
+import { HeartRate } from './ble/hr.js?v=202611091718';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091718';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091718';
+import { log, logMsg } from './ble/base.js?v=202611091718';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091718';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091718';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091718';
+import { encodeActivity } from './fit.js?v=202611091718';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091718';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091718';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091718';
+import { ls, rides } from './store.js?v=202611091718';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -378,7 +378,7 @@ function dayCardHtml(info) {
   else if (info.workout && info.optional && !info.isToday) status = '<div class="d-missed">Optional</div>';
   else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
   return `<div class="day ${info.isToday ? 'today' : ''} ${info.workout ? '' : 'nowo'} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
-    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}${recoveryPill(info.key)}</div>`;
+    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}</div>`;
 }
 
 function renderWeek() {
@@ -465,12 +465,6 @@ function renderCalendar() {
 const recZone = (r) => (r >= 67 ? 'green' : r >= 34 ? 'yellow' : 'red');
 const whoopDay = (key) => app.whoop?.[key];
 
-function recoveryPill(key) {
-  const d = whoopDay(key);
-  if (d?.recovery == null) return '';
-  return `<div class="rec-pill ${recZone(d.recovery)}">Recovery ${d.recovery}%${d.hrv ? ` &middot; HRV ${Math.round(d.hrv)}` : ''}</div>`;
-}
-
 function isHard(w) {
   if (!w) return false;
   if ((w.tags || []).some((t) => ['vo2', 'threshold', 'test'].includes(t))) return true;
@@ -481,25 +475,25 @@ function isHard(w) {
 function recoveryAdvice(today) {
   if (!today) return '';
   const d = whoopDay(today.key);
-  if (d?.recovery == null) return coachDecision(today.key) || (app.whoop ? '<p class="week-note muted">WHOOP: today\'s recovery isn\'t scored yet.</p>' : '');
-  const z = recZone(d.recovery), w = today.workout;
-  const facts = `Recovery <b class="rz ${z}">${d.recovery}%</b>.`; // HRV, sleep: in the overview tiles above
-  let advice = '', btns = '';
+  // The recovery number itself lives only in the overview tile at the top; here just the call.
   // The morning coach run already weighed recovery against the plan: show its call, don't adjust twice.
   const decided = coachDecision(today.key);
-  if (decided) return `<div class="rec-advice ${z} stacked"><p>${facts}</p>${decided}</div>`;
-  if (!w || today.done) return ''; // nothing to advise: the number is already in the Recovery tile
+  if (d?.recovery == null) return decided;
+  const z = recZone(d.recovery), w = today.workout;
+  if (decided) return `<div class="rec-advice ${z} stacked">${decided}</div>`;
+  if (!w || today.done) return '';
+  let advice = '', btns = '';
   if (z === 'red' && isHard(w)) {
-    advice = ` Hard session on a red day is a bad trade. Swap to easy Zone 2, or ride it at 90%.`;
+    advice = `Hard session on a red recovery day is a bad trade. Swap to easy Zone 2, or ride it at 90%.`;
     btns = `<button class="primary small" data-rec="swap">Swap to Zone 2, 60 min</button><button class="ghost small" data-rec="0.9">Ride it at 90%</button>`;
   } else if (z === 'red') {
-    advice = ' Keep it truly easy today; drop to 95% if HR runs high.';
+    advice = 'Red recovery: keep it truly easy today; drop to 95% if HR runs high.';
     btns = `<button class="ghost small" data-rec="0.95">Ride at 95%</button>`;
   } else if (z === 'yellow' && isHard(w)) {
-    advice = ' Ride as planned. If the first rep feels like a fight, nudge effort down 2-3% with the left shifter.';
+    advice = 'Yellow recovery: ride as planned. If the first rep feels like a fight, nudge effort down 2-3% with the left shifter.';
     btns = `<button class="ghost small" data-rec="0.97">Start at 97%</button>`;
-  } else advice = ' Green light: ride as planned.';
-  return `<div class="rec-advice ${z}"><p>${facts}${advice}</p>${btns ? `<div class="row-btns">${btns}</div>` : ''}</div>`;
+  } else advice = 'Green light: ride as planned.';
+  return `<div class="rec-advice ${z}"><p>${advice}</p>${btns ? `<div class="row-btns">${btns}</div>` : ''}</div>`;
 }
 
 const DECISION_LABEL = { kept: 'Ride as planned', scaled: 'Adjusted', swapped: 'Swapped', moved: 'Moved', rest: 'Rest instead' };
