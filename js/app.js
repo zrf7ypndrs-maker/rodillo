@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092100';
-import { HeartRate } from './ble/hr.js?v=202611092100';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092100';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092100';
-import { log, logMsg } from './ble/base.js?v=202611092100';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092100';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092100';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092100';
-import { encodeActivity } from './fit.js?v=202611092100';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092100';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092100';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092100';
-import { ls, rides } from './store.js?v=202611092100';
+import { Trainer } from './ble/trainer.js?v=202611092104';
+import { HeartRate } from './ble/hr.js?v=202611092104';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092104';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092104';
+import { log, logMsg } from './ble/base.js?v=202611092104';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092104';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092104';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092104';
+import { encodeActivity } from './fit.js?v=202611092104';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092104';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092104';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092104';
+import { ls, rides } from './store.js?v=202611092104';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1442,13 +1442,13 @@ function renderPhone(s) {
     set('rp-int-label', 'Workout complete');
     set('rp-count', 'Done');
     set('rp-target', '');
-    set('rp-target-sub', 'Keep riding, or End ride from &middot;&middot;&middot;');
+    set('rp-target-sub', 'Keep riding. End ride is in the menu.');
   } else {
     zc = gradeHex(s.grade);
     set('rp-int-label', 'Free ride');
     set('rp-count', `${(s.grade * 100).toFixed(1)}%`);
     set('rp-target', '');
-    set('rp-target-sub', 'D-pad &#9650;&#9660; or &middot;&middot;&middot; to change');
+    set('rp-target-sub', 'D-pad &#9650;&#9660; changes the grade');
   }
   hero.style.setProperty('--zc', zc);
 
