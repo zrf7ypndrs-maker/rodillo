@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092010';
-import { HeartRate } from './ble/hr.js?v=202611092010';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092010';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092010';
-import { log, logMsg } from './ble/base.js?v=202611092010';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092010';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092010';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092010';
-import { encodeActivity } from './fit.js?v=202611092010';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092010';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092010';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092010';
-import { ls, rides } from './store.js?v=202611092010';
+import { Trainer } from './ble/trainer.js?v=202611092057';
+import { HeartRate } from './ble/hr.js?v=202611092057';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092057';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092057';
+import { log, logMsg } from './ble/base.js?v=202611092057';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092057';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092057';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092057';
+import { encodeActivity } from './fit.js?v=202611092057';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092057';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092057';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092057';
+import { ls, rides } from './store.js?v=202611092057';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1448,7 +1448,7 @@ function renderPhone(s) {
     set('rp-int-label', 'Free ride');
     set('rp-count', `${(s.grade * 100).toFixed(1)}%`);
     set('rp-target', '');
-    set('rp-target-sub', `set ${fmtGradeSet(s)} &middot; D-pad or &middot;&middot;&middot; to change`);
+    set('rp-target-sub', 'D-pad &#9650;&#9660; or &middot;&middot;&middot; to change');
   }
   hero.style.setProperty('--zc', zc);
 
@@ -1474,8 +1474,10 @@ function renderPhone(s) {
     m3.classList.toggle('down', s.intensity < 0.999);
   } else {
     set('rp-m3-k', 'Gear');
-    set('rp-m3', s.gb.seq ? s.gb.label : s.gb.label.replace('x', '×'));
-    set('rp-m3-sub', `${(s.bike.v * 3.6).toFixed(1)} km/h`);
+    // Position first (ring × cog, cogs counted from the largest = 1), teeth in the sub line.
+    const gb = s.gb, kmh = Math.round(s.bike.v * 3.6);
+    set('rp-m3', gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`);
+    set('rp-m3-sub', gb.seq ? `${kmh} km/h` : `${gb.ring}×${gb.cog} · ${kmh} km/h`);
     m3.classList.remove('up', 'down');
   }
 

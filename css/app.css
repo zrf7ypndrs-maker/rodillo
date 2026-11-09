@@ -688,7 +688,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .rp-target-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
   .rp-target { background: var(--on-zone); color: var(--on-zone-inv); font-weight: 800; font-size: 26px; padding: 2px 14px; border-radius: 6px; line-height: 1.25; }
   .rp-target:empty { display: none; }
-  .rp-target-sub { font-size: 15px; font-weight: 600; }
+  .rp-target-sub { font-size: 17px; font-weight: 750; line-height: 1.25; }
 
   .rp-power { text-align: center; }
   .rp-pval { font-size: clamp(80px, 29vw, 160px); font-weight: 900; line-height: .86; letter-spacing: -0.01em; }
@@ -750,7 +750,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .rp-int-label { font-size: 13px; }
   .rp-count { font-size: clamp(34px, 10vh, 58px); margin: 0 0 3px; }
   .rp-target { font-size: 17px; padding: 0 9px; }
-  .rp-target-sub { font-size: 13px; }
+  .rp-target-sub { font-size: 14px; }
   .rp-power { grid-area: power; }
   .rp-pval { font-size: clamp(38px, 12.5vh, 72px); }
   .rp-gauge { margin-top: 4px; height: 6px; }
