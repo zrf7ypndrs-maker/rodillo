@@ -1,15 +1,15 @@
-import { Trainer } from './ble/trainer.js?v=202611090133';
-import { HeartRate } from './ble/hr.js?v=202611090133';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090133';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090133';
-import { log, logMsg } from './ble/base.js?v=202611090133';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090133';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090133';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090133';
-import { encodeActivity } from './fit.js?v=202611090133';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090133';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090133';
-import { ls, rides } from './store.js?v=202611090133';
+import { Trainer } from './ble/trainer.js?v=202611090138';
+import { HeartRate } from './ble/hr.js?v=202611090138';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090138';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090138';
+import { log, logMsg } from './ble/base.js?v=202611090138';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090138';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090138';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090138';
+import { encodeActivity } from './fit.js?v=202611090138';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090138';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090138';
+import { ls, rides } from './store.js?v=202611090138';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1185,7 +1185,7 @@ function drawChart() {
   ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 6 * dpr, 16 * dpr);
 }
 
-// Heart rate on its own scale (at least 80-190 bpm, widened to fit), with a "HR n" tag at the latest point.
+// Heart rate on its own scale (at least 80-190 bpm, widened to fit).
 function drawHrTrace(ctx, samples, xOf, W, H, pad, dpr) {
   const hrs = samples.filter((x) => x.hr > 0);
   if (!hrs.length) return;
@@ -1202,12 +1202,6 @@ function drawHrTrace(ctx, samples, xOf, W, H, pad, dpr) {
     pen = true;
   });
   ctx.stroke();
-  const last = hrs.at(-1), lx = xOf(last, samples.lastIndexOf(last)), ly = Y(last.hr);
-  const label = `HR ${Math.round(last.hr)}`;
-  ctx.font = `700 ${12 * dpr}px ${NUM_FONT}`;
-  const tw = ctx.measureText(label).width;
-  const tx = Math.min(W - tw - 4 * dpr, lx + 6 * dpr), ty = Math.max(14 * dpr, Math.min(H - 4 * dpr, ly - 6 * dpr));
-  ctx.fillStyle = HR_LINE; ctx.fillText(label, tx, ty);
   ctx.restore();
 }
 
