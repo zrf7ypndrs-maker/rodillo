@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092002';
-import { HeartRate } from './ble/hr.js?v=202611092002';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092002';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092002';
-import { log, logMsg } from './ble/base.js?v=202611092002';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092002';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092002';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092002';
-import { encodeActivity } from './fit.js?v=202611092002';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092002';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092002';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092002';
-import { ls, rides } from './store.js?v=202611092002';
+import { Trainer } from './ble/trainer.js?v=202611092010';
+import { HeartRate } from './ble/hr.js?v=202611092010';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092010';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092010';
+import { log, logMsg } from './ble/base.js?v=202611092010';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092010';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092010';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092010';
+import { encodeActivity } from './fit.js?v=202611092010';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092010';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092010';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092010';
+import { ls, rides } from './store.js?v=202611092010';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -276,9 +276,9 @@ const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday'
 function workoutCard(w, i) {
   return `
     <div class="wo" data-i="${i}" tabindex="0">
-      <div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>
+      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
-      <div>${isSim(w) ? '<span class="tag sim">slope + gears</span>' : '<span class="tag">ERG</span>'}${w._source === 'coach' ? '<span class="tag coach">coach</span>' : ''}${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       <div class="wo-desc">${esc(w.description)}</div>
       <div class="start-row"><button class="primary small" data-start="${i}">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}">Remove</button>` : ''}</div>
     </div>`;
@@ -324,16 +324,18 @@ function renderOverview() {
   // Planned = this week's plan workouts, optional days left out.
   const planned = weekKeys.map(dayInfo).filter((d) => d.workout && !d.optional);
   const planSec = planned.reduce((a, d) => a + totalDuration(d.workout), 0);
-  const tile = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  const tile = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l"><b>${l}</b>${sub ? `<span class="sub">${sub}</span>` : ''}</div></div>`;
 
+  // One slim row under the hero: value big, label + short context on one line.
   const w = whoopDay(dkey(new Date()));
   const rec = w?.recovery != null
-    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', [w.hrv && `HRV ${Math.round(w.hrv)} ms`, w.sleepHours && `slept ${w.sleepHours} h`].filter(Boolean).join(' &middot; '))
-    : tile('-', 'Recovery', app.whoop ? 'not scored yet today' : 'WHOOP not connected');
-  const week = tile(fmtHours(doneSec), 'This week',
-    `${planSec ? `of ${fmtHours(planSec)} planned &middot; ` : ''}${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? `, ${weekTss} TSS` : ''}`);
-  const fat = tile(Math.round(t.atl), 'Fatigue', `Form ${t.tsb > 0 ? '+' : ''}${Math.round(t.tsb)}, ${formLabel(t.tsb).toLowerCase()} &middot; fitness ${Math.round(t.ctl)}`,
-    `${LOAD_INFO.atl}<br><br>${LOAD_INFO.tsb}`);
+    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', `${w.hrv ? `HRV ${Math.round(w.hrv)}` : ''}${w.sleepHours ? `<span class="wide-only">${w.hrv ? ' &middot; ' : ''}${w.sleepHours} h sleep</span>` : ''}`)
+    : tile('-', 'Recovery', app.whoop ? 'not scored yet' : 'WHOOP off');
+  const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
+    `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
+  const tsb = Math.round(t.tsb);
+  const fat = tile(`${tsb > 0 ? '+' : ''}${tsb}`, 'Form', `${formLabel(t.tsb).toLowerCase()}<span class="wide-only"> &middot; fitness ${Math.round(t.ctl)}</span>`,
+    `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${Math.round(t.atl)}.`);
   const est = ftpEstimate(real);
   const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
   el.innerHTML = rec + week + fat + ftp;
@@ -367,42 +369,122 @@ function dayInfo(key) {
 function dayCardHtml(info) {
   const d = new Date(info.key + 'T12:00');
   const dow = d.toLocaleDateString([], { weekday: 'short' });
-  const date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   let body, status = '';
+  // Slim cards for the "Next days" strip (today is the hero above it): name + duration, no chart.
   if (info.workout) {
     const w = info.workout;
-    body = `<div class="d-name">${esc(w.name)}</div><div class="d-meta">${woMeta(w)}</div>${profileSvg(w, 220, 34)}`;
-  } else if (info.kind === 'strength') body = '<div class="d-name muted">Strength</div><div class="d-meta">Gym day, no ride</div>';
+    body = `<div class="d-name">${esc(w.name)}</div><div class="d-meta">${woMeta(w)}</div>`;
+  } else if (info.kind === 'strength') body = '<div class="d-name muted">Strength</div>';
   else if (info.kind === 'rest') body = '<div class="d-name muted">Rest</div>';
   else body = '<div class="d-name muted">Nothing planned</div>';
   if (info.done) status = `<div class="d-done">&#10003; ${info.done.workoutId === info.workout?.id ? 'Done' : esc(info.done.name)} &middot; ${info.done.tss} TSS</div>`;
   else if (info.workout && info.isPast) status = `<div class="d-missed">${info.optional ? 'Skipped (optional)' : 'Missed'}</div>`;
-  else if (info.workout && info.optional && !info.isToday) status = '<div class="d-missed">Optional</div>';
-  else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
-  return `<div class="day ${info.isToday ? 'today' : ''} ${info.workout ? '' : 'nowo'} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
-    <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}</div>`;
+  else if (info.workout && info.optional) status = '<div class="d-missed">Optional</div>';
+  return `<div class="day ${info.workout ? '' : 'nowo'} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
+    <div class="d-top"><span class="d-dow">${dow} ${d.getDate()}</span></div>${body}${status}</div>`;
+}
+
+const fmtSpan = (s) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
+
+/** The main set in one phrase: "4 x 4 min at 229 W", "40 min at 136 W". Empty for tests and slope sessions. */
+function workSummary(w) {
+  if (!w || isSim(w) || (w.tags || []).includes('test')) return '';
+  const ftp = app.settings.ftp;
+  const segs = flatten(w, ftp).filter((x) => x.kind === 'erg' && x.dur >= 20);
+  if (!segs.length) return '';
+  const avg = (x) => (x.from + x.to) / 2;
+  const top = Math.max(...segs.map(avg));
+  const reps = segs.filter((x) => Math.abs(avg(x) - top) < 0.005);
+  const watts = Math.round(top * ftp);
+  if (reps.length === 1) return reps[0].dur >= 600 ? `${fmtSpan(reps[0].dur)} at ${watts} W` : '';
+  return reps.every((x) => x.dur === reps[0].dur) ? `${reps.length} x ${fmtSpan(reps[0].dur)} at ${watts} W` : `up to ${watts} W`;
+}
+
+const BIKE_ICO = '<span class="bike-ico" aria-hidden="true"></span>';
+const PLAY_ICO = '<svg class="play-ico" viewBox="0 0 16 18" aria-hidden="true"><path d="M2 1.5v15l13-7.5z"/></svg>';
+
+/** Recovery + the coach's call (or the built-in advice), one line under the profile. */
+function heroRecovery(today) {
+  const d = whoopDay(today.key);
+  const decided = coachDecision(today.key);
+  const z = d?.recovery != null ? recZone(d.recovery) : '';
+  const rec = z ? `<span class="rdot ${z}"></span><span><b class="rz ${z}">Recovery ${d.recovery}%.</b> ` : '<span>';
+  if (decided) return `<div class="hero-rec">${rec}${decided.replace(/^<p class="coach-call">|<\/p>$/g, '')}</span></div>`;
+  if (!z) return '';
+  const adv = today.workout && !today.done ? recoveryAdvice(today) : '';
+  // recoveryAdvice() returns a block; pull its sentence and buttons into the hero line.
+  const p = adv.match(/<p>(.*?)<\/p>/)?.[1] || '';
+  const btns = adv.match(/<div class="row-btns">(.*?)<\/div>/s)?.[1] || '';
+  return `<div class="hero-rec">${rec}${p}</span>${btns ? `<span class="row-btns">${btns}</span>` : ''}</div>`;
+}
+
+/** Today: a full-width card in the color of the day's main effort, with Start up front and Free ride as the second choice. */
+function renderHero() {
+  const el = $('#today');
+  const today = dayInfo(dkey(new Date()));
+  const w = today.workout;
+  const date = new Date(today.key + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const src = !app.plan ? '' : !syncClient()
+    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to get the coach\'s daily changes on this device.</p>'
+    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
+  const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free">${primary ? 'Start free ride' : 'Free ride'}${BIKE_ICO}</button>`;
+  let body;
+  if (w) {
+    const work = workSummary(w);
+    const status = today.done
+      ? `<div class="hero-done">&#10003; ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS</div>` : '';
+    const start = today.done
+      ? `<button class="ghost hero-start" id="hero-start">${PLAY_ICO}Ride it again</button>`
+      : `<button class="primary hero-start" id="hero-start">${PLAY_ICO}Start workout</button>`;
+    body = `<div class="hero-main">
+        <div class="hero-text">
+          <div class="hero-top"><b>Today</b><span>${date}</span></div>
+          <h2 class="hero-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</h2>
+          <div class="hero-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}</div>
+          ${today.note ? `<p class="hero-desc"><b>Coach:</b> ${esc(today.note)}</p>` : w.description ? `<p class="hero-desc">${esc(w.description)}</p>` : ''}
+          ${status}
+        </div>
+        <div class="hero-btns">${start}${free(false)}</div>
+      </div>
+      <div class="hero-prof">${profileSvg(w, 1000, 100)}</div>
+      ${heroRecovery(today)}`;
+  } else {
+    const [name, sub] = today.kind === 'strength' ? ['Strength day', 'Gym day, no ride planned.']
+      : today.kind === 'rest' ? ['Rest day', 'Nothing planned. Spin easy if you feel like it.']
+      : [app.plan ? 'Nothing planned' : 'No plan loaded', 'Set the grade with D-pad up/down and ride it with your gears.'];
+    body = `<div class="hero-main">
+        <div class="hero-text">
+          <div class="hero-top"><b>Today</b><span>${date}</span></div>
+          <h2 class="hero-name">${name}</h2>
+          <p class="hero-desc">${sub}</p>
+          ${today.done ? `<div class="hero-done">&#10003; ${esc(today.done.name)} &middot; ${today.done.tss} TSS</div>` : ''}
+        </div>
+        <div class="hero-btns">${free(true)}</div>
+      </div>${heroRecovery(today)}`;
+  }
+  el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}" style="--c:${w ? workoutColor(w) : 'transparent'}" aria-label="Today">${body}</section>`;
+  $('#btn-free').onclick = startFree;
+  const s = $('#hero-start');
+  if (s) s.onclick = () => startWorkout(w);
+  bindRecoveryAdvice(el);
 }
 
 function renderWeek() {
   const el = $('#week');
+  renderHero();
   renderOverview();
   if (!app.plan) { el.classList.add('hidden'); return; }
   // Re-renders (plan reload, tab switch, WHOOP) keep the scroll position;
-  // only a new day (or the first render) starts the strip at today again.
+  // only a new day (or the first render) starts the strip at tomorrow again.
   const prev = $('#week-strip');
   const keepScroll = prev && prev.dataset.start === dkey(new Date()) ? prev.scrollLeft : 0;
   el.classList.remove('hidden');
-  // Starts at today: no past days here (history lives in Calendar and Training).
+  // Today lives in the hero; the strip is the next 13 days (history lives in Calendar and Training).
   const start = new Date(); start.setHours(12, 0, 0, 0);
-  const days = Array.from({ length: 14 }, (_, i) => dayInfo(dkey(addDays(start, i))));
-  const today = days.find((x) => x.isToday);
-  const note = (today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '') + recoveryAdvice(today);
-  const src = !syncClient()
-    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to get the coach\'s daily changes on this device.</p>'
-    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
-  el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">Training plan</span> <span class="muted">next two weeks</span></div>
-    <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
-    <div class="week-strip" id="week-strip" data-start="${days[0].key}">${days.map(dayCardHtml).join('')}</div>${note}`;
+  const days = Array.from({ length: 13 }, (_, i) => dayInfo(dkey(addDays(start, i + 1))));
+  el.innerHTML = `<div class="week-head"><h3 class="eyebrow">Next days</h3>
+    <div class="row-btns"><button class="ghost small" data-scroll="-1" aria-label="Earlier">&lsaquo;</button><button class="ghost small" data-scroll="1" aria-label="Later">&rsaquo;</button></div></div>
+    <div class="week-strip" id="week-strip" data-start="${dkey(start)}">${days.map(dayCardHtml).join('')}</div>`;
   const strip = $('#week-strip');
   el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
   const back = el.querySelector('[data-scroll="-1"]');
@@ -1021,9 +1103,7 @@ document.addEventListener('keydown', (e) => {
 function focusables() {
   const list = [];
   if (app.tab === 'workouts') {
-    const t = $('#week .day.today [data-startday]');
-    if (t) list.push(t.closest('.day'));
-    list.push($('#btn-free'), ...$$('#wo-kind button'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
+    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
   }
   return list;
 }
@@ -1606,7 +1686,6 @@ $('#btn-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!devPopOpen(
 $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
-$('#btn-free').onclick = startFree;
 setWoKind(app.woKind);
 $$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
 // "Settings" links in notices open the panel (the top-bar button is just a gear)

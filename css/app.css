@@ -184,19 +184,23 @@ button.danger:hover { border-color: var(--bad); }
 /* workout library: a stage list, not a card grid */
 .workout-list { display: block; background: var(--sheet); border-radius: var(--r); }
 .workout-list:empty { display: none; }
-.wo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 34%) 118px; grid-template-areas: "name prof meta" "tags prof meta" "desc prof meta" "start start start";
-  column-gap: 22px; row-gap: 3px; align-items: start; padding: 14px 18px; border-top: 1px solid var(--rule); cursor: pointer; outline: none; position: relative; }
+/* compact rows: name, mini profile, duration. Tap for tags, description and Start. */
+.wo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 30%) 130px; grid-template-areas: "name prof meta" "tags tags tags" "desc desc desc" "start start start";
+  column-gap: 22px; row-gap: 3px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--rule); cursor: pointer; outline: none; position: relative; }
 .wo:first-child { border-top: none; }
 .wo:hover { background: var(--sheet2); }
 .wo.focus { box-shadow: inset 4px 0 0 var(--ink); }
 .wo-top { display: contents; }
-.wo-name { grid-area: name; font-weight: 700; font-size: 16.5px; letter-spacing: -0.01em; }
-.wo-meta { grid-area: meta; font-size: 17px; font-weight: 650; text-align: right; white-space: nowrap; align-self: center; }
-.wo .profile { grid-area: prof; align-self: center; }
-.wo > div:nth-of-type(2) { grid-area: tags; }
-.wo-desc { grid-area: desc; font-size: 13.5px; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 62ch; }
+.wo-name { grid-area: name; font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; }
+.wo-name .tag { margin-left: 4px; vertical-align: 1px; }
+.wo-meta { grid-area: meta; font-size: 15.5px; font-weight: 750; text-align: right; white-space: nowrap; align-self: center; }
+.wo .profile { grid-area: prof; align-self: center; height: 26px; }
+.wo-tags { grid-area: tags; display: none; margin-top: 6px; }
+.wo-tags:empty { display: none !important; }
+.wo.expanded .wo-tags { display: block; }
+.wo-desc { grid-area: desc; font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 72ch; display: none; margin-top: 4px; }
 .wo.expanded { background: var(--sheet2); }
-.wo.expanded .wo-desc { -webkit-line-clamp: unset; }
+.wo.expanded .wo-desc { display: block; }
 .wo .start-row { grid-area: start; display: none; }
 .wo.expanded .start-row { display: flex; gap: 8px; margin-top: 10px; }
 .profile { width: 100%; height: 54px; display: block; }
@@ -206,18 +210,18 @@ button.danger:hover { border-color: var(--bad); }
 .tag.warn { color: var(--warn); border-color: var(--warn-line); }
 .import-row { margin-top: 14px; display: flex; gap: 12px; align-items: center; font-size: 13.5px; }
 
-/* rider overview: one panel split by rules, like the ride tiles */
-.overview { margin: 0 0 22px; }
-.overview > .stat { position: relative; }
-.overview .stat .v { font-size: 34px; }
+/* rider overview: one slim row under the hero, split by rules */
+.overview { margin: 0 0 24px; }
+.overview > .stat { position: relative; padding: 9px 16px 10px; }
+.overview .stat .v { font-size: 30px; }
+.overview .stat .v .of { font-size: 18px; color: var(--faint); font-weight: 750; }
+.overview .stat .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
+.overview .stat .l b { color: var(--ink); font-weight: 650; }
+.overview .stat .sub { font-size: inherit; margin: 0; }
+.overview .stat .sub::before { content: " \00b7  "; }
 .overview:empty { display: none; }
-/* free ride: no workout, just grade + gears, sits under the plan */
-.free-row { display: flex; align-items: center; gap: 18px; margin: 0 0 28px; font-size: 14px; }
-.free-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-width: 280px; padding: 15px 30px; font-size: 18px; font-weight: 750; letter-spacing: -0.01em;
-  box-shadow: 0 10px 22px -12px var(--today-shadow), 0 2px 4px -1px var(--shadow); }
 /* icons/bike.png (drawn for Rodillo, 3x) used as a mask so it takes the button's text color in both themes */
 .bike-ico { width: 33px; height: 20px; flex: none; transform: translateY(-2px); /* center on the capitals, not the line box */ background: currentColor; -webkit-mask: url(../icons/bike.png?v=1) center / contain no-repeat; mask: url(../icons/bike.png?v=1) center / contain no-repeat; }
-.free-btn.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 /* Workouts tab: ERG / Slope pill switch (same look as the phone Chart / List toggle) */
 .seg-tg { display: inline-flex; background: var(--sheet); border-radius: 999px; padding: 2px; }
 .seg-tg button { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; touch-action: manipulation; }
@@ -373,47 +377,83 @@ table.ints { margin-bottom: 14px; }
 .t-val.combo { font-size: min(70px, 28cqi); padding: 8px 0 6px; white-space: nowrap; }
 .gearviz { height: 26px; display: block; margin-bottom: 2px; max-width: 100%; }
 
+/* ---------- today hero ----------
+   Today's session as a dome in the color of its main effort (--c, the same
+   zone color as the stripe on the next-days cards): lit from the top left,
+   a sheen band across the top, fading into white at the bottom. Dark text on
+   the zone color. Start is the big button; Free ride is the second choice.
+   Days without a ride (strength, rest) are an ink card with Free ride as the
+   main action. */
+#today { margin-bottom: 16px; }
+.hero { border-radius: 10px; padding: 24px 28px 20px; color: var(--on-zone);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+    radial-gradient(110% 120% at 15% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 30%, color-mix(in oklab, var(--c), var(--today-end) 45%) 50%, color-mix(in oklab, var(--c), var(--today-end) 85%) 68%, var(--today-end) 86%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 16px 30px -12px var(--today-shadow), 0 2px 4px -1px var(--today-shadow); }
+:root[data-theme="dark"] .hero:not(.nowo) { /* fade later so dark text stays on the zone color */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+    radial-gradient(110% 130% at 15% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 40%, color-mix(in oklab, var(--c), var(--today-end) 45%) 60%, color-mix(in oklab, var(--c), var(--today-end) 85%) 76%, var(--today-end) 92%); }
+.hero-main { display: flex; flex-wrap: wrap; gap: 18px 32px; align-items: flex-start; }
+.hero-text { flex: 1 1 420px; min-width: 0; }
+.hero-top { display: flex; gap: 8px; font-size: 15px; font-weight: 650; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
+.hero-top b { color: var(--on-zone); font-weight: 750; }
+.hero-top span::before { content: "\00b7"; margin-right: 8px; }
+.hero-name { margin: 6px 0 0; font-size: 42px; line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; }
+.hero-name .tag { font-size: 13px; vertical-align: 10px; letter-spacing: 0; }
+.hero-meta { margin-top: 6px; font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 21px; font-variant-numeric: tabular-nums; color: color-mix(in oklab, var(--on-zone), transparent 22%); }
+.hero-desc { margin: 6px 0 0; font-size: 15px; line-height: 1.45; max-width: 64ch; color: color-mix(in oklab, var(--on-zone), transparent 18%);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hero-desc b { color: var(--on-zone); }
+.hero-done { margin-top: 8px; font-size: 15px; font-weight: 750; color: var(--good); }
+.hero-btns { flex: 0 0 280px; display: flex; flex-direction: column; gap: 10px; }
+.hero-btns button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; font-weight: 750; letter-spacing: -0.01em; }
+.hero-start { height: 64px; font-size: 20px; }
+.hero-start.primary { box-shadow: 0 10px 20px -10px var(--today-shadow), 0 2px 4px -1px var(--shadow); }
+.hero-free { height: 48px; font-size: 15px; }
+/* on the zone color the secondary buttons stay light glass with dark text, in both themes */
+.hero:not(.nowo) .ghost { background: rgba(255,255,255,.55); border-color: rgba(22,24,27,.24); color: var(--on-zone); }
+.hero:not(.nowo) .ghost:hover { background: rgba(255,255,255,.8); border-color: var(--on-zone); }
+.hero-btns button.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
+.play-ico { width: 15px; height: 17px; fill: currentColor; flex: none; }
+.hero-free .bike-ico { width: 28px; height: 17px; }
+.hero-prof { height: 120px; margin-top: 24px; }
+.hero-prof .profile { height: 100%; }
+.hero-rec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.hero-rec > span:first-of-type:not(.rdot), .hero-rec .rdot + span { flex: 1 1 220px; min-width: 0; }
+.hero-rec .rdot { margin-top: -1px; }
+.hero-rec .tag { margin-right: 6px; }
+.rdot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--good); }
+.rdot.yellow { background: var(--z4); }
+.rdot.red { background: var(--bad); }
+.hero.nowo { color: var(--sheet); background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 22%), var(--ink); }
+.hero.nowo .hero-top, .hero.nowo .hero-desc, .hero.nowo .hero-rec { color: var(--inv-muted); }
+.hero.nowo .hero-top b, .hero.nowo .hero-name { color: var(--sheet); }
+.hero.nowo .primary { background: var(--sheet); border-color: var(--sheet); color: var(--ink); }
+.hero.nowo .primary:hover { background: var(--hi); }
+.hero.nowo .hero-btns { align-self: center; }
+
 /* ---------- week carousel ---------- */
 .week { margin-bottom: 18px; }
-.week-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-.eyebrow { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.week-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.eyebrow { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); margin: 0; }
 .week-head .muted { font-size: 15px; }
-.week-strip { display: flex; align-items: flex-end; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 2px 26px; margin-bottom: -18px; /* room for today's lift and shadow */ scrollbar-width: none; }
+.week-strip { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 0 4px; scrollbar-width: none; }
 .week-strip::-webkit-scrollbar { display: none; } /* arrows + trackpad scroll it; no bar */
-.day { flex: 0 0 196px; scroll-snap-align: start; background: var(--sheet); border-radius: var(--r); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-height: 156px; box-shadow: inset 0 4px 0 var(--c); outline: none; }
+/* seven days fill the row on a wide screen; the arrows page to week two */
+.day { flex: 0 0 calc((100% - 48px) / 7); scroll-snap-align: start; background: var(--sheet); border-radius: var(--r); padding: 9px 12px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-height: 92px; box-shadow: inset 0 4px 0 var(--c); outline: none; }
 .day:hover { background: var(--hi); }
-/* Today: a dome in the color of the day's main effort (--c, the same zone
-   color as the stripe on the other cards). Lit from the top left, a sheen
-   band across the top, fading into the sheet at the bottom, lifted off the
-   strip. Dark text on the zone color, like the ride screen's interval card.
-   Days without a ride (strength, rest) stay ink. */
-.day.today { flex-basis: 272px; min-height: 184px; padding: 12px 14px 14px; color: var(--on-zone); transform: translateY(-4px);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
-    radial-gradient(125% 95% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 34%, color-mix(in oklab, var(--c), var(--today-end) 45%) 54%, color-mix(in oklab, var(--c), var(--today-end) 85%) 70%, var(--today-end) 88%);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 14px 26px -10px var(--today-shadow), 0 2px 4px -1px var(--today-shadow); }
-:root[data-theme="dark"] .day.today:not(.nowo) { /* fade later so dark text stays on the zone color */
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
-    radial-gradient(125% 100% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 42%, color-mix(in oklab, var(--c), var(--today-end) 45%) 62%, color-mix(in oklab, var(--c), var(--today-end) 85%) 78%, var(--today-end) 94%); }
-.day.today:hover { filter: brightness(1.03); }
-.day.today .d-top, .day.today .d-meta { color: color-mix(in oklab, var(--on-zone), transparent 30%); }
-.day.today .d-dow, .day.today .d-name { color: var(--on-zone); }
-.day.today.nowo { color: var(--sheet); background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 22%), var(--ink); }
-.day.today.nowo .d-top, .day.today.nowo .d-meta, .day.today.nowo .d-name.muted { color: var(--inv-muted); }
-.day.today.nowo .d-dow, .day.today.nowo .d-name { color: var(--sheet); }
-.day.today .d-name { font-size: 17px; }
-.day.today .profile { height: 38px; }
+.day.nowo { background: var(--sheet2); box-shadow: none; }
+.day.nowo:hover { background: var(--hi); }
 .day.past:not(.done) { opacity: .5; }
 .day.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 .d-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; padding-top: 4px; }
 .d-dow { color: var(--ink); font-weight: 750; }
-.d-name { font-weight: 700; font-size: 15px; line-height: 1.2; margin-top: 2px; }
+.d-name { font-weight: 700; font-size: 14.5px; line-height: 1.2; margin-top: 2px; }
+.d-name.muted { font-weight: 500; }
 .d-meta { font-size: 13px; color: var(--muted); }
-.day .profile { height: 30px; margin-top: auto; padding-top: 6px; }
 .d-done { font-size: 13px; color: var(--good); font-weight: 650; }
 .d-missed { font-size: 13px; color: var(--muted); }
-.day button { align-self: flex-start; margin-top: 6px; }
 .week-head button:disabled { opacity: .35; cursor: default; }
 /* plan source notice (public copy / coach plan failed to load) */
 .plan-src { margin: 0 2px 10px; padding: 9px 14px; border-radius: var(--r); background: var(--sheet); border-left: 4px solid var(--warn); color: var(--muted); font-size: 14px; line-height: 1.45; }
@@ -530,15 +570,53 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   @media (max-width: 340px) { .brand { font-size: 0; gap: 0; } }
   .tabs { margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs button { white-space: nowrap; font-size: 15px; }
-  .wo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name meta" "prof prof" "tags tags" "desc desc" "start start"; padding: 12px 14px; row-gap: 6px; column-gap: 10px; }
-  .wo-meta { font-size: 15px; align-self: baseline; }
-  .wo .profile { height: 40px; }
-  .free-row { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 22px; }
-  .free-row .muted { font-size: 12.5px; text-align: center; }
-  .free-btn { min-width: 0; width: 100%; padding: 15px 20px; font-size: 17px; }
+  .wo { grid-template-columns: minmax(0, 1fr) 96px; grid-template-areas: "name prof" "meta prof" "tags tags" "desc desc" "start start"; padding: 10px 14px; row-gap: 1px; column-gap: 12px; }
+  .wo-name { font-size: 15px; }
+  .wo-meta { font-size: 13.5px; text-align: left; color: var(--muted); font-weight: 700; }
+  .wo .profile { height: 24px; }
+  /* today hero: text, chart, recovery line, then the buttons across the bottom */
+  #today { margin-bottom: 14px; }
+  .hero { display: flex; flex-direction: column; padding: 16px 16px 14px; border-radius: 8px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+      radial-gradient(125% 95% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 34%, color-mix(in oklab, var(--c), var(--today-end) 45%) 54%, color-mix(in oklab, var(--c), var(--today-end) 85%) 72%, var(--today-end) 90%); }
+  :root[data-theme="dark"] .hero:not(.nowo) {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+      radial-gradient(125% 100% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 42%, color-mix(in oklab, var(--c), var(--today-end) 45%) 62%, color-mix(in oklab, var(--c), var(--today-end) 85%) 78%, var(--today-end) 94%); }
+  .hero.nowo { background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 22%), var(--ink); }
+  .hero-main { display: contents; }
+  .hero-text { order: 1; flex: none; }
+  .hero-prof { order: 2; height: 72px; margin-top: 16px; }
+  .hero-rec { order: 3; margin-top: 12px; font-size: 14px; }
+  .hero-rec .row-btns { flex-wrap: wrap; }
+  .hero-btns { order: 4; flex: none; flex-direction: row; margin-top: 14px; }
+  .hero-top { justify-content: space-between; font-size: 14px; }
+  .hero-top span::before { content: none; }
+  .hero-name { font-size: 27px; line-height: 1.1; margin-top: 4px; }
+  .hero-name .tag { vertical-align: 5px; }
+  .hero-meta { font-size: 17px; margin-top: 4px; }
+  .hero-desc { font-size: 14px; }
+  .hero-btns button { height: 56px; }
+  .hero-start { flex: 1 1 auto; font-size: 18px; gap: 10px; }
+  .hero-free { flex: none; padding: 0 16px; gap: 8px; }
+  .hero.nowo .hero-free { flex: 1 1 auto; font-size: 17px; }
+  .hero.nowo .hero-btns { align-self: stretch; }
+  /* the buttons sit on the faded bottom of the card: normal buttons there */
+  .hero:not(.nowo) .ghost { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
+  /* overview: one row of four, value over a short label */
   .overview { margin-bottom: 18px; }
-  .overview .stat .v { font-size: 30px; }
-  .overview > .stat:nth-child(even) .tip { left: auto; right: -8px; }
+  .overview.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .overview.stats > .stat:nth-child(n) { border-left: 1px solid var(--rule); border-top: none; padding: 8px 8px 8px 10px; }
+  .overview.stats > .stat:nth-child(1) { border-left: none; }
+  .overview .wide-only { display: none; }
+  .overview .stat .v { font-size: 23px; }
+  .overview .stat .v .of { font-size: 14px; }
+  .overview .stat .l { font-size: 12.5px; padding-right: 0; }
+  .overview .stat .sub { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .overview .stat .sub::before { content: none; }
+  .overview .info { top: 6px; right: 6px; }
+  .overview > .stat:nth-child(n+3) .tip { left: auto; right: -8px; }
   .seg-tg { display: flex; }
   .seg-tg button { flex: 1; }
   .import-row { flex-wrap: wrap; }
@@ -546,8 +624,11 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .eyebrow { font-size: 18px; }
   .week-head .muted { display: block; font-size: 13px; }
   .week-head > :last-child { display: flex; gap: 6px; flex-shrink: 0; }
-  .day { flex-basis: 158px; min-height: 136px; }
-  .day.today { flex-basis: 220px; min-height: 160px; }
+  .week-head > .row-btns { display: none; } /* swipe */
+  .day { flex-basis: 150px; min-height: 78px; padding: 7px 10px 8px; }
+  .day.nowo { flex-basis: 88px; }
+  .d-name { font-size: 14px; }
+  .d-meta, .d-done, .d-missed { font-size: 12.5px; }
   .rec-advice { flex-direction: column; align-items: stretch; }
   .rec-advice .row-btns { flex-wrap: wrap; }
   .cal-layout { grid-template-columns: 1fr; }

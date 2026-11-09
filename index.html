@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611092002">
+<link rel="stylesheet" href="css/app.css?v=202611092010">
 </head>
 <body>
 <div id="app">
@@ -60,14 +60,12 @@
       </div>
     </header>
 
+    <!-- today hero: today's session (or rest/strength) with Start; free ride is the secondary button -->
+    <div id="today"></div>
+
     <div id="overview" class="overview stats"></div>
 
     <div id="week" class="week hidden"></div>
-
-    <div class="free-row">
-      <button class="primary free-btn" id="btn-free">Start free ride<span class="bike-ico" aria-hidden="true"></span></button>
-      <span class="muted">No workout: set the grade with D-pad up/down and ride it with your gears.</span>
-    </div>
 
     <nav class="tabs" id="tabs">
       <button data-tab="workouts" class="active">Workouts</button>
@@ -260,6 +258,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611092002"></script>
+<script type="module" src="js/app.js?v=202611092010"></script>
 </body>
 </html>
