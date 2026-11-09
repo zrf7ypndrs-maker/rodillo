@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611091508">
+<link rel="stylesheet" href="css/app.css?v=202611091604">
 </head>
 <body>
 <div id="app">
@@ -23,8 +23,7 @@
       <div class="top-actions">
         <button class="ghost" id="btn-devices" aria-label="Bluetooth connections" aria-haspopup="dialog" aria-expanded="false" title="Bluetooth connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1"/></svg><span class="ldots"><i data-k="trainer"></i><i data-k="hr"></i><i data-k="controller"></i></span></button>
         <button class="ghost" id="btn-theme">Dark</button>
-        <button class="ghost" id="btn-settings">Settings</button>
-        <button class="ghost" id="btn-log">Log</button>
+        <button class="ghost icon-btn" id="btn-settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
       </div>
       <div class="devpop hidden" id="devpop" role="dialog" aria-label="Bluetooth connections">
         <div class="devpop-head"><h3>Connections</h3><button class="ghost small" id="devpop-close">Close</button></div>
@@ -57,6 +56,7 @@
             <button class="ghost small" id="btn-demo">Demo mode</button>
           </div>
         </div>
+        <div class="devpop-foot"><span class="muted">Something not connecting?</span><button class="ghost small" id="btn-log">Log</button></div>
       </div>
     </header>
 
@@ -255,6 +255,6 @@
     <pre id="log-body"></pre>
   </aside>
 </div>
-<script type="module" src="js/app.js?v=202611091508"></script>
+<script type="module" src="js/app.js?v=202611091604"></script>
 </body>
 </html>

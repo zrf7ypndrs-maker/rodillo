@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091508';
-import { HeartRate } from './ble/hr.js?v=202611091508';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091508';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091508';
-import { log, logMsg } from './ble/base.js?v=202611091508';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091508';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091508';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091508';
-import { encodeActivity } from './fit.js?v=202611091508';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091508';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091508';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091508';
-import { ls, rides } from './store.js?v=202611091508';
+import { Trainer } from './ble/trainer.js?v=202611091604';
+import { HeartRate } from './ble/hr.js?v=202611091604';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091604';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091604';
+import { log, logMsg } from './ble/base.js?v=202611091604';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091604';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091604';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091604';
+import { encodeActivity } from './fit.js?v=202611091604';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091604';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091604';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091604';
+import { ls, rides } from './store.js?v=202611091604';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -349,8 +349,8 @@ function renderWeek() {
   const today = days.find((x) => x.isToday);
   const note = (today?.workout && today.note ? `<p class="week-note"><b>Today:</b> ${esc(today.note)}</p>` : '') + recoveryAdvice(today);
   const src = !syncClient()
-    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <b>Settings</b> to get the coach\'s daily changes on this device.</p>'
-    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <b>Settings</b>.</p>` : '';
+    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to get the coach\'s daily changes on this device.</p>'
+    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
   el.innerHTML = `${src}<div class="week-head"><div><span class="eyebrow">${esc(app.plan.name || 'Plan')}</span> <span class="muted">next two weeks</span></div>
     <div class="row-btns"><button class="ghost small" data-scroll="-1">&lsaquo;</button><button class="ghost small" data-scroll="1">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip">${days.map(dayCardHtml).join('')}</div>${note}`;
@@ -607,7 +607,7 @@ async function renderTraining() {
   const at = ls.get('remoteIndexAt');
   $('#sync-status').innerHTML = cfg.token
     ? `Synced with <b>${esc(cfg.repo || DEFAULT_REPO)}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
-    : 'History is only on this Mac. Add your GitHub token in <b>Settings</b> to sync it to rodillo-data so your coach can see it.';
+    : 'History is only on this Mac. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to sync it to rodillo-data so your coach can see it.';
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
     card(Math.round(today.ctl), 'Fitness (CTL)', '', LOAD_INFO.ctl), card(Math.round(today.atl), 'Fatigue (ATL)', '', LOAD_INFO.atl),
@@ -1566,6 +1566,8 @@ $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
 $('#btn-free').onclick = startFree;
+// "Settings" links in notices open the panel (the top-bar button is just a gear)
+document.addEventListener('click', (e) => { const a = e.target.closest('[data-open-settings]'); if (a) { e.preventDefault(); $('#btn-settings').click(); } });
 $('#btn-settings').onclick = () => {
   renderSettings();
   const cfg = ls.get('sync', {});
@@ -1606,7 +1608,7 @@ function setTheme(t) {
 }
 setTheme(ls.get('theme', 'light'));
 $('#btn-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
-$('#btn-log').onclick = () => { $('#log-body').textContent = logLines.join('\n'); $('#log').classList.remove('hidden'); };
+$('#btn-log').onclick = () => { setDevPop(false); $('#log-body').textContent = logLines.join('\n'); $('#log').classList.remove('hidden'); };
 $$('[data-close]').forEach((b) => (b.onclick = () => b.closest('.panel').classList.add('hidden')));
 $('#btn-diag').onclick = async () => {
   for (const d of [app.trainer, app.hr, ...app.controllers]) {

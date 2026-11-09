@@ -138,6 +138,8 @@ button.danger:hover { border-color: var(--bad); }
 /* connections: a link button in the top bar (one status dot per sensor) opens a popover with one row per sensor */
 .topbar { position: relative; }
 #btn-devices { display: inline-flex; align-items: center; gap: 7px; padding-left: 12px; padding-right: 13px; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
+.icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #btn-devices svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 #btn-devices[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
 .ldots { display: inline-flex; gap: 4px; }
@@ -164,7 +166,8 @@ button.danger:hover { border-color: var(--bad); }
 .device.connected .dev-name { color: var(--ink); }
 .dev-meta { font-size: 13px; color: var(--muted); }
 .dev-name:empty, .dev-meta:empty { display: none; }
-.device.demo { border-radius: 0 0 var(--r) var(--r); background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--hatch) 7px 8px); }
+.devpop-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--rule); font-size: 13px; }
+.device.demo { background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--hatch) 7px 8px); }
 
 .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
 .tabs button { border: none; background: none; border-radius: 0; padding: 10px 0; color: var(--muted); font-size: 16px; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; }
@@ -377,6 +380,7 @@ table.ints { margin-bottom: 14px; }
 /* plan source notice (public copy / coach plan failed to load) */
 .plan-src { margin: 0 2px 10px; padding: 9px 14px; border-radius: var(--r); background: var(--sheet); border-left: 4px solid var(--warn); color: var(--muted); font-size: 14px; line-height: 1.45; }
 .plan-src b { color: var(--ink); }
+a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .week-note { font-size: 14px; color: var(--muted); margin: 8px 2px 0; }
 .week-note b { color: var(--ink); }
 
@@ -477,9 +481,6 @@ table.ints { margin-bottom: 14px; }
   .brand { font-size: 21px; }
   .top-actions { gap: 0; }
   .top-actions button { padding: 6px 9px; }
-  /* phone: theme toggle is just its half-moon icon, so the link button fits */
-  #btn-theme { font-size: 0; gap: 0; padding: 6px 10px; }
-  #btn-theme::before { width: 15px; height: 15px; }
   /* connections popover: full width under the top bar */
   .devpop { left: 0; right: 0; width: auto; max-width: none; max-height: calc(100dvh - 90px - env(safe-area-inset-top)); overflow: auto; overscroll-behavior: contain; }
   #btn-devices { padding: 6px 9px; gap: 5px; }
@@ -491,8 +492,8 @@ table.ints { margin-bottom: 14px; }
   .dev-head, .dev-meta { font-size: 12.5px; }
   .dev-name { font-size: 15px; }
   @media (orientation: landscape) { .devpop { left: auto; width: 420px; } }
-  /* narrow phones (SE, mini): logo only, so the actions never clip */
-  @media (max-width: 385px) { .brand { font-size: 0; gap: 0; } }
+  /* tiny phones (320 px): logo only, so the actions never clip */
+  @media (max-width: 340px) { .brand { font-size: 0; gap: 0; } }
   .tabs { overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { white-space: nowrap; font-size: 15px; }
