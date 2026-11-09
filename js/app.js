@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611091615';
-import { HeartRate } from './ble/hr.js?v=202611091615';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611091615';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611091615';
-import { log, logMsg } from './ble/base.js?v=202611091615';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091615';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091615';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091615';
-import { encodeActivity } from './fit.js?v=202611091615';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091615';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091615';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091615';
-import { ls, rides } from './store.js?v=202611091615';
+import { Trainer } from './ble/trainer.js?v=202611091627';
+import { HeartRate } from './ble/hr.js?v=202611091627';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611091627';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611091627';
+import { log, logMsg } from './ble/base.js?v=202611091627';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611091627';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611091627';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611091627';
+import { encodeActivity } from './fit.js?v=202611091627';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611091627';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611091627';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611091627';
+import { ls, rides } from './store.js?v=202611091627';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -335,7 +335,7 @@ function dayCardHtml(info) {
   else if (info.workout && info.isPast) status = `<div class="d-missed">${info.optional ? 'Skipped (optional)' : 'Missed'}</div>`;
   else if (info.workout && info.optional && !info.isToday) status = '<div class="d-missed">Optional</div>';
   else if (info.workout && info.isToday) status = `<button class="primary small" data-startday="${info.key}">Start</button>`;
-  return `<div class="day ${info.isToday ? 'today' : ''} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
+  return `<div class="day ${info.isToday ? 'today' : ''} ${info.workout ? '' : 'nowo'} ${info.isPast ? 'past' : ''} ${info.done ? 'done' : ''}" data-day="${info.key}" style="--c:${info.workout ? workoutColor(info.workout) : 'transparent'}" tabindex="0">
     <div class="d-top"><span class="d-dow">${info.isToday ? 'Today' : dow}</span><span class="d-date">${date}</span></div>${body}${status}${recoveryPill(info.key)}</div>`;
 }
 

@@ -6,8 +6,8 @@
      compressed + heavy for every number (race-number numerals),
      normal width for text, extra-wide for the wordmark.
    - "Now" is inverted: the current interval, the main button.
-   - Exception: today's card in the home carousel is a purple dome that
-     fades into white (Agustín's call, Nov 9). Keep purple to that card.
+   - Today's card in the home carousel is a dome in its zone color that
+     fades into the sheet (Nov 9). Still data color, no decoration.
    ===================================================================== */
 @font-face {
   font-family: "Archivo";
@@ -51,10 +51,8 @@
   --ftp-line: rgba(22, 24, 27, .32);
   --hr-line: #c4196e;  /* heart rate trace on the ride chart */
   --underlay: #dde1dc;
-  /* today's card in the home carousel: purple dome fading into white */
-  --today-glow: #7c3fd6; --today-deep: #3d1a78; --today-mid: #6a3fae; --today-fade: #e4d8f5; --today-end: #ffffff;
-  --today-btn: #3d1a78; --today-btn-ink: #ffffff; --today-shadow: rgba(61, 26, 120, .55);
-  --today-good: #8ff0b8; --today-yellow: #ffd166; --today-red: #ffb3c0;
+  /* today's card: the zone color fades into this, and this is its lift shadow */
+  --today-end: #ffffff; --today-shadow: rgba(22, 24, 27, .28);
 
   /* zones (kept in sync with ZC in js/app.js) */
   --z1: #a3a9ae; --z2: #2d7ff9; --z3: #1fa855; --z4: #f4be1a; --z5: #f47b20; --z6: #e23b44;
@@ -91,8 +89,7 @@
   --ftp-line: rgba(238, 241, 236, .35);
   --hr-line: #ff5fa8;
   --underlay: #262b27;
-  --today-glow: #9a63f0; --today-deep: #4a2290; --today-mid: #5a3596; --today-fade: #2e2440; --today-end: #1a181d;
-  --today-btn: #b48cff; --today-btn-ink: #1a0f2e; --today-shadow: rgba(0, 0, 0, .75);
+  --today-end: #181b19; --today-shadow: rgba(255, 255, 255, .32);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -367,21 +364,28 @@ table.ints { margin-bottom: 14px; }
 .week-strip { display: flex; align-items: flex-end; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 2px 26px; margin-bottom: -18px; /* room for today's lift and shadow */ scrollbar-width: thin; }
 .day { flex: 0 0 196px; scroll-snap-align: start; background: var(--sheet); border-radius: var(--r); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-height: 156px; box-shadow: inset 0 4px 0 var(--c); outline: none; }
 .day:hover { background: var(--hi); }
-/* Today: the one decorative surface. A purple dome lit from the top left,
-   a sheen band across the top, fading to white at the bottom, lifted off
-   the strip. Text sits on the dark upper half; profile and Start on the
-   light lower half. */
-.day.today { flex-basis: 272px; min-height: 184px; padding: 12px 14px 14px; color: #fff; transform: translateY(-4px);
+/* Today: a dome in the color of the day's main effort (--c, the same zone
+   color as the stripe on the other cards). Lit from the top left, a sheen
+   band across the top, fading into the sheet at the bottom, lifted off the
+   strip. Dark text on the zone color, like the ride screen's interval card.
+   Days without a ride (strength, rest) stay ink. */
+.day.today { flex-basis: 272px; min-height: 184px; padding: 12px 14px 14px; color: var(--on-zone); transform: translateY(-4px);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 22%),
-    radial-gradient(120% 90% at 20% 0%, var(--today-glow) 0%, var(--today-deep) 38%, var(--today-mid) 58%, var(--today-fade) 80%, var(--today-end) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 -18px 30px -18px var(--today-shadow), 0 14px 26px -10px var(--today-shadow); }
-.day.today:hover { filter: brightness(1.04); }
-.day.today .d-top, .day.today .d-meta, .day.today .d-name.muted { color: rgba(255,255,255,.75); }
-.day.today .d-dow, .day.today .d-name { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+    radial-gradient(125% 95% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 34%, color-mix(in oklab, var(--c), var(--today-end) 45%) 54%, color-mix(in oklab, var(--c), var(--today-end) 85%) 70%, var(--today-end) 88%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 14px 26px -10px var(--today-shadow), 0 2px 4px -1px var(--today-shadow); }
+:root[data-theme="dark"] .day.today:not(.nowo) { /* fade later so dark text stays on the zone color */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
+    radial-gradient(125% 100% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 42%, color-mix(in oklab, var(--c), var(--today-end) 45%) 62%, color-mix(in oklab, var(--c), var(--today-end) 85%) 78%, var(--today-end) 94%); }
+.day.today:hover { filter: brightness(1.03); }
+.day.today .d-top, .day.today .d-meta { color: color-mix(in oklab, var(--on-zone), transparent 30%); }
+.day.today .d-dow, .day.today .d-name { color: var(--on-zone); }
+.day.today.nowo { color: var(--sheet); background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 22%), var(--ink); }
+.day.today.nowo .d-top, .day.today.nowo .d-meta, .day.today.nowo .d-name.muted { color: var(--inv-muted); }
+.day.today.nowo .d-dow, .day.today.nowo .d-name { color: var(--sheet); }
 .day.today .d-name { font-size: 17px; }
 .day.today .profile { height: 38px; }
-.day.today button.primary { background: var(--today-btn); color: var(--today-btn-ink); border-color: var(--today-btn); }
 .day.past:not(.done) { opacity: .5; }
 .day.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 .d-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; padding-top: 4px; }
@@ -390,7 +394,6 @@ table.ints { margin-bottom: 14px; }
 .d-meta { font-size: 13px; color: var(--muted); }
 .day .profile { height: 30px; margin-top: auto; padding-top: 6px; }
 .d-done { font-size: 13px; color: var(--good); font-weight: 650; }
-.day.today .d-done { color: var(--today-good, var(--inv-good)); }
 .d-missed { font-size: 13px; color: var(--muted); }
 .day button { align-self: flex-start; margin-top: 6px; }
 .week-head button:disabled { opacity: .35; cursor: default; }
@@ -465,9 +468,6 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .rec-pill.green, .rz.green { color: var(--good); }
 .rec-pill.yellow, .rz.yellow { color: var(--warn); }
 .rec-pill.red, .rz.red { color: var(--bad); }
-.day.today .rec-pill.green { color: var(--today-good); }
-.day.today .rec-pill.yellow { color: var(--today-yellow); }
-.day.today .rec-pill.red { color: var(--today-red); }
 .rec-advice { margin: 10px 2px 0; padding: 11px 16px; border-radius: var(--r); background: var(--sheet); border-left: 5px solid var(--good); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .rec-advice.yellow { border-left-color: var(--z4); }
 .rec-advice.red { border-left-color: var(--z6); }
