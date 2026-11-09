@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092151';
-import { HeartRate } from './ble/hr.js?v=202611092151';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092151';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092151';
-import { log, logMsg } from './ble/base.js?v=202611092151';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092151';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092151';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092151';
-import { encodeActivity } from './fit.js?v=202611092151';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092151';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092151';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092151';
-import { ls, rides } from './store.js?v=202611092151';
+import { Trainer } from './ble/trainer.js?v=202611092157';
+import { HeartRate } from './ble/hr.js?v=202611092157';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611092157';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611092157';
+import { log, logMsg } from './ble/base.js?v=202611092157';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092157';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092157';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092157';
+import { encodeActivity } from './fit.js?v=202611092157';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092157';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092157';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092157';
+import { ls, rides } from './store.js?v=202611092157';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -246,17 +246,17 @@ function profileSvg(w, width = 340, height = 54) {
   const T = segs.length ? segs[segs.length - 1].end : 1;
   const maxF = 1.5;
   let out = '';
-  for (const s of segs) {
+  segs.forEach((s, i) => {
     const x = (s.start / T) * width, wd = Math.max(0.5, (s.dur / T) * width);
     if (s.kind === 'erg') {
       const y0 = height - (Math.min(s.from, maxF) / maxF) * height, y1 = height - (Math.min(s.to, maxF) / maxF) * height;
-      out += `<polygon points="${x},${height} ${x},${y0} ${x + wd},${y1} ${x + wd},${height}" fill="${zoneHex((s.from + s.to) / 2)}" opacity=".9"/>`;
+      out += `<polygon data-i="${i}" points="${x},${height} ${x},${y0} ${x + wd},${y1} ${x + wd},${height}" fill="${zoneHex((s.from + s.to) / 2)}" opacity=".9"/>`;
     } else {
       const g = s.grade;
       const h = Math.max(4, ((g + 0.03) / 0.15) * height);
-      out += `<rect x="${x}" y="${height - h}" width="${wd}" height="${h}" fill="${gradeHex(g)}" opacity=".9"/>`;
+      out += `<rect data-i="${i}" x="${x}" y="${height - h}" width="${wd}" height="${h}" fill="${gradeHex(g)}" opacity=".9"/>`;
     }
-  }
+  });
   return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
 }
 
@@ -507,7 +507,64 @@ function renderHero() {
   $('#btn-free').onclick = startFree;
   const s = $('#hero-start');
   if (s) s.onclick = () => startWorkout(w);
+  if (w) bindProfileHover(el.querySelector('.hero-prof'), w);
   bindRecoveryAdvice(el);
+}
+
+/** What one interval asks for, for the profile readout: "216 W", "120-180 W", "7% grade". */
+function tipTarget(g, ftp) {
+  if (g.kind === 'sim') return g.free ? 'Free ride' : `${+(g.grade * 100).toFixed(1)}% grade`;
+  const a = Math.round(g.from * ftp), b = Math.round(g.to * ftp);
+  return a === b ? `${a} W` : `${a}-${b} W`;
+}
+
+/** Hover (or tap on the phone) on the hero profile: highlight the interval under the pointer and show its watts and time. */
+function bindProfileHover(box, w) {
+  if (!box) return;
+  const segs = flatten(w, app.settings.ftp);
+  if (!segs.length) return;
+  const T = segs[segs.length - 1].end, ftp = app.settings.ftp;
+  const tip = document.createElement('div');
+  tip.className = 'prof-tip';
+  tip.setAttribute('role', 'status');
+  box.append(tip);
+  const svg = box.querySelector('.profile');
+  let cur = -1;
+  const show = (e) => {
+    const r = svg.getBoundingClientRect();
+    const t = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999) * T;
+    const i = segs.findIndex((g) => t >= g.start && t < g.end);
+    if (i < 0) return hide();
+    if (i !== cur) {
+      cur = i;
+      const g = segs[i];
+      svg.querySelectorAll('[data-i]').forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
+      const pct = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * 100)}%` : `${Math.round(g.from * 100)}-${Math.round(g.to * 100)}%`) + ' FTP' : '';
+      const rep = g.rep ? ` &middot; ${g.rep.i} of ${g.rep.of}` : '';
+      const len = g.dist ? `${fmtDist(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur);
+      const cad = g.cadence !== '' ? ` &middot; ${esc(g.cadence)} rpm` : '';
+      tip.innerHTML = `<div class="pt-lbl">${esc(g.label)}${rep}</div>
+        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}</div>
+        <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
+      box.classList.add('hov');
+    }
+    // Centered over the interval, kept inside the chart.
+    const b = box.getBoundingClientRect(), g = segs[cur];
+    const mid = r.left - b.left + ((g.start + g.end) / 2 / T) * r.width;
+    const half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.min(Math.max(mid, half), b.width - half)}px`;
+  };
+  const hide = () => {
+    cur = -1;
+    box.classList.remove('hov');
+    svg.querySelectorAll('.on').forEach((el) => el.classList.remove('on'));
+  };
+  box.addEventListener('pointermove', show);
+  box.addEventListener('pointerdown', show);
+  // A finger lifts right after the tap, so on touch the readout stays until a tap elsewhere.
+  box.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') hide(); });
+  const outside = (e) => { if (!box.isConnected) return document.removeEventListener('pointerdown', outside); if (!box.contains(e.target)) hide(); };
+  document.addEventListener('pointerdown', outside);
 }
 
 function renderWeek() {
