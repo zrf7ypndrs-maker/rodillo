@@ -103,4 +103,15 @@ assert.equal(idx2.rides.length, 2);
 assert.deepEqual((await sync.fetchIndex()).map((r) => r.id), ['2026-11-01T0900', ride.summary.id]);
 ok(`GitHub sync: ride file + index upsert (${gh.calls.length} API calls)`);
 
+// ---- power zones: one table for colors and stats (Coggan, upper bound inclusive)
+{
+  const { zoneOf, zoneRange } = await import('../js/zones.js');
+  const { timeInZones } = await import('../js/stats.js');
+  assert.deepEqual([0, 0.55, 0.56, 0.75, 0.76, 0.88, 0.9, 0.91, 1.05, 1.06, 1.2, 1.21, 1.5, 1.51, 3].map(zoneOf), [0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+  assert.deepEqual(timeInZones([0, 110, 111, 150, 151, 180, 181, 210, 211, 240, 241, 300, 301], 200), [2, 2, 2, 2, 2, 2, 1]);
+  assert.deepEqual([0, 1, 3, 6].map((i) => zoneRange(i, 200)), ['0-110 W', '111-150 W', '181-210 W', '301+ W']);
+  assert.deepEqual([0, 2, 6].map((i) => zoneRange(i)), ['up to 55%', '76-90%', '151%+']);
+  ok('power zones (colors and time-in-zone share one table)');
+}
+
 console.log(`\n${n} stats/sync tests passed`);

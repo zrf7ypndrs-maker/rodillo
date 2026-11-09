@@ -1,15 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611090138';
-import { HeartRate } from './ble/hr.js?v=202611090138';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611090138';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611090138';
-import { log, logMsg } from './ble/base.js?v=202611090138';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090138';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090138';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090138';
-import { encodeActivity } from './fit.js?v=202611090138';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, CURVE_DURS } from './stats.js?v=202611090138';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090138';
-import { ls, rides } from './store.js?v=202611090138';
+import { Trainer } from './ble/trainer.js?v=202611090146';
+import { HeartRate } from './ble/hr.js?v=202611090146';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611090146';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611090146';
+import { log, logMsg } from './ble/base.js?v=202611090146';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611090146';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611090146';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611090146';
+import { encodeActivity } from './fit.js?v=202611090146';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611090146';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611090146';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611090146';
+import { ls, rides } from './store.js?v=202611090146';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -20,7 +21,6 @@ const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
 };
-const zoneColor = (f) => f < 0.56 ? 'var(--z1)' : f < 0.76 ? 'var(--z2)' : f < 0.88 ? 'var(--z3)' : f < 1.06 ? 'var(--z4)' : f < 1.21 ? 'var(--z5)' : 'var(--z6)';
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
 let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE;
@@ -30,7 +30,7 @@ function readTokens() {
 }
 readTokens();
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
-const zoneHex = (f) => f < 0.56 ? ZC.z1 : f < 0.76 ? ZC.z2 : f < 0.88 ? ZC.z3 : f < 1.06 ? ZC.z4 : f < 1.21 ? ZC.z5 : ZC.z6;
+const zoneHex = (f) => ZC[ZONES[zoneOf(f)].color]; // Coggan zones from zones.js
 const gradeHex = (g) => g < 0 ? '#3fa596' : g < 0.03 ? '#6f8fbf' : g < 0.06 ? '#d2a531' : g < 0.09 ? '#e27a35' : '#d9434b';
 
 // ------------------------------------------------------------------ state
@@ -540,6 +540,30 @@ function svgCurve(c90, cAll) {
     <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="${INK}">&#9632; Last 90 days</tspan> <tspan fill="${MUTED}">- - All time</tspan></text></svg>`;
 }
 
+/** Time-in-zone rows (Z1..Z7). With ftp, ranges are in watts (one ride); without, % of FTP. */
+const fmtLong = (sec) => (sec < 3600 ? fmtTime(sec) : `${Math.floor(sec / 3600)}h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}m`);
+function zoneBars(secs, ftp) {
+  const total = (secs || []).reduce((a, b) => a + (b || 0), 0);
+  if (!total) return '<p class="muted">No rides in this period.</p>';
+  const max = Math.max(...secs);
+  return `<div class="zbars">${ZONES.map((z, i) => {
+    const sec = secs[i] || 0;
+    return `<div class="zb-z">Z${z.z}</div><div class="zb-n">${z.name}<span>${zoneRange(i, ftp)}</span></div>
+      <div class="zb-bar"><i style="width:${(sec / max) * 100}%;background:var(--${z.color})"></i></div>
+      <div class="zb-t">${sec ? fmtLong(sec) : '-'}</div><div class="zb-p">${sec ? Math.round((sec / total) * 100) + '%' : ''}</div>`;
+  }).join('')}</div>`;
+}
+
+function renderZones(real, thisWeekStart) {
+  const since28 = dkey(new Date(Date.now() - 27 * 864e5));
+  const pick = (from) => real.filter((r) => r.id.slice(0, 10) >= from);
+  const col = (title, rs) => {
+    const z = zoneTotals(rs), tot = z.reduce((a, b) => a + b, 0);
+    return `<div><h4>${title} <span class="muted">${tot ? `${fmtLong(tot)} &middot; ${rs.length} ride${rs.length === 1 ? '' : 's'}` : ''}</span></h4>${zoneBars(z)}</div>`;
+  };
+  $('#chart-zones').innerHTML = col('This week', pick(thisWeekStart)) + col('Last 4 weeks', pick(since28));
+}
+
 async function renderTraining() {
   const rows = await trainingRows();
   const real = rows.filter((r) => !r.demo).map((r) => r.summary);
@@ -568,6 +592,7 @@ async function renderTraining() {
   ].join('');
   $('#chart-load').innerHTML = svgLoad(series);
   $('#chart-weekly').innerHTML = svgWeekly(wk);
+  renderZones(real, thisWeek.start);
   $('#chart-curve').innerHTML = real.length ? svgCurve(powerCurve(real, 90), powerCurve(real)) : '<p class="muted">No rides yet.</p>';
   $('#ride-table').innerHTML = rows.length ? `<table><tr><th>Date</th><th>Ride</th><th>Time</th><th>NP</th><th>IF</th><th>TSS</th><th>HR</th><th>Intervals</th><th>Drift</th><th></th></tr>
     ${rows.map((r) => {
@@ -752,6 +777,7 @@ function showSummary(ride) {
       ${work.map((x) => `<tr><td>${esc(x.label)}${x.rep ? ' ' + x.rep : ''}</td><td>${x.target ? x.target + ' W' : (x.grade ?? '') + (x.grade != null ? '%' : '')}</td><td>${x.avgP} W</td>
       <td>${x.pct ? `<span class="pct ${x.pct < 95 ? 'low' : x.pct > 105 ? 'high' : 'ok'}">${x.pct}%</span>` : ''}</td><td>${x.avgHr ?? '-'}</td><td>${x.avgCad}${x.cadTarget ? ` <span class="muted">(${x.cadTarget}, ${x.cadInRange ?? '-'}% in range)</span>` : ''}</td></tr>`).join('')}</table>`;
   }
+  if (st.zones?.some(Boolean)) extra += `<h4>Time in zones <span class="muted">at FTP ${st.ftp} W</span></h4>${zoneBars(st.zones, st.ftp)}`;
   if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
   $('#s-extra').innerHTML = extra;
   if ($('#s-setftp')) $('#s-setftp').onclick = (e) => { app.settings.ftp = Math.round(st.bests[60] * 0.75); ls.set('settings', app.settings); e.target.textContent = 'Saved'; };

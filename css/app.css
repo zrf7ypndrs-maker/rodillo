@@ -205,6 +205,17 @@ table.ints { margin-bottom: 14px; }
 .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .tgrid .wide { grid-column: 1 / -1; }
 .tgrid h3, .card h3 { font-size: 16px; }
+/* time in zones (Coggan Z1-Z7, js/zones.js) */
+.zcols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; }
+.zcols h4 .muted, #s-extra h4 .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
+.zbars { display: grid; grid-template-columns: auto auto 1fr auto 2.8em; align-items: center; gap: 7px 12px; font-size: 14px; font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+.zb-z { font-weight: 800; }
+.zb-n { white-space: nowrap; }
+.zb-n span { color: var(--muted); font-size: 12.5px; margin-left: 8px; }
+.zb-bar { height: 12px; min-width: 40px; background: var(--underlay); border-radius: 2px; overflow: hidden; }
+.zb-bar i { display: block; height: 100%; }
+.zb-t { text-align: right; font-weight: 700; }
+.zb-p { text-align: right; font-size: 12.5px; color: var(--muted); }
 .svgchart { width: 100%; height: auto; display: block; font-family: var(--num); }
 
 /* ---------- panels ---------- */
@@ -483,6 +494,9 @@ table.ints { margin-bottom: 14px; }
   .stats.tcards > .stat:nth-child(odd) { border-left: none; }
   .stats.tcards > .stat:nth-child(n+3) { border-top: 1px solid var(--rule); }
   .tgrid { grid-template-columns: 1fr; }
+  .zcols { grid-template-columns: 1fr; }
+  .zbars { gap: 6px 8px; font-size: 13px; }
+  .zb-n span { display: block; margin-left: 0; font-size: 11.5px; }
   .card { padding: 14px; }
   .ride-table { overflow-x: auto; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }

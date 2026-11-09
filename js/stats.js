@@ -2,7 +2,7 @@
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
-const ZONES = [0.55, 0.75, 0.9, 1.05, 1.2, 1.5]; // Coggan power zone upper bounds (fraction of FTP)
+import { ZONES, zoneOfWatts } from './zones.js?v=202611090146';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -84,13 +84,17 @@ export function intervalResults(samples, segs, ftp) {
   return out;
 }
 
+/** Seconds in each power zone (Z1..Z7, see zones.js) for a 1 Hz power array. */
 export function timeInZones(power, ftp) {
-  const z = new Array(ZONES.length + 1).fill(0);
-  for (const p of power) {
-    let k = ZONES.findIndex((u) => p < u * ftp);
-    if (k < 0) k = ZONES.length;
-    z[k]++;
-  }
+  const z = new Array(ZONES.length).fill(0);
+  for (const p of power) z[zoneOfWatts(p, ftp)]++;
+  return z;
+}
+
+/** Sum time-in-zone over ride summaries (each ride is binned at its own FTP). */
+export function zoneTotals(summaries) {
+  const z = new Array(ZONES.length).fill(0);
+  for (const r of summaries) (r.zones || []).forEach((sec, i) => { if (i < z.length) z[i] += sec || 0; });
   return z;
 }
 
