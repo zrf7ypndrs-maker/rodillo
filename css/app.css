@@ -382,6 +382,21 @@ table.ints { margin-bottom: 14px; }
 .int-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; background: color-mix(in srgb, var(--on-zone) 16%, transparent); }
 .int-bar i { display: block; height: 100%; width: 0; background: var(--on-zone); opacity: .85; transition: width .3s linear; }
 .int-bar.hidden { display: none; }
+/* interval card pulse: zone-color ripple + small bump (js pulseCard). One beat when an interval
+   starts, one per second in its last 10 s. The one-shot wins over the steady beat while it runs. */
+.interval.int-ending, .rp-hero.int-ending { animation: int-beat 1s ease-out infinite; }
+.interval.int-fresh, .rp-hero.int-fresh { animation: int-fresh .75s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes int-beat {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--zc) 75%, transparent); }
+  18% { transform: scale(1.035); }
+  100% { transform: scale(1); box-shadow: 0 0 0 16px color-mix(in srgb, var(--zc) 0%, transparent); }
+}
+@keyframes int-fresh {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--zc) 85%, transparent); }
+  30% { transform: scale(1.06); }
+  100% { transform: scale(1); box-shadow: 0 0 0 24px color-mix(in srgb, var(--zc) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .interval.int-ending, .rp-hero.int-ending, .interval.int-fresh, .rp-hero.int-fresh { animation: none; } }
 .int-next { font-size: 14px; color: var(--muted); }
 .int-next b { font-family: var(--num); font-stretch: 75%; font-size: 20px; color: var(--ink); }
 

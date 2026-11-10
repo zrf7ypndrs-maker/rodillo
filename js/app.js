@@ -1,17 +1,17 @@
-import { Trainer } from './ble/trainer.js?v=202611101947';
-import { HeartRate } from './ble/hr.js?v=202611101947';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611101947';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611101947';
-import { log, logMsg } from './ble/base.js?v=202611101947';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101947';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101947';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101947';
-import { encodeActivity } from './fit.js?v=202611101947';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101947';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101947';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101947';
-import { ls, rides } from './store.js?v=202611101947';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101947';
+import { Trainer } from './ble/trainer.js?v=202611101948';
+import { HeartRate } from './ble/hr.js?v=202611101948';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611101948';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611101948';
+import { log, logMsg } from './ble/base.js?v=202611101948';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101948';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101948';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101948';
+import { encodeActivity } from './fit.js?v=202611101948';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101948';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101948';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101948';
+import { ls, rides } from './store.js?v=202611101948';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101948';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1316,9 +1316,36 @@ function renderPaused(s) {
   }
 }
 
+// Interval card pulse (desktop card and phone hero): one beat when a new interval starts,
+// a steady beat once per second through its last 10 seconds. Distance steps estimate the
+// seconds left from current speed. Nothing pulses before the start or while paused.
+function intervalEnding(s) {
+  const rem = s.segRemaining;
+  if (!rem || !s.started || s.paused) return false;
+  if (rem.sec !== undefined) return rem.sec > 0 && rem.sec < 10.5; // the countdown reads 0:10
+  return s.bike.v > 1 && rem.m > 0 && rem.m / s.bike.v < 10.5;
+}
+function pulseCard(s, card) {
+  if (card._ses !== s) { card._ses = s; card._seg = -1; card.classList.remove('int-fresh', 'int-ending'); }
+  const i = s.started ? s.segIndex : -1;
+  if (i >= 0 && i !== card._seg) {
+    card.classList.remove('int-fresh');
+    void card.offsetWidth; // restart the one-shot animation
+    card.classList.add('int-fresh');
+  }
+  card._seg = i;
+  card.classList.toggle('int-ending', intervalEnding(s));
+}
+for (const id of ['r-interval', 'rp-hero']) {
+  document.getElementById(id).addEventListener('animationend', (e) => {
+    if (e.animationName === 'int-fresh') e.currentTarget.classList.remove('int-fresh');
+  });
+}
+
 function renderRide() {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
+  pulseCard(s, isPhone() ? $('#rp-hero') : $('#r-interval'));
   if (isPhone()) { renderPhone(s); renderPaused(s); return; }
   const td = s.trainer.data || {};
   const hr = Math.round(app.hr?.bpm || td.hr || 0);
