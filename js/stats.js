@@ -2,7 +2,7 @@
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
-import { ZONES, zoneOfWatts } from './zones.js?v=202611102017';
+import { ZONES, zoneOfWatts } from './zones.js?v=202611102030';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;

@@ -1,18 +1,18 @@
-import { Trainer } from './ble/trainer.js?v=202611102017';
-import { HeartRate } from './ble/hr.js?v=202611102017';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611102017';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611102017';
-import { log, logMsg } from './ble/base.js?v=202611102017';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102017';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102017';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102017';
-import { encodeActivity } from './fit.js?v=202611102017';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102017';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102017';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102017';
-import { reconcile, applyPending } from './settings-sync.js?v=202611102017';
-import { ls, rides } from './store.js?v=202611102017';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102017';
+import { Trainer } from './ble/trainer.js?v=202611102030';
+import { HeartRate } from './ble/hr.js?v=202611102030';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611102030';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611102030';
+import { log, logMsg } from './ble/base.js?v=202611102030';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102030';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102030';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102030';
+import { encodeActivity } from './fit.js?v=202611102030';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102030';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102030';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102030';
+import { reconcile, applyPending } from './settings-sync.js?v=202611102030';
+import { ls, rides } from './store.js?v=202611102030';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102030';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -785,7 +785,7 @@ function renderCalendar() {
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
   html += coachDecision(sel);
   const wd = whoopDay(sel);
-  if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}${wd.strain != null ? ` &middot; strain ${wd.strain}` : ''}</div>`;
+  if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}</div>`;
   for (const r of info.ridden) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)} &middot; NP ${r.np} W &middot; TSS ${r.tss}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
   }
