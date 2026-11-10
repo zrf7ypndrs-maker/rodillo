@@ -29,5 +29,5 @@ const wpath = path.join(dir, 'whoop', 'daily.json');
 if (fs.existsSync(wpath)) {
   const days = Object.entries(JSON.parse(fs.readFileSync(wpath, 'utf8')).days).slice(-14);
   console.log('\nWHOOP (last 14 days):');
-  for (const [d, v] of days) console.log(`${d}  recovery ${v.recovery ?? '-'}%  HRV ${v.hrv ?? '-'}  RHR ${v.rhr ?? '-'}  sleep ${v.sleepHours ?? '-'}h  strain ${v.strain ?? '-'}`);
+  for (const [d, v] of days) console.log(`${d}  recovery ${v.recovery ?? '-'}%  HRV ${v.hrv ?? '-'}  RHR ${v.rhr ?? '-'}  sleep ${v.sleepHours ?? '-'}h`);
 }

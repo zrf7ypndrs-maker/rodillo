@@ -2,7 +2,7 @@
 // Validate after edits: node tools/daily.mjs <path-to-rodillo-data> --check
 //
 // Prints everything the morning coach run needs to decide whether to keep, scale or
-// swap today's session: WHOOP today vs personal baselines, recent strain, ride load,
+// swap today's session: WHOOP today vs personal baselines, ride load,
 // and the plan for the next 7 days with each workout's duration, TSS and intensity.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -82,7 +82,6 @@ if (!t || t.recovery == null) {
 }
 const recRun = []; for (let i = 1; i <= 3; i++) { const v = whoop[addDays(today, -i)]?.recovery; recRun.push(v ?? '-'); }
 console.log(`  Recovery previous 3 days (newest first): ${recRun.join(', ')}`);
-console.log('  Day strain last 7 days (oldest first, includes gym and outdoor): ' + Array.from({ length: 7 }, (_, i) => whoop[addDays(today, i - 7)]?.strain ?? '-').join(', '));
 
 // ---- Ride load
 const rides = (readJson(path.join(dir, 'index.json'), { rides: [] }).rides || []).filter((r) => r.source !== 'demo');
