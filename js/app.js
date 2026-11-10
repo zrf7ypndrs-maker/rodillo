@@ -1,17 +1,17 @@
-import { Trainer } from './ble/trainer.js?v=202611101952';
-import { HeartRate } from './ble/hr.js?v=202611101952';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611101952';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611101952';
-import { log, logMsg } from './ble/base.js?v=202611101952';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101952';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101952';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101952';
-import { encodeActivity } from './fit.js?v=202611101952';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101952';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101952';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101952';
-import { ls, rides } from './store.js?v=202611101952';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101952';
+import { Trainer } from './ble/trainer.js?v=202611101956';
+import { HeartRate } from './ble/hr.js?v=202611101956';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611101956';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611101956';
+import { log, logMsg } from './ble/base.js?v=202611101956';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101956';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101956';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101956';
+import { encodeActivity } from './fit.js?v=202611101956';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101956';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101956';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101956';
+import { ls, rides } from './store.js?v=202611101956';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101956';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -464,6 +464,80 @@ function heroRecovery(today) {
   return `<div class="hero-rec">${rec}${p}</span>${btns ? `<span class="row-btns">${btns}</span>` : ''}</div>`;
 }
 
+const DONE_ICO = '<svg class="done-ico" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16"/><path d="M9 16.5l4.8 4.8L23.5 11"/></svg>';
+const SEE_ICO = '<svg class="see-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>';
+
+/** Today's hero once the planned ride is done: result headline, the ride's real numbers, See ride + Free ride. */
+function heroDoneBody(w, r, date) {
+  const same = r.workoutId === w.id;
+  const at = r.start ? new Date(r.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  const c = r.compliance;
+  const sub = !same ? `Instead of ${esc(w.name)}.`
+    : c ? (c.min >= 95 ? `All ${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} on target.` : `Weakest rep at ${c.min}% of target.`) : '';
+  const stat = (v, l, extra = '', cls = '') => `<div class="hs"><div class="v ${cls}">${v}</div><div class="l"><b>${l}</b>${extra ? `<span class="wide-only"> &middot; ${extra}</span>` : ''}</div></div>`;
+  const stats = [
+    r.durSec != null && stat(fmtTime(r.durSec), 'Time', same ? `plan ${fmtTime(totalDuration(w))}` : ''),
+    r.np && stat(`${r.np} W`, 'NP', r.avgP ? `avg ${r.avgP} W` : ''),
+    r.tss != null && stat(r.tss, 'TSS', same && !isSim(w) ? `plan ~${estimateTSS(w)}` : ''),
+    r.if && stat(Number(r.if).toFixed(2), 'IF', r.kj ? `${r.kj} kJ` : ''),
+    r.avgHr && stat(r.avgHr, 'Avg HR', r.maxHr ? `max ${r.maxHr}` : '', 'hr'),
+    c && stat(`${c.avg}%`, 'Intervals', `${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} &middot; min ${c.min}%`, c.min >= 95 ? 'ok' : 'warn'),
+  ].filter(Boolean).join('');
+  return `<div class="hero-main">
+      <div class="hero-text">
+        <div class="hero-top"><b>Today</b><span>${date}${at ? ` &middot; ${at}` : ''}</span></div>
+        <h2 class="hero-name">${DONE_ICO}<span><span class="ok">Done.</span> ${esc(same ? w.name : r.name)}</span></h2>
+        ${sub ? `<p class="hero-desc">${sub}</p>` : ''}
+      </div>
+      <div class="hero-btns">
+        <button class="ghost hero-see" id="hero-see">${SEE_ICO}See ride</button>
+        <button class="ghost hero-free" id="btn-free">Free ride${BIKE_ICO}</button>
+      </div>
+    </div>
+    ${stats ? `<div class="hero-stats">${stats}</div>` : ''}
+    ${same ? `<div class="hero-prof prof-hover">${profileSvg(w, 1000, 100)}</div>` : ''}`;
+}
+
+/** The next planned ride after today (skipping strength and rest days), shown under a done hero. */
+function upNextHtml() {
+  const start = new Date(); start.setHours(12, 0, 0, 0);
+  const tomorrow = dayInfo(dkey(addDays(start, 1)));
+  let next = null;
+  for (let i = 1; i <= 13 && !next; i++) { const d = dayInfo(dkey(addDays(start, i))); if (d.workout) next = d; }
+  if (!next) return '';
+  const w = next.workout;
+  const dow = (k, opts) => new Date(k + 'T12:00').toLocaleDateString([], opts);
+  const when = next.key === tomorrow.key ? `Tomorrow, ${dow(next.key, { month: 'short', day: 'numeric' })}` : dow(next.key, { weekday: 'short', month: 'short', day: 'numeric' });
+  const between = next.key !== tomorrow.key && (tomorrow.kind === 'strength' || tomorrow.kind === 'rest')
+    ? `<span>${dow(tomorrow.key, { weekday: 'short' })} is ${tomorrow.kind}</span>` : '';
+  const work = workSummary(w);
+  return `<section class="up-next" data-day="${next.key}" style="--c:${workoutColor(w)}" aria-label="Up next">
+    <div class="un-text">
+      <div class="un-top"><b>Up next</b><span>${when}</span>${between}</div>
+      <h3 class="un-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</h3>
+      <div class="un-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}${next.optional ? ' &middot; optional' : ''}</div>
+    </div>
+    <div class="un-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
+  </section>`;
+}
+
+function bindUpNext(root) {
+  const card = root.querySelector('.up-next');
+  if (!card) return;
+  const info = dayInfo(card.dataset.day);
+  bindProfileHover(card.querySelector('.un-prof'), info.workout);
+  // The card opens that day in Calendar; the chart keeps its own tap readout.
+  card.onclick = (e) => { if (e.target.closest('.un-prof')) return; app.calMonth = card.dataset.day.slice(0, 7); app.calSel = card.dataset.day; setTab('calendar'); };
+}
+
+/** "See ride": the Training tab, scrolled to that ride's row, which flashes. */
+function seeRide(id) {
+  app.flashRide = id;
+  setTab('training');
+  clearTimeout(seeRide.t);
+  seeRide.t = setTimeout(() => (app.flashRide = null), 2500);
+}
+
 /** Today: a full-width card in the color of the day's main effort, with Start up front and Free ride as the second choice. */
 function renderHero() {
   const el = $('#today');
@@ -475,13 +549,23 @@ function renderHero() {
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check sync in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
   const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free">${primary ? 'Start free ride' : 'Free ride'}${BIKE_ICO}</button>`;
   let body;
+  // Done = the planned workout, or another structured workout in its place (e.g. the red-recovery Zone 2 swap).
+  // A free ride alone leaves today's workout open.
+  const doneRide = w && (today.ridden.find((r) => r.workoutId === w.id) || today.ridden.find((r) => r.workoutId));
+  if (doneRide) {
+    // Done: a quiet sheet card with the ride's real numbers, then the next planned ride.
+    el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date)}</section>${upNextHtml()}`;
+    $('#btn-free').onclick = startFree;
+    $('#hero-see').onclick = () => seeRide(doneRide.id);
+    if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w);
+    bindUpNext(el);
+    return;
+  }
   if (w) {
     const work = workSummary(w);
     const status = today.done
       ? `<div class="hero-done">&#10003; ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS</div>` : '';
-    const start = today.done
-      ? `<button class="ghost hero-start" id="hero-start">${PLAY_ICO}Ride it again</button>`
-      : `<button class="primary hero-start" id="hero-start">${PLAY_ICO}Start workout</button>`;
+    const start = `<button class="primary hero-start" id="hero-start">${PLAY_ICO}Start workout</button>`;
     body = `<div class="hero-main">
         <div class="hero-text">
           <div class="hero-top"><b>Today</b><span>${date}</span></div>
@@ -868,11 +952,13 @@ async function renderTraining() {
       const x = r.summary;
       const comp = x.compliance ? `<span class="pct ${x.compliance.min < 95 ? 'low' : 'ok'}">${x.compliance.avg}%</span> <span class="muted">min ${x.compliance.min}%</span>` : '';
       const status = r.demo ? '<span class="tag">demo</span>' : r.interrupted ? '<span class="tag">interrupted</span>' : r.synced ? '' : '<span class="tag warn">not synced</span>';
-      return `<tr><td>${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+      return `<tr data-ride="${esc(x.id)}"><td>${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
       <td>${esc(x.name)} ${status}</td><td>${fmtTime(x.durSec)}</td><td>${x.np} W</td><td>${x.if}</td><td>${x.tss}</td><td>${x.avgHr ?? '-'}</td>
       <td>${comp}</td><td>${x.decoupling != null ? x.decoupling + '%' : ''}</td>
       <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
     }).join('')}</table>` : '<p class="muted">No rides yet.</p>';
+  const fr = app.flashRide && $(`#ride-table tr[data-ride="${CSS.escape(app.flashRide)}"]`);
+  if (fr) { fr.classList.add('flash'); fr.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
   $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this Mac?', ok: 'Delete', danger: true })) { await rides.del(+b.dataset.del); renderTraining(); } }));
 }

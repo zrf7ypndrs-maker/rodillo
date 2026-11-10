@@ -485,7 +485,7 @@ table.ints { margin-bottom: 14px; }
     linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
     radial-gradient(110% 120% at 15% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 30%, color-mix(in oklab, var(--c), var(--today-end) 45%) 50%, color-mix(in oklab, var(--c), var(--today-end) 85%) 68%, var(--today-end) 86%);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 16px 30px -12px var(--today-shadow), 0 2px 4px -1px var(--today-shadow); }
-:root[data-theme="dark"] .hero:not(.nowo) { /* fade later so dark text stays on the zone color */
+:root[data-theme="dark"] .hero:not(.nowo):not(.done) { /* fade later so dark text stays on the zone color */
   background:
     linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
     radial-gradient(110% 130% at 15% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 40%, color-mix(in oklab, var(--c), var(--today-end) 45%) 60%, color-mix(in oklab, var(--c), var(--today-end) 85%) 76%, var(--today-end) 92%); }
@@ -507,8 +507,8 @@ table.ints { margin-bottom: 14px; }
 .hero-start.primary { box-shadow: 0 10px 20px -10px var(--today-shadow), 0 2px 4px -1px var(--shadow); }
 .hero-free { height: 48px; font-size: 15px; }
 /* on the zone color the secondary buttons stay light glass with dark text, in both themes */
-.hero:not(.nowo) .ghost { background: rgba(255,255,255,.55); border-color: rgba(22,24,27,.24); color: var(--on-zone); }
-.hero:not(.nowo) .ghost:hover { background: rgba(255,255,255,.8); border-color: var(--on-zone); }
+.hero:not(.nowo):not(.done) .ghost { background: rgba(255,255,255,.55); border-color: rgba(22,24,27,.24); color: var(--on-zone); }
+.hero:not(.nowo):not(.done) .ghost:hover { background: rgba(255,255,255,.8); border-color: var(--on-zone); }
 .hero-btns button.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 .play-ico { width: 15px; height: 17px; fill: currentColor; flex: none; }
 .hero-free .bike-ico { width: 28px; height: 17px; }
@@ -544,6 +544,48 @@ table.ints { margin-bottom: 14px; }
 .hero.nowo .primary { background: var(--sheet); border-color: var(--sheet); color: var(--ink); }
 .hero.nowo .primary:hover { background: var(--hi); }
 .hero.nowo .hero-btns { align-self: center; }
+
+/* Done today: the dome steps back to a sheet with a faint tint of the day's zone color.
+   The headline is the result, the numbers are the ride's own, and the next planned ride
+   gets its own card underneath (.up-next). */
+.hero.done { color: var(--ink); padding: 22px 28px 20px;
+  background: radial-gradient(60% 160% at 0% 0%, color-mix(in oklab, var(--c), var(--sheet) 78%) 0%, var(--sheet) 70%);
+  box-shadow: 0 6px 16px -8px var(--shadow), 0 1px 2px var(--shadow); }
+.hero.done .hero-top { color: var(--muted); flex-wrap: wrap; }
+.hero.done .hero-top b { color: var(--ink); }
+.hero.done .hero-name { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 32px; line-height: 1.1; }
+.hero.done .hero-name .ok { color: var(--good); }
+.done-ico { width: 32px; height: 32px; flex: none; }
+.done-ico circle { fill: var(--good); }
+.done-ico path { fill: none; stroke: var(--sheet); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.hero.done .hero-desc { color: var(--muted); }
+.hero.done .hero-btns { flex-basis: 220px; gap: 8px; }
+.hero.done .hero-btns button { height: 46px; font-size: 15px; gap: 8px; }
+.hero.done .hero-see { border-color: var(--ink); }
+.see-ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.hero-stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.hs + .hs { border-left: 1px solid var(--rule); padding-left: 16px; }
+.hs .v { font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 30px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.hs .v.hr { color: var(--hr-line); }
+.hs .v.ok { color: var(--good); }
+.hs .v.warn { color: var(--warn); }
+.hs .l { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs .l b { color: var(--ink); font-weight: 650; }
+.hero.done .hero-prof { height: 36px; margin-top: 16px; }
+
+.up-next { margin-top: 14px; padding: 16px 24px 18px; border-radius: 8px; border-top: 4px solid var(--c); background: var(--sheet);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px; cursor: pointer; }
+.un-text { flex: 1 1 320px; min-width: 0; }
+.un-top { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; font-weight: 650; color: var(--muted); }
+.un-top b { color: var(--ink); font-weight: 750; }
+.un-top span::before { content: "\00b7"; margin-right: 8px; }
+.un-name { margin: 4px 0 0; font-size: 24px; line-height: 1.1; font-weight: 800; letter-spacing: -0.015em; }
+.un-name .tag { font-size: 12px; vertical-align: 4px; letter-spacing: 0; }
+.un-meta { margin-top: 4px; font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.un-prof { flex: 1 1 440px; height: 64px; cursor: auto; }
+.un-prof .profile { height: 100%; display: block; }
+#ride-table tr.flash td { animation: flash 2.4s ease-out; }
+@media (prefers-reduced-motion: reduce) { #ride-table tr.flash td { animation: none; background: var(--flash); } }
 
 /* ---------- week carousel ---------- */
 .week { margin-bottom: 18px; }
@@ -706,7 +748,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
     background:
       linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
       radial-gradient(125% 95% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 34%, color-mix(in oklab, var(--c), var(--today-end) 45%) 54%, color-mix(in oklab, var(--c), var(--today-end) 85%) 72%, var(--today-end) 90%); }
-  :root[data-theme="dark"] .hero:not(.nowo) {
+  :root[data-theme="dark"] .hero:not(.nowo):not(.done) {
     background:
       linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,0) 22%),
       radial-gradient(125% 100% at 20% 0%, color-mix(in oklab, var(--c), #fff 30%) 0%, var(--c) 42%, color-mix(in oklab, var(--c), var(--today-end) 45%) 62%, color-mix(in oklab, var(--c), var(--today-end) 85%) 78%, var(--today-end) 94%); }
@@ -729,7 +771,27 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .hero.nowo .hero-free { flex: 1 1 auto; font-size: 17px; }
   .hero.nowo .hero-btns { align-self: stretch; }
   /* the buttons sit on the faded bottom of the card: normal buttons there */
-  .hero:not(.nowo) .ghost { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
+  .hero:not(.nowo):not(.done) .ghost { background: var(--sheet); border-color: var(--rule); color: var(--ink); }
+  /* done today: headline, numbers in rows of three, then the two buttons; the next ride carries the chart */
+  .hero.done { padding: 16px 16px 14px;
+    background: radial-gradient(90% 120% at 0% 0%, color-mix(in oklab, var(--c), var(--sheet) 78%) 0%, var(--sheet) 70%); }
+  .hero.done .hero-name { font-size: 23px; gap: 10px; }
+  .done-ico { width: 26px; height: 26px; }
+  .hero-stats { order: 2; grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; margin-top: 12px; padding-top: 10px; }
+  .hs + .hs { padding-left: 12px; }
+  .hs:nth-child(3n + 1) { border-left: none; padding-left: 0; }
+  .hs .v { font-size: 24px; }
+  .hs .l { font-size: 12.5px; }
+  .hs .wide-only { display: none; }
+  .hero.done .hero-prof { display: none; }
+  .hero.done .hero-btns { flex: none; }
+  .hero.done .hero-btns button { flex: 1 1 0; height: 48px; padding: 0 12px; }
+  .up-next { margin-top: 12px; padding: 12px 16px 14px; gap: 10px; }
+  .un-text, .un-prof { flex: 1 1 100%; }
+  .un-top { font-size: 13.5px; }
+  .un-name { font-size: 20px; }
+  .un-meta { font-size: 15.5px; }
+  .un-prof { height: 48px; }
   /* overview: one row of four, value over a short label */
   .overview { margin-bottom: 18px; }
   .overview.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
