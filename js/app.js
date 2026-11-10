@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611100003';
-import { HeartRate } from './ble/hr.js?v=202611100003';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611100003';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611100003';
-import { log, logMsg } from './ble/base.js?v=202611100003';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611100003';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611100003';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611100003';
-import { encodeActivity } from './fit.js?v=202611100003';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611100003';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611100003';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611100003';
-import { ls, rides } from './store.js?v=202611100003';
+import { Trainer } from './ble/trainer.js?v=202611100332';
+import { HeartRate } from './ble/hr.js?v=202611100332';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611100332';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611100332';
+import { log, logMsg } from './ble/base.js?v=202611100332';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611100332';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611100332';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611100332';
+import { encodeActivity } from './fit.js?v=202611100332';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611100332';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611100332';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611100332';
+import { ls, rides } from './store.js?v=202611100332';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -487,7 +487,7 @@ function renderHero() {
         </div>
         <div class="hero-btns">${start}${free(false)}</div>
       </div>
-      <div class="hero-prof">${profileSvg(w, 1000, 100)}</div>
+      <div class="hero-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
       ${heroRecovery(today)}`;
   } else {
     const [name, sub] = today.kind === 'strength' ? ['Strength day', 'Gym day, no ride planned.']
@@ -518,7 +518,7 @@ function tipTarget(g, ftp) {
   return a === b ? `${a} W` : `${a}-${b} W`;
 }
 
-/** Hover (or tap on the phone) on the hero profile: highlight the interval under the pointer and show its watts and time. */
+/** Hover (or tap on the phone) on a workout profile (today hero, calendar day): highlight the interval under the pointer and show its watts and time. */
 function bindProfileHover(box, w) {
   if (!box) return;
   const segs = flatten(w, app.settings.ftp);
@@ -639,7 +639,7 @@ function renderCalendar() {
   let html = `<h3>${date}</h3>`;
   if (info.workout) {
     const w = info.workout;
-    html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div>${profileSvg(w, 600, 60)}
+    html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div><div class="cal-prof prof-hover">${profileSvg(w, 600, 60)}</div>
       ${info.note ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
       <button class="primary small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
@@ -651,6 +651,7 @@ function renderCalendar() {
   }
   $('#cal-detail').innerHTML = html;
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
+  if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
 }
 
 // ------------------------------------------------------------------ WHOOP recovery

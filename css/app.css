@@ -476,21 +476,21 @@ table.ints { margin-bottom: 14px; }
 .hero-prof .profile { height: 100%; display: block; }
 /* Hover readout on today's profile: the interval under the pointer stays full color, the rest fades,
    and an ink tag above it gives watts and time. */
-.hero-prof { position: relative; touch-action: pan-y; }
-.hero-prof .profile [data-i] { transition: opacity .15s; cursor: crosshair; }
-.hero-prof.hov .profile [data-i] { opacity: .35; }
-.hero-prof.hov .profile [data-i].on { opacity: 1; }
+.prof-hover { position: relative; touch-action: pan-y; }
+.prof-hover .profile [data-i] { transition: opacity .15s; cursor: crosshair; }
+.prof-hover.hov .profile [data-i] { opacity: .35; }
+.prof-hover.hov .profile [data-i].on { opacity: 1; }
 .prof-tip { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%); z-index: 3;
   padding: 8px 12px 9px; border-radius: 6px; background: var(--ink); color: var(--sheet); white-space: nowrap;
   font-size: 13px; line-height: 1.35; pointer-events: none; opacity: 0; transition: opacity .12s;
   box-shadow: 0 8px 18px -8px rgba(0,0,0,.45); }
-.hero-prof.hov .prof-tip { opacity: 1; }
+.prof-hover.hov .prof-tip { opacity: 1; }
 .prof-tip .pt-lbl { font-weight: 700; color: var(--inv-muted); }
 .prof-tip .pt-tgt { font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .prof-tip .pt-tgt span { font-size: 16px; color: var(--inv-muted); }
 .prof-tip .pt-time { font-variant-numeric: tabular-nums; font-weight: 650; }
 .prof-tip .pt-time span { color: var(--inv-muted); font-weight: 500; }
-@media (prefers-reduced-motion: reduce) { .hero-prof .profile [data-i], .prof-tip { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .prof-hover .profile [data-i], .prof-tip { transition: none; } }
 .hero-rec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; font-size: 15px; line-height: 1.45; color: var(--muted); }
 .hero-rec > span:first-of-type:not(.rdot), .hero-rec .rdot + span { flex: 1 1 220px; min-width: 0; }
 .hero-rec .rdot { margin-top: -1px; }
@@ -564,6 +564,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .cal-missed { font-size: 12px; color: var(--muted); }
 .cal-detail h3 { font-size: 18px; }
 .cal-detail p { font-size: 14px; line-height: 1.5; }
+.cal-prof { margin-top: 8px; } /* profile of the selected day: same hover/tap readout as the today hero */
 .cal-ride { font-size: 13.5px; padding: 8px 0; border-top: 1px solid var(--rule); color: var(--good); }
 .cal-ride b { color: var(--ink); }
 
