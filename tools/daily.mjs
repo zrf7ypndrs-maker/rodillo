@@ -101,7 +101,9 @@ for (const r of recent) {
 const lastRamp = rides.filter((r) => r.workoutId === 'ramp-test' && r.bests?.[60]).at(-1);
 if (lastRamp) {
   const newFtp = Math.round(lastRamp.bests[60] * 0.75);
-  const pending = !plan.ftpSetAt || plan.ftpSetAt < lastRamp.id.slice(0, 10);
+  // the app now asks after the ride: Update writes ftpSetAt, Keep writes ftpDeclinedAt; either one settles it
+  const day = lastRamp.id.slice(0, 10);
+  const pending = !((plan.ftpSetAt || '') >= day || (plan.ftpDeclinedAt || '') >= day);
   console.log(`  Last ramp test ${lastRamp.id.slice(0, 10)}: best 1-min ${lastRamp.bests[60]} W -> FTP ${newFtp} W${pending ? '  >> NOT YET IN PLAN: set plan.ftp and plan.ftpSetAt (see DAILY.md step 3)' : ''}`);
 }
 const rodeToday = rides.some((r) => r.id.slice(0, 10) === today && r.durSec >= 600);
@@ -117,7 +119,7 @@ for (let i = -7; i < 0; i++) {
 }
 
 // ---- Next 7 days
-console.log(`\nPlan "${plan.name}" (FTP ${plan.ftp} W${plan.ftpSetAt ? `, set ${plan.ftpSetAt}` : ', not tested yet'}${plan.maxMinutes ? `, max ${plan.maxMinutes} min per ride` : ''}), today + 6:`);
+console.log(`\nPlan "${plan.name}" (FTP ${plan.ftp} W${plan.ftpSetAt ? `, set ${plan.ftpSetAt}${plan.ftpSource ? ` from ${plan.ftpSource}` : ''}` : ', not tested yet'}${plan.maxMinutes ? `, max ${plan.maxMinutes} min per ride` : ''}), today + 6:`);
 for (let i = 0; i < 7; i++) {
   const k = addDays(today, i), v = plan.days?.[k];
   const w = v && library.get(v);

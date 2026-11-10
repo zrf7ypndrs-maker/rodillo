@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, powerCurve, ftpEstimate, rideIdFor } from '../js/stats.js';
+import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
 import { GitHubSync } from '../js/sync.js';
 import { flatten } from '../js/engine/workout.js';
 import fs from 'node:fs';
@@ -102,6 +102,61 @@ const idx2 = await sync.pushRide(ride);
 assert.equal(idx2.rides.length, 2);
 assert.deepEqual((await sync.fetchIndex()).map((r) => r.id), ['2026-11-01T0900', ride.summary.id]);
 ok(`GitHub sync: ride file + index upsert (${gh.calls.length} API calls)`);
+
+// ---- FTP from a single ride + FTP stored in the plan
+{
+  assert.deepEqual(ftpFromRide({ tags: ['test'], bests: { 60: 320, 1200: 180 } }).ftp, 240);
+  assert.equal(ftpFromRide({ bests: { 60: 400, 1200: 252 } }).ftp, 239);
+  assert.equal(ftpFromRide({ bests: { 60: 400 } }), null); // under 20 min, not a test
+  const g = mockGitHub();
+  const put = (path, obj) => { g.files[path] = { sha: 'p' + Math.random(), content: Buffer.from(JSON.stringify(obj)).toString('base64') }; };
+  const read = (path) => JSON.parse(Buffer.from(g.files[path].content, 'base64').toString());
+  put('coach/plan.json', { name: 'Block 1', ftp: 200, days: { '2026-11-11': 'ramp-test' } });
+  const s2 = new GitHubSync({ token: 't', fetchImpl: g.fetchImpl });
+  await s2.updatePlan((p) => { p.ftp = 240; p.ftpSetAt = '2026-11-11T20:00:00Z'; }, 'FTP');
+  assert.deepEqual(read('coach/plan.json'), { name: 'Block 1', ftp: 240, days: { '2026-11-11': 'ramp-test' }, ftpSetAt: '2026-11-11T20:00:00Z' });
+  // another writer (the coach) changes the plan between our read and write: we retry and keep their edit
+  let raced = false;
+  await s2.updatePlan((p) => {
+    if (!raced) { raced = true; put('coach/plan.json', { ...read('coach/plan.json'), notes: { x: 'coach' } }); }
+    p.ftp = 245;
+  }, 'FTP');
+  assert.equal(read('coach/plan.json').ftp, 245); assert.equal(read('coach/plan.json').notes.x, 'coach');
+  ok('FTP from one ride; plan FTP write survives a concurrent coach edit');
+}
+
+// ---- settings shared through the plan: newest wins per key; first run never pushes untouched defaults
+{
+  const { reconcile, applyPending, SEED_AT } = await import('../js/settings-sync.js');
+  const defaults = { ftp: 200, riderKg: 77, shiftStyle: 'sram', realDev: 5.1 };
+  const plan = { name: 'Block 1', ftp: 200 };
+  // Mac first run: customized values get seeded, defaults stay put
+  const mac = reconcile({ plan, settings: { ...defaults, riderKg: 74.5, shiftStyle: 'shimano', gradeTrim: 0.012 }, base: null, defaults });
+  assert.deepEqual(Object.keys(mac.pending).sort(), ['gradeTrim', 'riderKg', 'shiftStyle']);
+  assert.ok(Object.values(mac.pending).every((x) => x.at === SEED_AT));
+  assert.deepEqual(applyPending(plan, mac.pending).sort(), ['gradeTrim', 'riderKg', 'shiftStyle']);
+  assert.equal(plan.settings.riderKg, 74.5); assert.equal(plan.ftpSetAt, undefined);
+  // phone first run with defaults: adopts the Mac's values, pushes nothing
+  const phone = reconcile({ plan, settings: { ...defaults }, base: null, defaults });
+  assert.deepEqual(phone.pending, {});
+  assert.equal(phone.settings.riderKg, 74.5); assert.equal(phone.settings.shiftStyle, 'shimano'); assert.equal(phone.settings.gradeTrim, 0.012);
+  // phone changes FTP after a ride: pending, then written with source
+  const s2 = { ...phone.settings, ftp: 238 };
+  const ph2 = reconcile({ plan, settings: s2, base: phone.base, pending: phone.pending, defaults, now: '2026-11-11T20:00:00.000Z', source: 'ramp test 2026-11-11' });
+  assert.deepEqual(Object.keys(ph2.pending), ['ftp']);
+  applyPending(plan, ph2.pending);
+  assert.equal(plan.ftp, 238); assert.equal(plan.ftpSetAt, '2026-11-11T20:00:00.000Z'); assert.equal(plan.ftpSource, 'ramp test 2026-11-11');
+  // Mac next load: adopts FTP; its own older unsent change to riderKg loses to nothing (still pending) and survives
+  const m2 = reconcile({ plan, settings: { ...mac.settings, riderKg: 75 }, base: { ...mac.base, riderKg: { v: 74.5, at: SEED_AT }, shiftStyle: { v: 'shimano', at: SEED_AT }, gradeTrim: { v: 0.012, at: SEED_AT } }, defaults, now: '2026-11-11T21:00:00.000Z' });
+  assert.equal(m2.settings.ftp, 238); assert.deepEqual(m2.adopted, ['ftp']);
+  assert.equal(m2.pending.riderKg.v, 75);
+  // a newer value in the plan beats an older pending one
+  plan.settingsSetAt.riderKg = '2026-11-11T22:00:00.000Z'; plan.settings.riderKg = 76;
+  assert.deepEqual(applyPending(plan, m2.pending), []);
+  const m3 = reconcile({ plan, settings: m2.settings, base: m2.base, pending: m2.pending, defaults });
+  assert.equal(m3.settings.riderKg, 76); assert.deepEqual(m3.pending, {});
+  ok('settings sync: first-run seeding, adopt on other device, newest wins per key');
+}
 
 // ---- power zones: one table for colors and stats (Coggan, upper bound inclusive)
 {

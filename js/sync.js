@@ -89,6 +89,25 @@ export class GitHubSync {
     }
   }
 
+  /**
+   * Read-modify-write coach/plan.json (retries when the coach or another device wrote it in between).
+   * fn(plan) edits the plan in place. Returns the plan as written.
+   */
+  async updatePlan(fn, message) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const cur = await this.getJson(PLAN_PATH);
+      if (!cur) throw new Error(`${PLAN_PATH} not found in ${this.repo}`);
+      fn(cur.json);
+      try {
+        await this.putJson(PLAN_PATH, cur.json, message, cur.sha);
+        return cur.json;
+      } catch (e) {
+        if (e.status !== 409 && e.status !== 422) throw e;
+      }
+    }
+    throw new Error(`Could not update ${PLAN_PATH} after 3 attempts`);
+  }
+
   /** Write the full ride file, then upsert its summary into index.json. */
   async pushRide(ride) {
     const s = ride.summary;

@@ -456,6 +456,7 @@ table.ints { margin-bottom: 14px; }
   background: var(--ink); color: var(--sheet); font-size: 13px; line-height: 1.45; font-weight: 400; text-align: left; box-shadow: 0 10px 28px var(--shadow); }
 .tip b { font-weight: 700; }
 .info:hover .tip, .info.open .tip, .info-btn:focus-visible + .tip { display: block; }
+.ftp-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .callout { background: var(--paper); border-radius: var(--r); border-left: 4px solid var(--ink); padding: 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14.5px; }
 .small-print { font-size: 13px; margin-top: 14px; }
 

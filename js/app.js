@@ -1,17 +1,18 @@
-import { Trainer } from './ble/trainer.js?v=202611101959';
-import { HeartRate } from './ble/hr.js?v=202611101959';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611101959';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611101959';
-import { log, logMsg } from './ble/base.js?v=202611101959';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101959';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101959';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101959';
-import { encodeActivity } from './fit.js?v=202611101959';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101959';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101959';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101959';
-import { ls, rides } from './store.js?v=202611101959';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101959';
+import { Trainer } from './ble/trainer.js?v=202611102017';
+import { HeartRate } from './ble/hr.js?v=202611102017';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611102017';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611102017';
+import { log, logMsg } from './ble/base.js?v=202611102017';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102017';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102017';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102017';
+import { encodeActivity } from './fit.js?v=202611102017';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102017';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102017';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102017';
+import { reconcile, applyPending } from './settings-sync.js?v=202611102017';
+import { ls, rides } from './store.js?v=202611102017';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102017';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -209,6 +210,8 @@ async function loadCoachData() {
     const [p, w] = await Promise.all([gh.getJson(PLAN_PATH), gh.getJson(WORKOUTS_PATH)]);
     app.coachPlan = p?.json || null;
     app.coachWorkouts = w?.json?.workouts || [];
+    reconcileSettings();
+    await flushSettings(gh);
     ls.set('coachPlan', app.coachPlan);
     ls.set('coachWorkouts', app.coachWorkouts);
     app.coachError = null;
@@ -220,14 +223,62 @@ async function loadCoachData() {
   }
 }
 
-/** FTP set by the coach (plan.ftp + plan.ftpSetAt) wins once per update, so Mac and phone stay in sync. */
-function adoptPlanFtp() {
-  const p = app.coachPlan;
-  if (!p?.ftp || !p.ftpSetAt || ls.get('planFtpAt', null) === p.ftpSetAt) return;
-  app.settings.ftp = p.ftp;
+/**
+ * Settings are shared by every device through the plan (see settings-sync.js): FTP as plan.ftp (the
+ * morning coach writes it after a ramp test), everything else under plan.settings. Newest change wins,
+ * per setting. Sign-in and theme stay per device (stored outside settings).
+ */
+function reconcileSettings(source = 'settings') {
+  const r = reconcile({ plan: app.coachPlan, settings: app.settings, base: ls.get('settingsBase', null), pending: ls.get('settingsPending', {}), defaults: DEFAULT_SETTINGS, source });
+  app.settings = r.settings;
   ls.set('settings', app.settings);
-  ls.set('planFtpAt', p.ftpSetAt);
-  logMsg('coach', `FTP set to ${p.ftp} W from the plan (${p.ftpSetAt})`);
+  ls.set('settingsBase', r.base);
+  ls.set('settingsPending', r.pending);
+  if (r.adopted.length) logMsg('coach', `settings from the plan: ${r.adopted.map((k) => `${k} ${JSON.stringify(app.settings[k])}`).join(', ')}`);
+  return r;
+}
+
+/** Writes local setting changes into the plan. True when nothing is left to send. */
+let flushing = null;
+async function flushSettings(gh = syncClient()) {
+  if (flushing) await flushing.catch(() => {});
+  const pend = ls.get('settingsPending', {});
+  if (!Object.keys(pend).length) return true;
+  if (!gh || !app.coachPlan) return false;
+  flushing = (async () => {
+    let written = [];
+    const plan = await gh.updatePlan((p) => { written = applyPending(p, pend); },
+      `Settings: ${Object.entries(pend).map(([k, x]) => `${k} ${JSON.stringify(x.v)}`).join(', ')}`);
+    app.coachPlan = plan;
+    ls.set('coachPlan', plan);
+    const base = ls.get('settingsBase', {}), left = ls.get('settingsPending', {});
+    for (const k of written) { base[k] = { v: pend[k].v, at: pend[k].at }; if (left[k]?.at === pend[k].at) delete left[k]; }
+    ls.set('settingsBase', base);
+    ls.set('settingsPending', left);
+    reconcileSettings(); // keys we lost to a newer change elsewhere: take theirs
+    return !Object.keys(left).length;
+  })();
+  try { return await flushing; }
+  catch (e) { logMsg('coach', `settings not saved to the plan yet: ${e.message}`); return false; }
+  finally { flushing = null; }
+}
+
+/** Every settings change goes through here: saved on this device now, sent to the plan shortly after. */
+let flushTimer;
+function saveSettings(source = 'settings') {
+  reconcileSettings(source);
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(() => flushSettings(), 1500);
+}
+
+/** "Keep" after a ramp test: tells the morning coach not to apply that test's FTP. */
+async function declineTestFtp(rideId) {
+  const gh = syncClient();
+  if (!gh) return;
+  try {
+    app.coachPlan = await gh.updatePlan((p) => { p.ftpDeclinedAt = new Date().toISOString(); }, `FTP kept after ramp test ${rideId.slice(0, 10)}`);
+    ls.set('coachPlan', app.coachPlan);
+  } catch (e) { logMsg('coach', `could not record kept FTP: ${e.message}`); }
 }
 
 function applyLibrary() {
@@ -237,7 +288,7 @@ function applyLibrary() {
   for (const w of ls.get('imported', [])) lib.push(w);
   app.library = lib;
   app.plan = app.coachPlan || app.basePlan || null;
-  adoptPlanFtp();
+  reconcileSettings();
   renderLibrary();
   refreshPlanViews();
 }
@@ -1030,7 +1081,7 @@ async function endSession() {
     const simSamples = s.samples.filter((x) => x.grade !== 0).length;
     if (simSamples > 120) Object.assign(app.settings, s.learned());
     else app.settings.realDev = s.devEst.dev;
-    ls.set('settings', app.settings);
+    saveSettings();
   }
   const ride = await saveRide('done');
   showSummary(ride);
@@ -1132,9 +1183,12 @@ function showSummary(ride) {
     stat(st.tss, 'TSS'), stat(st.if, 'Intensity'),
   ].join('');
   let extra = '';
-  if (st.tags?.includes('test') && st.bests?.[60]) {
-    const ftp = Math.round(st.bests[60] * 0.75);
-    extra += `<div class="callout"><div>Best 1-min power <b>${st.bests[60]} W</b> &rarr; estimated FTP <b>${ftp} W</b> (currently ${app.settings.ftp} W)</div><button class="primary small" id="s-setftp">Set FTP to ${ftp}</button></div>`;
+  // New FTP: any ride that beats the current one, or a ramp test that says something different
+  const found = ride.demo ? null : ftpFromRide(st);
+  const cur = app.settings.ftp;
+  if (found && (found.ftp > cur || (found.test && found.ftp !== cur))) {
+    extra += `<div class="callout ftp-callout"><div><b>${found.ftp > cur ? 'New FTP detected' : 'Ramp test result'}: ${found.ftp} W</b> <span class="muted">(${found.basis}; currently ${cur} W)</span><div class="muted" id="s-ftpmsg">Updating saves it to your plan, so every device gets it.</div></div>
+      <div class="ftp-btns"><button class="primary small" id="s-setftp">Update to ${found.ftp} W</button><button class="ghost small" id="s-keepftp">Keep ${cur} W</button></div></div>`;
   }
   const work = (ride.intervals || []).filter((x) => x.work);
   if (work.length) {
@@ -1145,7 +1199,18 @@ function showSummary(ride) {
   if (st.zones?.some(Boolean)) extra += `<h4>Time in zones <span class="muted">at FTP ${st.ftp} W</span></h4>${zoneBars(st.zones, st.ftp)}`;
   if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
   $('#s-extra').innerHTML = extra;
-  if ($('#s-setftp')) $('#s-setftp').onclick = (e) => { app.settings.ftp = Math.round(st.bests[60] * 0.75); ls.set('settings', app.settings); e.target.textContent = 'Saved'; };
+  if ($('#s-setftp')) {
+    const done = (msg) => { $$('.ftp-callout button').forEach((b) => b.remove()); $('#s-ftpmsg').textContent = msg; };
+    $('#s-setftp').onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Saving...';
+      app.settings.ftp = found.ftp;
+      reconcileSettings(`${found.test ? 'ramp test' : 'ride'} ${st.id.slice(0, 10)}`);
+      const synced = await flushSettings();
+      refreshPlanViews();
+      done(synced ? `FTP is now ${found.ftp} W on all devices.` : `FTP is now ${found.ftp} W here. It goes to your plan on the next sync.`);
+    };
+    $('#s-keepftp').onclick = () => { if (found.test) declineTestFtp(st.id); done(`Kept ${cur} W.`); };
+  }
   $('#s-sync').textContent = ride.demo ? 'Demo ride: saving keeps it on this Mac only.' : syncClient() ? 'Saving adds it to your training history in rodillo-data.' : `Saving keeps it on this device. ${syncHint()} in Settings to sync it.`;
   $('#s-fit').onclick = () => downloadFit(ride);
   $('#s-home').onclick = async () => {
@@ -1928,7 +1993,7 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') moda
 // ------------------------------------------------------------------ settings
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
-  rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1], ['bikeKg', 'Bike weight (kg)', 0.1]],
+  rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1], ['bikeKg', 'Bike weight (kg)', 0.1, 1, 'All settings are saved to your plan, so every device gets them.']],
   ride: [['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.']],
   gearing: [],
   road: [
@@ -1956,7 +2021,7 @@ function renderSettings() {
   f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
     `<div class="settings-form stab-pane hidden" data-pane="${id}">${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
-  $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; ls.set('settings', app.settings); renderSettings(); };
+  $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
@@ -1965,7 +2030,7 @@ function renderSettings() {
     else if (el.id === 'set-dt') app.settings.drivetrain = el.value;
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
-    ls.set('settings', app.settings);
+    saveSettings();
   };
   setSetTab(ls.get('setTab', 'rider'));
 }

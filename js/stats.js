@@ -2,7 +2,7 @@
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
-import { ZONES, zoneOfWatts } from './zones.js?v=202611101959';
+import { ZONES, zoneOfWatts } from './zones.js?v=202611102017';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -196,6 +196,16 @@ export function powerCurve(rides, days = null, now = Date.now()) {
     for (const [d, w] of Object.entries(r.bests || {})) out[d] = Math.max(out[d] || 0, w);
   }
   return out;
+}
+
+/**
+ * FTP this one ride proves, or null. Ramp test: 75% of best 1 min. Any other ride: 95% of best 20 min
+ * (so raising ERG effort or riding hard in slope mode counts).
+ */
+export function ftpFromRide(st) {
+  if (st?.tags?.includes('test') && st.bests?.[60]) return { ftp: Math.round(st.bests[60] * 0.75), basis: `best 1-min ${st.bests[60]} W x 75%`, test: true };
+  if (st?.bests?.[1200]) return { ftp: Math.round(st.bests[1200] * 0.95), basis: `best 20-min ${st.bests[1200]} W x 95%`, test: false };
+  return null;
 }
 
 /** FTP estimates from the last 90 days: 95% of best 20 min, and 75% of best 1 min in ramp tests. */
