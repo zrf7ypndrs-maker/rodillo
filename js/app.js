@@ -290,21 +290,21 @@ async function declineTestFtp(rideId) {
 // ------------------------------------------------------------------ my workouts (built in the app)
 // Stored in rodillo-data workouts/mine.json (see js/mine.js). Changes are shown at once and queued in
 // localStorage until they're written, so the builder works offline or signed out.
-async function saveMine(w) { queueMine(w.id, w); }
-async function deleteMine(id) { queueMine(id, null); }
-function queueMine(id, w) {
+async function saveMine(w) { await queueMine(w.id, w); setTab('workouts'); setWoKind('mine', true); }
+async function deleteMine(id) { await queueMine(id, null); }
+async function queueMine(id, w) {
   const pend = ls.get('minePending', {});
   pend[id] = { w, at: new Date().toISOString() };
   ls.set('minePending', pend);
   applyLibrary();
-  if (!syncClient()) toast('Saved on this device. Sign in under Settings, Sync to get it on your other devices.');
-  flushMine();
+  if (!(await flushMine())) toast("Couldn't reach GitHub. Saved here for now; it goes to rodillo-data on the next load.");
 }
 let mineFlushing = null;
 async function flushMine(gh = syncClient()) {
   if (mineFlushing) await mineFlushing.catch(() => {});
   const pend = ls.get('minePending', {});
-  if (!gh || !Object.keys(pend).length) return;
+  if (!Object.keys(pend).length) return true;
+  if (!gh) return false;
   mineFlushing = (async () => {
     let handled = [];
     const names = Object.entries(pend).map(([id, x]) => (x.w ? x.w.name : `delete ${id}`));
@@ -315,8 +315,8 @@ async function flushMine(gh = syncClient()) {
     ls.set('minePending', left);
     applyLibrary();
   })();
-  try { await mineFlushing; }
-  catch (e) { logMsg('coach', `my workouts not saved to rodillo-data yet: ${e.message}`); }
+  try { await mineFlushing; return true; }
+  catch (e) { logMsg('coach', `my workouts not saved to rodillo-data yet: ${e.message}`); return false; }
   finally { mineFlushing = null; }
 }
 /** Dates from today on where the plan has this workout. */
@@ -330,9 +330,10 @@ function applyLibrary() {
   const lib = (app.baseLibrary || []).map((w) => custom.get(w.id) || w);
   for (const [id, w] of custom) if (!lib.some((x) => x.id === id)) lib.push(w);
   for (const w of ls.get('imported', [])) lib.push(w);
-  const mine = mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
+  // Agustín's own workouts (builder) are private: only with access to rodillo-data (GitHub sign-in or token).
+  const mine = !signedIn() ? [] : mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  app.library = [...mine, ...lib]; // yours first, newest edit on top
+  app.library = [...mine, ...lib]; // newest edit first
   app.plan = app.coachPlan || app.basePlan || null;
   reconcileSettings();
   renderLibrary();
@@ -374,22 +375,24 @@ const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday'
 function workoutCard(w, i) {
   return `
     <div class="wo" data-i="${i}" tabindex="0">
-      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : w._source === 'mine' ? ' <span class="tag mine">mine</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
+      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
       <div class="wo-more"><div class="wo-more-in">
         <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="wo-desc">${esc(w.description)}</div>
         <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
-        <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>`}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
+        <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : signedIn() ? `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>` : ''}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
       </div></div>
     </div>`;
 }
 
 function renderLibrary() {
-  const erg = [], slope = [];
-  app.library.forEach((w, i) => (isSlopeOnly(w) ? slope : erg).push(workoutCard(w, i)));
+  const erg = [], slope = [], mine = [];
+  app.library.forEach((w, i) => (w._source === 'mine' ? mine : isSlopeOnly(w) ? slope : erg).push(workoutCard(w, i)));
   $('#workout-list').innerHTML = erg.join('') || '<p class="muted empty-list">No ERG workouts yet.</p>';
   $('#slope-list').innerHTML = slope.join('') || '<p class="muted empty-list">No slope sessions yet.</p>';
+  $('#mine-list').innerHTML = mine.join('') || '<p class="muted empty-list mine-empty">Nothing here yet. Build one with New workout, or open any workout and use Edit a copy.</p>';
+  $('#kind-btn-mine').classList.toggle('hidden', !signedIn());
   setWoKind(app.woKind);
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
@@ -411,14 +414,14 @@ function renderLibrary() {
 /** Workouts tab: ERG and slope sessions share one list area, switched by a pill toggle. */
 function setWoKind(k, animate = false) {
   const prev = app.woKind;
-  app.woKind = k === 'slope' ? 'slope' : 'erg';
-  ls.set('woKind', app.woKind);
+  app.woKind = k === 'slope' ? 'slope' : k === 'mine' && signedIn() ? 'mine' : 'erg';
+  if (k !== 'mine' || app.woKind === 'mine') ls.set('woKind', app.woKind); // signed out: keep "mine" for next sign-in
   $$('#wo-kind button').forEach((b) => { const on = b.dataset.kind === app.woKind; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  $('#kind-erg').classList.toggle('hidden', app.woKind !== 'erg');
-  $('#kind-slope').classList.toggle('hidden', app.woKind !== 'slope');
+  for (const x of WO_KINDS) $(`#kind-${x}`).classList.toggle('hidden', app.woKind !== x);
   placeInk($('#wo-kind'), $('#wo-kind button.on'));
-  if (animate && prev !== app.woKind) slideIn($(`#kind-${app.woKind}`), app.woKind === 'slope' ? 1 : -1);
+  if (animate && prev !== app.woKind) slideIn($(`#kind-${app.woKind}`), WO_KINDS.indexOf(app.woKind) > WO_KINDS.indexOf(prev) ? 1 : -1);
 }
+const WO_KINDS = ['erg', 'slope', 'mine'];
 
 // ------------------------------------------------------------------ sliding indicators (ERG/Slope pill, tab underline)
 /** Moves a container's indicator (CSS ::before/::after reading --ink-x/--ink-w) under the active element.
@@ -1168,6 +1171,9 @@ function syncClient() {
   if (authEnabled() && authSession()) return new GitHubSync({ token: authToken, repo });
   return cfg.token ? new GitHubSync({ token: cfg.token, repo }) : null;
 }
+const signedIn = () => !!syncClient();
+/** Lost access to rodillo-data: the builder can't save anymore, close it (unsaved edits are dropped). */
+function closeBuilderNow() { if (builderOpen()) $('#builder').classList.add('hidden'); }
 const syncHint = () => (authEnabled() ? 'Sign in with GitHub' : 'Add your GitHub token');
 
 async function syncRide(ride) {
@@ -1435,7 +1441,7 @@ document.addEventListener('keydown', (e) => {
 function focusables() {
   const list = [];
   if (app.tab === 'workouts') {
-    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button'), $('#btn-new-wo'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
+    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button:not(.hidden)'), ...(app.woKind === 'mine' ? [$('#btn-new-wo'), ...$$('#mine-list .wo')] : $$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo')));
   }
   return list;
 }
@@ -2139,14 +2145,14 @@ $('#devpop-close').onclick = () => setDevPop(false);
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #modal')) setDevPop(false); });
 setWoKind(app.woKind);
 initBuilder({
-  esc, ask, placeInk, profileSvg, woMeta, zoneHex, gradeHex, plannedOn,
+  esc, ask, placeInk, profileSvg, woMeta, zoneHex, gradeHex, plannedOn, signedIn,
   ftp: () => app.settings.ftp,
   maxMinutes: () => app.plan?.maxMinutes || 0,
   onSave: saveMine,
   onDelete: deleteMine,
   onRide: (id) => { const w = app.library.find((x) => x.id === id); if (w) startWorkout(w); },
 });
-$('#btn-new-wo').onclick = () => { setDevPop(false); openBuilder(null, { kind: app.woKind }); };
+$('#btn-new-wo').onclick = () => { setDevPop(false); if (signedIn()) openBuilder(null); };
 if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#tabs')); }
 placeInk($('#tabs'), $('#tabs button.active'));
 $$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind, true); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
@@ -2183,7 +2189,7 @@ $('#btn-token').onclick = async () => {
   const token = $('#set-token').value.trim();
   const repo = $('#set-repo').value.trim() || DEFAULT_REPO;
   const st = $('#token-status');
-  if (!token) { ls.set('sync', { repo }); st.textContent = 'Sync turned off'; return; }
+  if (!token) { ls.set('sync', { repo }); st.textContent = 'Sync turned off'; closeBuilderNow(); applyLibrary(); return; }
   st.textContent = 'Testing...';
   try {
     await new GitHubSync({ token, repo }).test();
@@ -2247,7 +2253,7 @@ function renderSignIn(msg = '') {
     ? `<span>Signed in as <b>${esc(s.login || 'GitHub user')}</b></span> <button class="ghost small" id="btn-gh-out">Sign out</button>${msg ? ` <span class="muted">${esc(msg)}</span>` : ''}`
     : `<button class="primary small" id="btn-gh-in">Sign in with GitHub</button> <span class="muted">${esc(msg || 'Once per browser, about twice a year.')}</span>`;
   if ($('#btn-gh-in')) $('#btn-gh-in').onclick = startSignIn;
-  if ($('#btn-gh-out')) $('#btn-gh-out').onclick = () => { signOut(); renderSignIn('Signed out on this browser'); renderHero(); };
+  if ($('#btn-gh-out')) $('#btn-gh-out').onclick = () => { signOut(); renderSignIn('Signed out on this browser'); renderHero(); closeBuilderNow(); applyLibrary(); };
   $('#token-label').textContent = s ? 'Or use a token (not needed while signed in)' : 'Or paste a token instead';
 }
 // ------------------------------------------------------------------ theme (light default, dark optional; index.html sets it before first paint)

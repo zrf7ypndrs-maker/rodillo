@@ -76,6 +76,7 @@ export const builderOpen = () => !!st && !$('#builder').classList.contains('hidd
 
 /** w: workout to edit (null = new). mine: true when it's one of Agustín's (edit in place), else a copy is made. */
 export function openBuilder(w = null, { mine = false, kind = 'erg' } = {}) {
+  if (!D.signedIn()) return; // the builder saves to the private repo: signed in only
   let work;
   if (!w) work = { id: null, name: '', description: '', tags: [], steps: TEMPLATE[kind]() };
   else if (mine) work = clone(stripUi(w));
@@ -351,7 +352,10 @@ async function save(ride) {
   st.w.id = w.id;
   st.snap = JSON.stringify(st.w);
   st.isNew = false; st.mine = true;
-  await D.onSave(w);
+  const btns = $$('#builder .b-foot button');
+  btns.forEach((x) => (x.disabled = true));
+  $('#b-save').textContent = 'Saving...';
+  try { await D.onSave(w); } finally { btns.forEach((x) => (x.disabled = false)); $('#b-save').textContent = 'Save'; }
   $('#builder').classList.add('hidden');
   st = null;
   if (ride) D.onRide(w.id);

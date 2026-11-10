@@ -76,12 +76,10 @@
 
     <div class="tab-body">
       <div id="tab-workouts" class="tab active">
-        <div class="wo-head">
-          <div class="wo-kind seg-tg" id="wo-kind" role="tablist" aria-label="Workout type">
-            <button data-kind="erg" role="tab">ERG</button>
-            <button data-kind="slope" role="tab">Slope</button>
-          </div>
-          <button class="ghost small" id="btn-new-wo">+ New workout</button>
+        <div class="wo-kind seg-tg" id="wo-kind" role="tablist" aria-label="Workout type">
+          <button data-kind="erg" role="tab">ERG</button>
+          <button data-kind="slope" role="tab">Slope</button>
+          <button data-kind="mine" role="tab" class="hidden" id="kind-btn-mine">Mine</button>
         </div>
         <div id="kind-erg" class="wo-pane">
           <p class="muted list-sub">The trainer holds the power target. Shifters nudge effort &plusmn;1%.</p>
@@ -90,6 +88,10 @@
         <div id="kind-slope" class="wo-pane">
           <p class="muted list-sub">Grade profiles you ride with your gears. Up/down shifts the whole profile by 1% if you want it harder or easier.</p>
           <div id="slope-list" class="workout-list"></div>
+        </div>
+        <div id="kind-mine" class="wo-pane hidden">
+          <div class="mine-head"><p class="muted list-sub">Workouts you built. Saved in your private rodillo-data repo, on every device you're signed in on.</p><button class="ghost small" id="btn-new-wo">+ New workout</button></div>
+          <div id="mine-list" class="workout-list"></div>
         </div>
         <div class="import-row">
           <label class="ghost small file-btn">Import .zwo / .json<input type="file" id="import-workout" accept=".zwo,.json,.xml" hidden></label>
