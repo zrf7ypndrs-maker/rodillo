@@ -313,8 +313,19 @@ table.ints { margin-bottom: 14px; }
 .settings-form input, .settings-form select { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; width: 100%; }
 .settings-form input:focus, .settings-form select:focus { border-color: var(--ink); outline: none; }
 .settings-form select.wide-select { grid-column: 1 / -1; }
+.settings-form .help a { color: inherit; }
 .settings-form .help { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); margin-top: -4px; }
 .settings-form .section { grid-column: 1 / -1; font-size: 15px; color: var(--ink); margin-top: 14px; font-weight: 700; padding-top: 12px; border-top: 1px solid var(--rule); }
+/* settings: one tab per section (same sliding underline as the home tabs); scrolls sideways if it doesn't fit */
+.set-tabs { gap: 18px; overflow-x: auto; scrollbar-width: none; margin-bottom: 18px; }
+.set-tabs::-webkit-scrollbar { display: none; }
+.set-tabs button { font-size: 15px; white-space: nowrap; flex: none; }
+.stab-pane { margin-bottom: 0; }
+.stab-pane .help:last-child { margin-bottom: 0; }
+.pane-intro { grid-column: 1 / -1; font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.ctl-style { font-size: 13.5px; margin: 0 0 10px; }
+.keys-group td { padding-top: 14px; font-weight: 700; font-size: 14px; color: var(--ink); }
+.keys tr.keys-group:first-of-type td, .keys tr:nth-child(2).keys-group td { padding-top: 8px; }
 .keys { width: 100%; border-collapse: collapse; font-size: 13px; }
 .keys td, .keys th { padding: 6px 4px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
 .keys th { color: var(--muted); font-weight: 500; }
@@ -726,7 +737,10 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .ride-table { overflow-x: auto; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }
   .settings-form { grid-template-columns: 1fr 110px; }
-  .keys { font-size: 12px; }
+  .set-tabs { gap: 15px; }
+  /* no keyboard on the phone */
+  .keys th:nth-child(3), .keys td:nth-child(3) { display: none; }
+  .keys { font-size: 13px; }
   #summary { padding: calc(14px + env(safe-area-inset-top)) 12px 30px; }
   .summary-card { padding: 18px; }
   .stats { grid-template-columns: repeat(2, 1fr); }

@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611092202';
-import { HeartRate } from './ble/hr.js?v=202611092202';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611092202';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611092202';
-import { log, logMsg } from './ble/base.js?v=202611092202';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611092202';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611092202';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611092202';
-import { encodeActivity } from './fit.js?v=202611092202';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611092202';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611092202';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611092202';
-import { ls, rides } from './store.js?v=202611092202';
+import { Trainer } from './ble/trainer.js?v=202611100003';
+import { HeartRate } from './ble/hr.js?v=202611100003';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611100003';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611100003';
+import { log, logMsg } from './ble/base.js?v=202611100003';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611100003';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611100003';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611100003';
+import { encodeActivity } from './fit.js?v=202611100003';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611100003';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611100003';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611100003';
+import { ls, rides } from './store.js?v=202611100003';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -466,8 +466,8 @@ function renderHero() {
   const w = today.workout;
   const date = new Date(today.key + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const src = !app.plan ? '' : !syncClient()
-    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to get the coach\'s daily changes on this device.</p>'
-    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings>Settings</a>.</p>` : '';
+    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings="sync">Settings</a> to get the coach\'s daily changes on this device.</p>'
+    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
   const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free">${primary ? 'Start free ride' : 'Free ride'}${BIKE_ICO}</button>`;
   let body;
   if (w) {
@@ -840,7 +840,7 @@ async function renderTraining() {
   const at = ls.get('remoteIndexAt');
   $('#sync-status').innerHTML = cfg.token
     ? `Synced with <b>${esc(cfg.repo || DEFAULT_REPO)}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
-    : 'History is only on this Mac. Add your GitHub token in <a href="#" data-open-settings>Settings</a> to sync it to rodillo-data so your coach can see it.';
+    : 'History is only on this Mac. Add your GitHub token in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.';
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
     card(Math.round(today.ctl), 'Fitness (CTL)', '', LOAD_INFO.ctl), card(Math.round(today.atl), 'Fatigue (ATL)', '', LOAD_INFO.atl),
@@ -1753,30 +1753,35 @@ function toast(msg) {
 }
 
 // ------------------------------------------------------------------ settings
-const FIELDS = [
-  ['section', 'Rider'],
-  ['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1], ['bikeKg', 'Bike weight (kg)', 0.1],
-  ['section', 'Road feel'],
-  ['gradeScale', 'Grade realism (%)', 5, 100, 'Zwift defaults to 50%. 100% = real climbs. Descents are always 100%.'],
-  ['cda', 'CdA (m²)', 0.01, 1, 'Aero drag. 0.32 hoods, 0.25 drops.'], ['crr', 'Rolling resistance', 0.001],
-  ['section', 'Trainer (learned automatically)'],
-  ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
-  ['maxSendGrade', 'Max grade sent to trainer (%)', 1, 100],
-  ['section', 'Ride'],
-  ['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.'],
-];
+// One tab per section. Number fields: [key, label, step, mult, help, offset].
+const SET_TABS = {
+  rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1], ['bikeKg', 'Bike weight (kg)', 0.1]],
+  ride: [['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.']],
+  gearing: [],
+  road: [
+    ['gradeScale', 'Grade realism (%)', 5, 100, 'Zwift defaults to 50%. 100% = real climbs. Descents are always 100%.'],
+    ['cda', 'CdA (m²)', 0.01, 1, 'Aero drag. 0.32 hoods, 0.25 drops.'], ['crr', 'Rolling resistance', 0.001],
+  ],
+  trainer: [
+    ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
+    ['maxSendGrade', 'Max grade sent to trainer (%)', 1, 100],
+  ],
+};
+const SET_TAB_IDS = ['rider', 'ride', 'gearing', 'road', 'trainer', 'sync'];
+const numField = ([k, label, step, mult = 1, help, offset = 0]) =>
+  `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`;
 function renderSettings() {
   const f = $('#settings-form');
-  f.innerHTML = FIELDS.map(([k, label, step, mult = 1, help, offset = 0]) => k === 'section'
-    ? `<div class="section">${label}</div>`
-    : `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`).join('') +
-    `<div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>
-     <div class="section">Gearing</div>
-     <label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
-     <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
-     <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>
-     <label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
-     <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`;
+  const extra = {
+    ride: `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
+      <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`,
+    gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
+      <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
+      <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>`,
+    trainer: `<div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>`,
+  };
+  f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
+    `<div class="settings-form stab-pane hidden" data-pane="${id}">${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; ls.set('settings', app.settings); renderSettings(); };
   $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
@@ -1789,6 +1794,46 @@ function renderSettings() {
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
     ls.set('settings', app.settings);
   };
+  setSetTab(ls.get('setTab', 'rider'));
+}
+/** Shows one settings tab; remembered per browser. */
+function setSetTab(id, animate = false) {
+  if (!SET_TAB_IDS.includes(id)) id = 'rider';
+  const prev = $('#set-tabs button.active')?.dataset.stab;
+  $$('#set-tabs button').forEach((b) => { const on = b.dataset.stab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+  $$('#settings .stab-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== id));
+  const btn = $(`#set-tabs [data-stab="${id}"]`);
+  placeInk($('#set-tabs'), btn);
+  btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (animate && prev && prev !== id) slideIn($(`#settings [data-pane="${id}"]`), SET_TAB_IDS.indexOf(id) > SET_TAB_IDS.indexOf(prev) ? 1 : -1);
+  ls.set('setTab', id);
+}
+
+// ------------------------------------------------------------------ controls (own panel, top-bar gamepad)
+function renderControls() {
+  const sram = (app.settings.shiftStyle || 'sram') === 'sram';
+  const rows = [
+    ['Riding'],
+    ['Start / pause', 'A', 'Space'],
+    ['End ride (press twice)', 'B', 'Esc'],
+    ['Skip interval', 'Y', 'S'],
+    ['Lap', 'Z', 'L'],
+    ['Slope'],
+    ['Rear: easier / harder', sram ? 'Left side / right side' : 'Right shift-down / shift-up', '&larr; / &rarr;'],
+    ['Front shift (2x)', sram ? 'Left + right together' : 'Left shift-up / shift-down', 'F'],
+    ['Grade &plusmn;1%', 'D-pad up / down', '&uarr; / &darr;'],
+    ['ERG'],
+    ['Effort &plusmn;1% (hold to repeat)', 'Left shifters &minus; / right shifters + (also D-pad)', '&larr; / &rarr; or &darr; / &uarr;'],
+    ['ERG off/on for this interval', 'Left power-up', 'E'],
+    ['Menus'],
+    ['Move / select / back', 'D-pad / A / B', '&uarr;&darr; / Enter / Esc'],
+    ['Switch home tabs', 'D-pad left / right', '&larr; / &rarr;'],
+  ];
+  $('#controls-body').innerHTML =
+    `<p class="muted ctl-style">Shifting: ${sram ? 'SRAM' : 'Shimano'} style. <a href="#" data-open-settings="gearing">Change</a></p>
+     <table class="keys"><tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>${rows.map(([a, b, c]) => b === undefined
+      ? `<tr class="keys-group"><td colspan="3">${a}</td></tr>`
+      : `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`).join('')}</table>`;
 }
 
 // ------------------------------------------------------------------ wiring
@@ -1803,14 +1848,32 @@ if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#t
 placeInk($('#tabs'), $('#tabs button.active'));
 $$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind, true); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
 // "Settings" links in notices open the panel (the top-bar button is just a gear)
-document.addEventListener('click', (e) => { const a = e.target.closest('[data-open-settings]'); if (a) { e.preventDefault(); $('#btn-settings').click(); } });
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-open-settings]');
+  if (!a) return;
+  e.preventDefault();
+  if (a.dataset.openSettings) ls.set('setTab', a.dataset.openSettings);
+  $$('.panel').forEach((p) => p.classList.add('hidden'));
+  $('#btn-settings').click();
+});
+$$('#set-tabs button').forEach((b) => (b.onclick = () => setSetTab(b.dataset.stab, true)));
+if (inkObserver) inkObserver.observe($('#set-tabs'));
+$('#btn-controls').onclick = () => {
+  setDevPop(false);
+  $('#settings').classList.add('hidden');
+  renderControls();
+  $('#controls').classList.remove('hidden');
+};
 $('#btn-settings').onclick = () => {
   renderSettings();
   const cfg = ls.get('sync', {});
   $('#set-token').value = cfg.token || '';
   $('#set-repo').value = cfg.repo || DEFAULT_REPO;
   $('#token-status').textContent = cfg.token ? 'Token saved' : '';
+  setDevPop(false);
+  $('#controls').classList.add('hidden');
   $('#settings').classList.remove('hidden');
+  setSetTab(ls.get('setTab', 'rider'));
 };
 $('#btn-token').onclick = async () => {
   const token = $('#set-token').value.trim();
