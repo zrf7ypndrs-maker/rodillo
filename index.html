@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611102138">
+<link rel="stylesheet" href="css/app.css?v=202611102147">
 </head>
 <body>
 <div id="app">
@@ -76,9 +76,12 @@
 
     <div class="tab-body">
       <div id="tab-workouts" class="tab active">
-        <div class="wo-kind seg-tg" id="wo-kind" role="tablist" aria-label="Workout type">
-          <button data-kind="erg" role="tab">ERG</button>
-          <button data-kind="slope" role="tab">Slope</button>
+        <div class="wo-head">
+          <div class="wo-kind seg-tg" id="wo-kind" role="tablist" aria-label="Workout type">
+            <button data-kind="erg" role="tab">ERG</button>
+            <button data-kind="slope" role="tab">Slope</button>
+          </div>
+          <button class="ghost small" id="btn-new-wo">+ New workout</button>
         </div>
         <div id="kind-erg" class="wo-pane">
           <p class="muted list-sub">The trainer holds the power target. Shifters nudge effort &plusmn;1%.</p>
@@ -258,6 +261,13 @@
     <div id="controls-body"></div>
   </aside>
 
+  <!-- workout builder (js/builder.js) -->
+  <aside id="builder" class="panel builder hidden" aria-labelledby="builder-title">
+    <div class="panel-head"><h3 id="builder-title">New workout</h3><button class="ghost small" id="b-close">Close</button></div>
+    <div id="builder-body"></div>
+    <div class="b-foot"><button class="ghost small danger" id="b-delete">Delete</button><span class="b-foot-r"><button id="b-save">Save</button><button class="primary" id="b-ride">Save and ride</button></span></div>
+  </aside>
+
   <aside id="log" class="panel hidden">
     <div class="panel-head"><h3>Log</h3><div><button class="ghost small" id="btn-diag">Device details</button> <button class="ghost small" data-close>Close</button></div></div>
     <pre id="log-body"></pre>
@@ -271,6 +281,6 @@
     </div>
   </div>
 </div>
-<script type="module" src="js/app.js?v=202611102138"></script>
+<script type="module" src="js/app.js?v=202611102147"></script>
 </body>
 </html>

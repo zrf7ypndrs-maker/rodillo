@@ -1,18 +1,20 @@
-import { Trainer } from './ble/trainer.js?v=202611102138';
-import { HeartRate } from './ble/hr.js?v=202611102138';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611102138';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611102138';
-import { log, logMsg } from './ble/base.js?v=202611102138';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102138';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102138';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102138';
-import { encodeActivity } from './fit.js?v=202611102138';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102138';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102138';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102138';
-import { reconcile, applyPending } from './settings-sync.js?v=202611102138';
-import { ls, rides } from './store.js?v=202611102138';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102138';
+import { Trainer } from './ble/trainer.js?v=202611102147';
+import { HeartRate } from './ble/hr.js?v=202611102147';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
+import { log, logMsg } from './ble/base.js?v=202611102147';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102147';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102147';
+import { encodeActivity } from './fit.js?v=202611102147';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
+import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
+import { ls, rides } from './store.js?v=202611102147';
+import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
+import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -198,6 +200,7 @@ async function loadLibrary() {
   try { app.basePlan = await (await fetch('plans/current.json', { cache: 'no-cache' })).json(); } catch { app.basePlan = null; }
   app.coachPlan = ls.get('coachPlan', null);
   app.coachWorkouts = ls.get('coachWorkouts', []);
+  app.mineDoc = ls.get('mineDoc', null);
   applyLibrary();
   await loadCoachData();
 }
@@ -207,15 +210,18 @@ async function loadCoachData() {
   const gh = syncClient();
   if (!gh) return;
   try {
-    const [p, w] = await Promise.all([gh.getJson(PLAN_PATH), gh.getJson(WORKOUTS_PATH)]);
+    const [p, w, m] = await Promise.all([gh.getJson(PLAN_PATH), gh.getJson(WORKOUTS_PATH), gh.getJson(MINE_PATH)]);
     app.coachPlan = p?.json || null;
     app.coachWorkouts = w?.json?.workouts || [];
+    app.mineDoc = m?.json || emptyMine();
+    ls.set('mineDoc', app.mineDoc);
     reconcileSettings();
     await flushSettings(gh);
     ls.set('coachPlan', app.coachPlan);
     ls.set('coachWorkouts', app.coachWorkouts);
     app.coachError = null;
     applyLibrary();
+    flushMine(gh);
   } catch (e) {
     app.coachError = e.message;
     logMsg('coach', `could not load coach data: ${e.message}`);
@@ -281,12 +287,52 @@ async function declineTestFtp(rideId) {
   } catch (e) { logMsg('coach', `could not record kept FTP: ${e.message}`); }
 }
 
+// ------------------------------------------------------------------ my workouts (built in the app)
+// Stored in rodillo-data workouts/mine.json (see js/mine.js). Changes are shown at once and queued in
+// localStorage until they're written, so the builder works offline or signed out.
+async function saveMine(w) { queueMine(w.id, w); }
+async function deleteMine(id) { queueMine(id, null); }
+function queueMine(id, w) {
+  const pend = ls.get('minePending', {});
+  pend[id] = { w, at: new Date().toISOString() };
+  ls.set('minePending', pend);
+  applyLibrary();
+  if (!syncClient()) toast('Saved on this device. Sign in under Settings, Sync to get it on your other devices.');
+  flushMine();
+}
+let mineFlushing = null;
+async function flushMine(gh = syncClient()) {
+  if (mineFlushing) await mineFlushing.catch(() => {});
+  const pend = ls.get('minePending', {});
+  if (!gh || !Object.keys(pend).length) return;
+  mineFlushing = (async () => {
+    let handled = [];
+    const names = Object.entries(pend).map(([id, x]) => (x.w ? x.w.name : `delete ${id}`));
+    app.mineDoc = await gh.updateJson(MINE_PATH, (doc) => { handled = applyMinePending(doc, pend); }, `My workouts: ${names.join(', ')}`, emptyMine);
+    ls.set('mineDoc', app.mineDoc);
+    const left = ls.get('minePending', {});
+    for (const id of handled) if (left[id]?.at === pend[id].at) delete left[id];
+    ls.set('minePending', left);
+    applyLibrary();
+  })();
+  try { await mineFlushing; }
+  catch (e) { logMsg('coach', `my workouts not saved to rodillo-data yet: ${e.message}`); }
+  finally { mineFlushing = null; }
+}
+/** Dates from today on where the plan has this workout. */
+function plannedOn(id) {
+  const today = dkey(new Date());
+  return Object.entries(app.plan?.days || {}).filter(([d, x]) => d >= today && x === id).map(([d]) => new Date(`${d}T12:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+}
+
 function applyLibrary() {
   const custom = new Map((app.coachWorkouts || []).map((w) => [w.id, { ...w, _source: 'coach' }]));
   const lib = (app.baseLibrary || []).map((w) => custom.get(w.id) || w);
   for (const [id, w] of custom) if (!lib.some((x) => x.id === id)) lib.push(w);
   for (const w of ls.get('imported', [])) lib.push(w);
-  app.library = lib;
+  const mine = mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  app.library = [...mine, ...lib]; // yours first, newest edit on top
   app.plan = app.coachPlan || app.basePlan || null;
   reconcileSettings();
   renderLibrary();
@@ -328,13 +374,13 @@ const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday'
 function workoutCard(w, i) {
   return `
     <div class="wo" data-i="${i}" tabindex="0">
-      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
+      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : w._source === 'mine' ? ' <span class="tag mine">mine</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
       <div class="wo-more"><div class="wo-more-in">
         <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="wo-desc">${esc(w.description)}</div>
         <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
-        <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
+        <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>`}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
       </div></div>
     </div>`;
 }
@@ -348,6 +394,8 @@ function renderLibrary() {
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
+    if (e.target.dataset.edit) return openBuilder(app.library[+e.target.dataset.edit], { mine: true });
+    if (e.target.dataset.copy) return openBuilder(app.library[+e.target.dataset.copy]);
     if (e.target.closest('.wo-prof')) return; // the open chart has its own hover/tap readout
     // One open row at a time (across the ERG and slope lists).
     const open = !c.classList.contains('expanded');
@@ -1243,6 +1291,7 @@ function showSummary(ride) {
 // ------------------------------------------------------------------ actions (controller + keyboard)
 function action(a) {
   if (modalOpen()) return modalAction(a);
+  if (builderOpen()) { if (a === 'back') closeBuilder(); return; } // the builder is keyboard/touch only
   const s = app.session;
   if (app.screen === 'ride' && s) {
     switch (a) {
@@ -1371,7 +1420,8 @@ function onButton(b, dev) {
 function onRelease(b) { clearTimeout(holdTimers[b]); delete holdTimers[b]; }
 
 document.addEventListener('keydown', (e) => {
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
+  if (builderOpen() && e.key !== 'Escape') return; // Space/Enter press the builder's own buttons
   const map = { ArrowLeft: app.screen === 'ride' ? 'easier' : 'left', ArrowRight: app.screen === 'ride' ? 'harder' : 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'select', Enter: 'select', Escape: 'back', s: 'skip', l: 'lap', e: 'ergToggle', '[': 'easier', ']': 'harder', f: 'front' };
   if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
     app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
@@ -1385,7 +1435,7 @@ document.addEventListener('keydown', (e) => {
 function focusables() {
   const list = [];
   if (app.tab === 'workouts') {
-    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
+    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button'), $('#btn-new-wo'), ...$$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo'));
   }
   return list;
 }
@@ -2088,6 +2138,15 @@ $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #modal')) setDevPop(false); });
 setWoKind(app.woKind);
+initBuilder({
+  esc, ask, placeInk, profileSvg, woMeta, zoneHex, gradeHex, plannedOn,
+  ftp: () => app.settings.ftp,
+  maxMinutes: () => app.plan?.maxMinutes || 0,
+  onSave: saveMine,
+  onDelete: deleteMine,
+  onRide: (id) => { const w = app.library.find((x) => x.id === id); if (w) startWorkout(w); },
+});
+$('#btn-new-wo').onclick = () => { setDevPop(false); openBuilder(null, { kind: app.woKind }); };
 if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#tabs')); }
 placeInk($('#tabs'), $('#tabs button.active'));
 $$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind, true); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
@@ -2146,7 +2205,7 @@ $('#imp-file').onchange = async (e) => {
   if (!gh) { tell(`${syncHint()} above first: imported rides go to rodillo-data.`, 'Not connected'); return; }
   btn.classList.add('busy');
   try {
-    const { scanFiles, buildImport, IMPORT_DAYS } = await import('./importer.js?v=202611102138');
+    const { scanFiles, buildImport, IMPORT_DAYS } = await import('./importer.js?v=202611102147');
     const since = Date.now() - IMPORT_DAYS * 864e5;
     st.textContent = 'Opening...';
     const { found, skip } = await scanFiles(files, { since, onProgress: (a, b) => { st.textContent = `Reading ${a} of ${b} activities...`; } });

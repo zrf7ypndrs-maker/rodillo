@@ -3,7 +3,7 @@
 // Rodillo ride document (same summary fields as rides recorded in the app), so the
 // coach's load numbers (CTL / ATL / Form), power curve and time in zones have history.
 // Pure module (no DOM): runs in the browser and in Node (tests).
-import { buildRide, rideIdFor } from './stats.js?v=202611102138';
+import { buildRide, rideIdFor } from './stats.js?v=202611102147';
 
 export const IMPORT_DAYS = 183; // about 6 months: enough for CTL (42-day average) to settle
 const FIT_EPOCH = 631065600;

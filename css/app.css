@@ -710,6 +710,68 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   * { transition: none !important; }
 }
 
+/* ---------- workout builder (js/builder.js): a wide panel, live profile on top ---------- */
+.tag.mine { color: var(--ink); border-color: var(--ink); }
+.wo-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.wo-head .wo-kind { margin-bottom: 0; }
+.wo-head #btn-new-wo { margin-left: auto; }
+.panel.builder { width: 880px; padding-bottom: 0; display: flex; flex-direction: column; }
+.panel.builder .panel-head { margin-bottom: 10px; }
+.b-name { width: 100%; font-size: 22px; font-weight: 750; letter-spacing: -0.01em; background: transparent; border: none; border-bottom: 1.5px solid var(--rule); border-radius: 0; padding: 4px 0 6px; }
+.b-name:focus { outline: none; border-bottom-color: var(--ink); }
+.b-chart { position: sticky; top: -20px; z-index: 2; background: var(--sheet); margin: 0 -20px; padding: 14px 20px 10px; border-bottom: 1px solid var(--rule); }
+.b-chart .profile { height: 110px; background: repeating-linear-gradient(to top, transparent 0 calc(110px / 1.5 - 1px), var(--ftp-line) calc(110px / 1.5 - 1px) calc(110px / 1.5)); }
+.b-chart [data-i] { transition: opacity .15s; }
+.b-meta { display: flex; gap: 14px; align-items: baseline; margin-top: 6px; font-size: 13.5px; }
+.b-tot { font-family: var(--num); font-stretch: 68%; font-weight: 750; font-size: 17px; font-variant-numeric: tabular-nums; }
+.b-cap { color: var(--warn); }
+.b-steps { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 10px; }
+.b-empty { margin: 10px 0; }
+.b-in { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; min-width: 0; font-size: 14px; }
+.b-in:focus { border-color: var(--ink); outline: none; }
+.b-in.bad, .b-in.bad:focus { border-color: var(--bad); background: var(--bad-bg); }
+.b-step, .b-rep { border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); padding: 8px 8px 8px 10px; transition: border-color .12s, box-shadow .12s; }
+.b-step.sel, .b-rep.sel { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.b-line1 { display: flex; align-items: center; gap: 8px; }
+.b-line2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin: 6px 0 0 14px; }
+.b-line2 .b-in { font-size: 13px; padding: 4px 8px; background: transparent; border-color: transparent; border-bottom-color: var(--rule); border-radius: 0; }
+.b-line2 .b-in:focus { border-bottom-color: var(--ink); }
+.b-sw { width: 6px; align-self: stretch; min-height: 30px; border-radius: 3px; flex: none; }
+.b-type { width: 104px; flex: none; }
+.b-len { display: inline-flex; flex: none; }
+.b-dur { width: 70px; text-align: right; border-radius: 4px 0 0 4px; font-family: var(--num); font-stretch: 68%; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.b-unit { width: 48px; border-left: none; border-radius: 0 4px 4px 0; color: var(--muted); font-weight: 600; padding: 6px 0; }
+.b-unit:hover { color: var(--ink); border-color: var(--rule); }
+.b-tgt { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.b-n { width: 58px; text-align: right; font-family: var(--num); font-stretch: 68%; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.b-u { font-size: 13px; color: var(--muted); }
+.b-w { font-size: 13px; margin-left: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.b-cad { width: 66px; flex: none; text-align: right; }
+.b-acts { display: inline-flex; gap: 2px; flex: none; margin-left: auto; }
+.b-ico { padding: 6px; border: none; background: transparent; color: var(--muted); border-radius: 4px; line-height: 0; }
+.b-ico:hover { color: var(--ink); background: var(--sheet2); }
+.b-ico[data-act="del"]:hover { color: var(--bad); }
+.brep-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.b-rep-k { font-weight: 750; }
+.b-sum { font-family: var(--num); font-stretch: 68%; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.brep-body { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px 6px; padding-left: 10px; border-left: 2px solid var(--rule); }
+.brep-body .b-step { background: var(--paper); }
+.b-add-in { align-self: flex-start; }
+.b-add { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
+.b-add .b-kind { margin-bottom: 0; background: var(--paper); }
+.b-add-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.b-lab { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.b-desc { width: 100%; resize: vertical; font: inherit; font-size: 14px; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 8px; }
+.b-desc:focus { border-color: var(--ink); outline: none; }
+.b-problems { margin-top: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--bad-bg); color: var(--bad); font-size: 13.5px; }
+.b-foot { position: sticky; bottom: 0; margin: auto -20px 0; padding: 12px 20px; background: var(--sheet); border-top: 1px solid var(--rule); display: flex; align-items: center; gap: 8px; z-index: 2; }
+.b-foot-r { margin-left: auto; display: flex; gap: 8px; }
+#builder-body { padding-bottom: 18px; }
+@media (prefers-reduced-motion: no-preference) {
+  .b-flash { animation: b-flash .7s ease-out; }
+}
+@keyframes b-flash { from { background: var(--flash); } }
+
 /* =====================================================================
    PHONE (touch screens only, so desktop Chrome never changes).
    Keep this query identical to PHONE_MQ in js/app.js.
@@ -958,4 +1020,34 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .rp-btns { grid-area: btns; }
   .rp-btns button { padding: 9px 8px; }
   .rp-m.bad { animation: none; }
+}
+
+/* workout builder on the phone: each step is two rows (type, rpm, buttons / length, target); desktop untouched */
+@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  .wo-head .wo-kind { flex: 1; }
+  .wo-head #btn-new-wo { flex: none; padding: 7px 12px; }
+  .panel.builder { width: 100vw; padding-bottom: 0; }
+  .b-chart { top: calc(-14px - env(safe-area-inset-top)); margin: 0 -14px; padding: 10px 14px 8px; }
+  .b-chart .profile { height: 80px; background: repeating-linear-gradient(to top, transparent 0 calc(80px / 1.5 - 1px), var(--ftp-line) calc(80px / 1.5 - 1px) calc(80px / 1.5)); }
+  .b-step, .b-rep { padding: 8px 6px 8px 8px; }
+  .b-line1 { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; grid-template-areas: "sw type cad acts" "sw len tgt tgt"; gap: 8px; align-items: center; }
+  .b-sw { grid-area: sw; height: auto; align-self: stretch; }
+  .b-type { grid-area: type; width: 100%; }
+  .b-cad { grid-area: cad; width: 64px; }
+  .b-acts { grid-area: acts; margin-left: 0; }
+  .b-len { grid-area: len; }
+  .b-tgt { grid-area: tgt; flex-wrap: wrap; row-gap: 2px; }
+  .b-in, .b-desc, .b-name { font-size: 16px; } /* under 16px iOS zooms the page on focus */
+  .b-n, .b-dur { font-size: 17px; }
+  .b-n { width: 52px; }
+  .b-dur { width: 66px; }
+  .b-unit { width: 50px; }
+  .b-ico { padding: 6px; }
+  .b-line2 { grid-template-columns: 1fr 1fr; margin-left: 14px; }
+  .b-line2 .b-in { font-size: 16px; padding: 4px 2px; }
+  .brep-head { flex-wrap: wrap; row-gap: 6px; }
+  .brep-head .b-acts { margin-left: auto; }
+  .brep-body { margin-left: 2px; padding-left: 6px; }
+  .b-foot { margin: auto -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+  .b-foot button { padding: 9px 14px; }
 }

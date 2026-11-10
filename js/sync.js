@@ -76,7 +76,7 @@ export class GitHubSync {
   async putJson(path, obj, message, sha) {
     return this.api(`/contents/${path}`, {
       method: 'PUT',
-      body: JSON.stringify({ message, content: b64(JSON.stringify(obj, null, path.endsWith('index.json') || path.startsWith('coach/') ? 2 : 0)), branch: this.branch, ...(sha ? { sha } : {}) }),
+      body: JSON.stringify({ message, content: b64(JSON.stringify(obj, null, path.endsWith('index.json') || path.startsWith('coach/') || path.startsWith('workouts/') ? 2 : 0)), branch: this.branch, ...(sha ? { sha } : {}) }),
     });
   }
 
@@ -106,6 +106,25 @@ export class GitHubSync {
       }
     }
     throw new Error(`Could not update ${PLAN_PATH} after 3 attempts`);
+  }
+
+  /**
+   * Read-modify-write any JSON file, creating it from empty() when it doesn't exist yet.
+   * fn(doc) edits doc in place. Returns the doc as written.
+   */
+  async updateJson(path, fn, message, empty = () => ({})) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const cur = await this.getJson(path);
+      const doc = cur?.json || empty();
+      fn(doc);
+      try {
+        await this.putJson(path, doc, message, cur?.sha);
+        return doc;
+      } catch (e) {
+        if (e.status !== 409 && e.status !== 422) throw e;
+      }
+    }
+    throw new Error(`Could not update ${path} after 3 attempts`);
   }
 
   /** Write the full ride file, then upsert its summary into index.json. */

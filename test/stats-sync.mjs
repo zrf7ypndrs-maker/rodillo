@@ -169,4 +169,48 @@ ok(`GitHub sync: ride file + index upsert (${gh.calls.length} API calls)`);
   ok('power zones (colors and time-in-zone share one table)');
 }
 
+// ---- my workouts (builder): merge across devices, parsing, validation
+{
+  const { applyMinePending, mineView, emptyMine, parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } = await import('../js/mine.js');
+  const a = { id: 'mine-a', name: 'A', steps: [{ dur: 60, power: 0.5 }] };
+  // Mac saves A
+  const doc = emptyMine();
+  assert.deepEqual(applyMinePending(doc, { 'mine-a': { w: a, at: '2026-11-10T10:00:00Z' } }), ['mine-a']);
+  assert.equal(doc.workouts[0].updatedAt, '2026-11-10T10:00:00Z');
+  // phone edited A later, Mac's older offline edit arrives after: phone's wins
+  applyMinePending(doc, { 'mine-a': { w: { ...a, name: 'A phone' }, at: '2026-11-10T12:00:00Z' } });
+  applyMinePending(doc, { 'mine-a': { w: { ...a, name: 'A mac' }, at: '2026-11-10T11:00:00Z' } });
+  assert.equal(doc.workouts[0].name, 'A phone');
+  // delete is a tombstone; an older edit can't bring it back, a newer one can
+  applyMinePending(doc, { 'mine-a': { w: null, at: '2026-11-10T13:00:00Z' } });
+  assert.equal(doc.workouts.length, 0); assert.ok(doc.deleted['mine-a']);
+  applyMinePending(doc, { 'mine-a': { w: a, at: '2026-11-10T12:30:00Z' } });
+  assert.equal(doc.workouts.length, 0);
+  applyMinePending(doc, { 'mine-a': { w: a, at: '2026-11-10T14:00:00Z' } });
+  assert.equal(doc.workouts.length, 1); assert.ok(!doc.deleted['mine-a']);
+  // view = file + unsent local changes, file untouched
+  const v = mineView(doc, { 'mine-b': { w: { ...a, id: 'mine-b' }, at: '2026-11-10T15:00:00Z' } });
+  assert.deepEqual(v.map((w) => w.id).sort(), ['mine-a', 'mine-b']); assert.equal(doc.workouts.length, 1);
+  assert.deepEqual(mineView(null), []);
+  // durations
+  assert.deepEqual(['4:30', '90', '1:02:00', '45s', '4.5', '0:61', 'x', ''].map(parseDur), [270, 5400, 3720, 45, 270, NaN, NaN, NaN]);
+  assert.deepEqual([270, 3720, 5].map(fmtDur), ['4:30', '1:02:00', '0:05']);
+  // validation + cleanup: the saved workout plays in the engine
+  { const pr = workoutProblems({ name: '', steps: [] }); assert.equal(pr.length, 2); assert.equal(pr[0], 'Give it a name.'); }
+  assert.ok(workoutProblems({ name: 'x', steps: [{ dur: 2, power: 0.5 }] })[0].includes('duration'));
+  assert.ok(workoutProblems({ name: 'x', steps: [{ dur: 60, power: 0.5, cadence: 'fast' }] })[0].includes('cadence'));
+  const built = cleanWorkout({ id: newMineId('Over-unders ñandú', 0), name: ' Over-unders ', description: '', tags: [], steps: [
+    { dur: 600, from: 0.45, to: 0.7, label: 'Warm-up', text: '' },
+    { repeat: 3, steps: [{ dur: 120, power: 0.95, cadence: '90' }, { dist: 1500, grade: 6, cadence: '80 - 90' }] },
+    { dur: 300, free: true },
+  ] });
+  assert.equal(built.id, 'mine-over-unders-nandu-0');
+  assert.equal(built.name, 'Over-unders');
+  assert.deepEqual(built.steps[1].steps, [{ dur: 120, power: 0.95, cadence: 90 }, { dist: 1500, grade: 6, cadence: '80-90' }]);
+  assert.deepEqual(workoutProblems(built), []);
+  const segs = flatten(built);
+  assert.equal(segs.length, 8); assert.equal(segs[2].kind, 'sim'); assert.equal(segs[2].cad.lo, 80); assert.ok(segs[7].free);
+  ok('my workouts: newest change wins across devices, tombstones, parsing, validation');
+}
+
 console.log(`\n${n} stats/sync tests passed`);

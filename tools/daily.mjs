@@ -27,6 +27,9 @@ const idx = readJson(path.join(root, 'workouts', 'index.json'));
 const library = new Map(idx.workouts.map((f) => { const w = readJson(path.join(root, 'workouts', f)); return [w.id, w]; }));
 const coachW = readJson(path.join(dir, 'coach', 'workouts.json'), { version: 1, workouts: [] });
 for (const w of coachW.workouts || []) library.set(w.id, { ...w, _coach: true });
+// Agustín's own workouts from the in-app builder (rodillo-data workouts/mine.json); the plan may use their ids
+const mineW = readJson(path.join(dir, 'workouts', 'mine.json'), { workouts: [] });
+for (const w of mineW.workouts || []) if (!library.has(w.id)) library.set(w.id, { ...w, _mine: true });
 const plan = readJson(path.join(dir, 'coach', 'plan.json')) || readJson(path.join(root, 'plans', 'current.json'));
 
 function describe(w) {
