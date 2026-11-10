@@ -1,18 +1,18 @@
-import { Trainer } from './ble/trainer.js?v=202611102034';
-import { HeartRate } from './ble/hr.js?v=202611102034';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611102034';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611102034';
-import { log, logMsg } from './ble/base.js?v=202611102034';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102034';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102034';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102034';
-import { encodeActivity } from './fit.js?v=202611102034';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102034';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102034';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102034';
-import { reconcile, applyPending } from './settings-sync.js?v=202611102034';
-import { ls, rides } from './store.js?v=202611102034';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102034';
+import { Trainer } from './ble/trainer.js?v=202611102051';
+import { HeartRate } from './ble/hr.js?v=202611102051';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611102051';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611102051';
+import { log, logMsg } from './ble/base.js?v=202611102051';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102051';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102051';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102051';
+import { encodeActivity } from './fit.js?v=202611102051';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102051';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102051';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102051';
+import { reconcile, applyPending } from './settings-sync.js?v=202611102051';
+import { ls, rides } from './store.js?v=202611102051';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102051';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1044,6 +1044,12 @@ async function startWorkout(w, intensity = 1) { if (await canRide() && !app.sess
 async function startFree() { if (await canRide() && !app.session) beginSession({}); }
 
 let wakeLock = null;
+// keep the screen on during a ride; the browser drops the lock when the page is hidden,
+// so ask again whenever the ride screen comes back.
+function keepAwake() { navigator.wakeLock?.request('screen').then((l) => (wakeLock = l)).catch(() => {}); }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && app.session && !app.session.finished) keepAwake();
+});
 function beginSession(opts) {
   const trainer = app.trainer || new SimTrainer();
   const { intensity = 1, ...sessionOpts } = opts;
@@ -1062,7 +1068,7 @@ function beginSession(opts) {
   sizeChart(); sizePhoneChart();
   $('#rp-sheet').classList.add('hidden');
   app._rpSegI = undefined;
-  navigator.wakeLock?.request('screen').then((l) => (wakeLock = l)).catch(() => {});
+  keepAwake();
   renderRide();
 }
 
