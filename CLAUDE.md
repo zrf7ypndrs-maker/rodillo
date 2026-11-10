@@ -7,6 +7,7 @@ Agustín's own Zwift replacement (vanilla JS web app on GitHub Pages). Private d
 - Phone layout must never change desktop: phone styles sit behind the `PHONE_MQ` media query in js/app.js.
 - Training work (plan, workouts, coaching decisions): read `rodillo-data/CLAUDE.md`, then `rodillo-data/coach/PROGRAM.md` and `coach/DAILY.md`. Log every plan change in PROGRAM.md.
 - Ride history import (Strava / Garmin export, loose FIT/GPX/TCX): `js/importer.js`, UI in Settings > Sync, one commit through `GitHubSync.pushRides()`. Imported rides carry the tag `imported` plus `indoor`/`outdoor`/`mtb`/`gravel`; rides without power have `np: null` and `tssFrom: "hr"`, so never assume a summary has power.
+- Workout builder (`js/builder.js`, logic in `js/mine.js`): Agustín's own workouts live in rodillo-data `workouts/mine.json` (`{ workouts, deleted }`, ids `mine-*`, newest `updatedAt` wins). They're his, not coach workouts: the plan may use their ids, but don't edit them without asking. `daily.mjs --check` reads them.
 - Coach tools here: `tools/daily.mjs` (morning brief, `--check` validator), `tools/scale.mjs` (scaled workout copies), `tools/review.mjs` (history).
 - Never use `alert()`, `confirm()` or `prompt()`: they open browser windows. Use `tell(text, title)` / `await ask(text, { title, ok, danger })` from js/app.js (in-app modal, works with keyboard and the Ride controllers).
 - No spending beyond the Claude subscription. No em dashes in anything written for Agustín.
