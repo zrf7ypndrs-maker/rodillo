@@ -213,6 +213,14 @@ button.danger:hover { border-color: var(--bad); }
 .wo-tags:empty { display: none; }
 .wo-desc { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 72ch; margin-top: 4px; }
 .wo .start-row { display: flex; gap: 8px; padding: 10px 0 2px; }
+/* open row: the mini profile gives way to a full-width one with the hover/tap readout (.prof-hover).
+   Once open, the panel stops clipping so the readout tag can sit above the chart. */
+.wo > .profile { transition: opacity .2s ease; }
+.wo.expanded > .profile { opacity: 0; }
+.wo-prof { height: 110px; margin-top: 14px; }
+.wo .wo-prof .profile { height: 100%; } /* beats the mini-profile heights, phone included */
+.wo.expanded .wo-more-in { animation: wo-unclip 0s .3s forwards; }
+@keyframes wo-unclip { to { overflow: visible; } }
 /* Start in the library and "Ride it now" in the calendar grow on hover like the hero buttons. They're small, so 8% instead of 5%,
    and they grow from the left edge: the library one sits in the clipped expand panel (.wo-more-in) */
 @media (prefers-reduced-motion: no-preference) {
@@ -659,6 +667,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
   .wo-meta { font-size: 13.5px; text-align: left; color: var(--muted); font-weight: 700; }
   .wo .profile { height: 24px; }
   .wo-more { margin-top: -1px; } /* phone row gap is 1px */
+  .wo-prof { height: 80px; margin-top: 12px; }
   /* today hero: text, chart, recovery line, then the buttons across the bottom */
   #today { margin-bottom: 14px; }
   .hero { display: flex; flex-direction: column; padding: 16px 16px 14px; border-radius: 8px;

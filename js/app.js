@@ -1,16 +1,16 @@
-import { Trainer } from './ble/trainer.js?v=202611100332';
-import { HeartRate } from './ble/hr.js?v=202611100332';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611100332';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611100332';
-import { log, logMsg } from './ble/base.js?v=202611100332';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611100332';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611100332';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611100332';
-import { encodeActivity } from './fit.js?v=202611100332';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611100332';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611100332';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611100332';
-import { ls, rides } from './store.js?v=202611100332';
+import { Trainer } from './ble/trainer.js?v=202611101556';
+import { HeartRate } from './ble/hr.js?v=202611101556';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611101556';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611101556';
+import { log, logMsg } from './ble/base.js?v=202611101556';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101556';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101556';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101556';
+import { encodeActivity } from './fit.js?v=202611101556';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101556';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101556';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101556';
+import { ls, rides } from './store.js?v=202611101556';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -281,6 +281,7 @@ function workoutCard(w, i) {
       <div class="wo-more"><div class="wo-more-in">
         <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="wo-desc">${esc(w.description)}</div>
+        <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
         <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
       </div></div>
     </div>`;
@@ -295,11 +296,14 @@ function renderLibrary() {
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
+    if (e.target.closest('.wo-prof')) return; // the open chart has its own hover/tap readout
     // One open row at a time (across the ERG and slope lists).
     const open = !c.classList.contains('expanded');
     $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = -1)); });
     c.classList.toggle('expanded', open);
     if (open) c.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = 0));
+    // Big chart with the same readout as the today hero; bound on first open (one document listener per chart).
+    if (open && !c.dataset.prof) { c.dataset.prof = '1'; bindProfileHover(c.querySelector('.wo-prof'), app.library[+c.dataset.i]); }
   }));
   applyFocus();
 }
@@ -518,7 +522,7 @@ function tipTarget(g, ftp) {
   return a === b ? `${a} W` : `${a}-${b} W`;
 }
 
-/** Hover (or tap on the phone) on a workout profile (today hero, calendar day): highlight the interval under the pointer and show its watts and time. */
+/** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
 function bindProfileHover(box, w) {
   if (!box) return;
   const segs = flatten(w, app.settings.ftp);
@@ -540,7 +544,7 @@ function bindProfileHover(box, w) {
     } else {
       // Mouse: only inside the filled area under the curve, not the empty space above it.
       const hit = e.target.closest?.('[data-i]');
-      i = hit ? +hit.dataset.i : -1;
+      i = hit && svg.contains(hit) ? +hit.dataset.i : -1; // library rows carry data-i too
     }
     if (i < 0) return hide();
     if (i !== cur) {
