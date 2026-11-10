@@ -1,17 +1,17 @@
-import { Trainer } from './ble/trainer.js?v=202611101924';
-import { HeartRate } from './ble/hr.js?v=202611101924';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611101924';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611101924';
-import { log, logMsg } from './ble/base.js?v=202611101924';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101924';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101924';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101924';
-import { encodeActivity } from './fit.js?v=202611101924';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101924';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101924';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101924';
-import { ls, rides } from './store.js?v=202611101924';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101924';
+import { Trainer } from './ble/trainer.js?v=202611101947';
+import { HeartRate } from './ble/hr.js?v=202611101947';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611101947';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611101947';
+import { log, logMsg } from './ble/base.js?v=202611101947';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101947';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101947';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101947';
+import { encodeActivity } from './fit.js?v=202611101947';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101947';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101947';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101947';
+import { ls, rides } from './store.js?v=202611101947';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101947';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -56,7 +56,7 @@ log.on('log', (l) => {
 // ------------------------------------------------------------------ devices
 async function connect(kind) {
   if (!navigator.bluetooth) {
-    alert('Web Bluetooth is not available. Open this page in Google Chrome on your Mac.');
+    tell('Open this page in Google Chrome on your Mac (or Bluefy on iPhone).', 'Web Bluetooth is not available');
     return;
   }
   if (app.demo) exitDemo();
@@ -87,7 +87,7 @@ async function connect(kind) {
     }
   } catch (e) {
     if (kind.startsWith('controller')) app.controllers = app.controllers.filter((c) => c.device);
-    if (e.name !== 'NotFoundError') { logMsg('app', e.message); alert(e.message); }
+    if (e.name !== 'NotFoundError') { logMsg('app', e.message); tell(e.message, 'Could not connect'); }
   }
   renderDevices();
 }
@@ -874,11 +874,12 @@ async function renderTraining() {
       <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
     }).join('')}</table>` : '<p class="muted">No rides yet.</p>';
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
-  $$('[data-del]').forEach((b) => (b.onclick = async () => { if (confirm('Delete this ride from this Mac? (Synced copies stay in rodillo-data.)')) { await rides.del(+b.dataset.del); renderTraining(); } }));
+  $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this Mac?', ok: 'Delete', danger: true })) { await rides.del(+b.dataset.del); renderTraining(); } }));
 }
 
 // ------------------------------------------------------------------ imports
 $('#import-workout').addEventListener('change', async (e) => {
+  const failed = [];
   for (const f of e.target.files) {
     const text = await f.text();
     try {
@@ -890,19 +891,20 @@ $('#import-workout').addEventListener('change', async (e) => {
       imported.push(w);
       ls.set('imported', imported);
       app.library.push(w);
-    } catch (err) { alert(`Could not import ${f.name}: ${err.message}`); }
+    } catch (err) { failed.push(`${f.name}: ${err.message}`); }
   }
   e.target.value = '';
   renderLibrary();
+  if (failed.length) tell(failed.join('\n'), failed.length > 1 ? 'Could not import these files' : 'Could not import this file');
 });
 
 // ------------------------------------------------------------------ rides
-function canRide() {
+async function canRide() {
   if (app.trainer && (app.trainer.state === 'connected')) return true;
-  return confirm('No trainer connected. Start anyway? (Use Demo mode to try without hardware.)');
+  return ask('Use Demo mode to try without hardware.', { title: 'No trainer connected. Start anyway?', ok: 'Start anyway' });
 }
-function startWorkout(w, intensity = 1) { if (canRide()) beginSession({ workout: w, intensity }); }
-function startFree() { if (canRide()) beginSession({}); }
+async function startWorkout(w, intensity = 1) { if (await canRide() && !app.session) beginSession({ workout: w, intensity }); }
+async function startFree() { if (await canRide() && !app.session) beginSession({}); }
 
 let wakeLock = null;
 function beginSession(opts) {
@@ -1017,7 +1019,7 @@ async function refreshRemoteIndex() {
 }
 
 function downloadFit(ride) {
-  if (!ride?.samples?.length) return alert('No data in this ride.');
+  if (!ride?.samples?.length) { tell('This ride has no recorded data to export.', 'Nothing to export'); return; }
   const bytes = encodeActivity(ride.samples, ride.laps, { tss: ride.summary?.tss });
   const blob = new Blob([bytes], { type: 'application/octet-stream' });
   const a = document.createElement('a');
@@ -1067,7 +1069,7 @@ function showSummary(ride) {
     refreshPlanViews();
   };
   $('#s-discard').onclick = async () => {
-    if (!confirm('Discard this ride? It will not be saved or synced.')) return;
+    if (!(await ask('It will not be saved or synced.', { title: 'Discard this ride?', ok: 'Discard', danger: true }))) return;
     try { await rides.del(ride.id); } catch { /* ignore */ }
     app.session = null;
     show('home');
@@ -1079,6 +1081,7 @@ function showSummary(ride) {
 
 // ------------------------------------------------------------------ actions (controller + keyboard)
 function action(a) {
+  if (modalOpen()) return modalAction(a);
   const s = app.session;
   if (app.screen === 'ride' && s) {
     switch (a) {
@@ -1762,6 +1765,49 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
 }
 
+// ------------------------------------------------------------------ modal
+// In-app replacement for alert()/confirm(), which open as browser windows.
+// ask() resolves true (OK) or false (Cancel, Esc, controller B, tap outside).
+// tell() is the one-button version. Never use alert/confirm/prompt in this app.
+let modalDone = null, modalFocus = 0;
+const modalOpen = () => !!modalDone;
+const modalBtns = () => $$('#modal .modal-btns button:not(.hidden)');
+function ask(text, { title = '', ok = 'OK', cancel = 'Cancel', danger = false } = {}) {
+  modalDone?.(false);
+  $('#modal-title').textContent = title;
+  $('#modal-text').textContent = text;
+  $('#modal-text').classList.toggle('hidden', !text);
+  $('#modal-ok').textContent = ok;
+  $('#modal-cancel').textContent = cancel || '';
+  $('#modal-cancel').classList.toggle('hidden', !cancel);
+  $('#modal').classList.remove('hidden');
+  // destructive questions start on Cancel so a stray A / Enter is harmless
+  modalFocus = danger && cancel ? 0 : modalBtns().length - 1;
+  setModalFocus();
+  return new Promise((resolve) => {
+    modalDone = (v) => { modalDone = null; $('#modal').classList.add('hidden'); $$('#modal .focus').forEach((x) => x.classList.remove('focus')); resolve(v); };
+  });
+}
+const tell = (text, title = '') => ask(text, { title, cancel: null });
+function setModalFocus() {
+  const btns = modalBtns();
+  btns.forEach((b, i) => b.classList.toggle('focus', i === modalFocus && !!app.usedNav));
+  btns[modalFocus]?.focus({ preventScroll: true });
+}
+function modalAction(a) {
+  app.usedNav = true; // keyboard or controller: show which button A / Enter will press
+  const btns = modalBtns();
+  switch (a) {
+    case 'left': case 'up': case 'easier': modalFocus = 0; setModalFocus(); break;
+    case 'right': case 'down': case 'harder': modalFocus = btns.length - 1; setModalFocus(); break;
+    case 'select': (btns.includes(document.activeElement) ? document.activeElement : btns[modalFocus])?.click(); break;
+    case 'back': modalDone?.(btns.length < 2); break;
+  }
+}
+$('#modal-ok').onclick = () => modalDone?.(true);
+$('#modal-cancel').onclick = () => modalDone?.(false);
+$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') modalDone?.(modalBtns().length < 2); });
+
 // ------------------------------------------------------------------ settings
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
@@ -1852,7 +1898,7 @@ $('#btn-demo').onclick = enterDemo;
 $('#btn-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!devPopOpen()); };
 $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
-document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices')) setDevPop(false); });
+document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #modal')) setDevPop(false); });
 setWoKind(app.woKind);
 if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#tabs')); }
 placeInk($('#tabs'), $('#tabs button.active'));
@@ -1957,7 +2003,7 @@ $('#cal-prev').onclick = () => shiftMonth(-1);
 $('#cal-next').onclick = () => shiftMonth(1);
 $('#cal-today').onclick = () => { app.calMonth = null; app.calSel = null; renderCalendar(); };
 $('#r-pause').onclick = () => { app.session?.togglePause(); renderRide(); };
-$('#r-end').onclick = () => { if (confirm('End this ride?')) endSession(); };
+$('#r-end').onclick = async () => { if (await ask('', { title: 'End this ride?', ok: 'End ride' })) endSession(); };
 
 // main loop: 4 Hz engine, render
 let last = performance.now(), saveAcc = 0;

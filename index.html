@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611101924">
+<link rel="stylesheet" href="css/app.css?v=202611101947">
 </head>
 <body>
 <div id="app">
@@ -259,7 +259,15 @@
     <div class="panel-head"><h3>Log</h3><div><button class="ghost small" id="btn-diag">Device details</button> <button class="ghost small" data-close>Close</button></div></div>
     <pre id="log-body"></pre>
   </aside>
+
+  <div class="modal hidden" id="modal">
+    <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
+      <h3 id="modal-title"></h3>
+      <p id="modal-text"></p>
+      <div class="modal-btns"><button class="ghost" id="modal-cancel">Cancel</button><button class="primary" id="modal-ok">OK</button></div>
+    </div>
+  </div>
 </div>
-<script type="module" src="js/app.js?v=202611101924"></script>
+<script type="module" src="js/app.js?v=202611101947"></script>
 </body>
 </html>
