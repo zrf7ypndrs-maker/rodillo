@@ -421,7 +421,7 @@ table.ints { margin-bottom: 14px; }
 .ride-body.with-segs { grid-template-columns: 1fr 330px; }
 .ride-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .chart { width: 100%; flex: 1; min-height: 140px; background: var(--sheet); border-radius: var(--r); }
-.ride-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ride-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: relative; z-index: 6; } /* above .paused-overlay so End ride / Resume stay clickable while paused */
 .hints { font-size: 13px; color: var(--muted); }
 .hints b { color: var(--ink); font-weight: 650; }
 .ride-btns { display: flex; gap: 8px; }
