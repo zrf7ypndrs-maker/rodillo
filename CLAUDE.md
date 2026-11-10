@@ -7,4 +7,5 @@ Agustín's own Zwift replacement (vanilla JS web app on GitHub Pages). Private d
 - Phone layout must never change desktop: phone styles sit behind the `PHONE_MQ` media query in js/app.js.
 - Training work (plan, workouts, coaching decisions): read `rodillo-data/CLAUDE.md`, then `rodillo-data/coach/PROGRAM.md` and `coach/DAILY.md`. Log every plan change in PROGRAM.md.
 - Coach tools here: `tools/daily.mjs` (morning brief, `--check` validator), `tools/scale.mjs` (scaled workout copies), `tools/review.mjs` (history).
+- Never use `alert()`, `confirm()` or `prompt()`: they open browser windows. Use `tell(text, title)` / `await ask(text, { title, ok, danger })` from js/app.js (in-app modal, works with keyboard and the Ride controllers).
 - No spending beyond the Claude subscription. No em dashes in anything written for Agustín.
