@@ -87,7 +87,7 @@ console.log(`  Recovery previous 3 days (newest first): ${recRun.join(', ')}`);
 const rides = (readJson(path.join(dir, 'index.json'), { rides: [] }).rides || []).filter((r) => r.source !== 'demo');
 if (rides.length) {
   const s = loadSeries(rides, new Date(today + 'T12:00:00')).at(-1);
-  console.log(`\nRide load (Rodillo rides only, ${rides.length} on file): CTL ${s.ctl}  ATL ${s.atl}  TSB ${s.tsb} (${formLabel(s.tsb)})`);
+  console.log(`\nRide load (${rides.length} rides on file, ${rides.filter((r) => r.tags?.includes("imported")).length} imported from Strava/Garmin): CTL ${s.ctl}  ATL ${s.atl}  TSB ${s.tsb} (${formLabel(s.tsb)})`);
 } else console.log('\nRide load: no rides on file yet.');
 console.log('Rides last 10 days:');
 const since = addDays(today, -10);
@@ -95,7 +95,7 @@ const recent = rides.filter((r) => r.id.slice(0, 10) >= since && r.id.slice(0, 1
 if (!recent.length) console.log('  none');
 for (const r of recent) {
   const c = r.compliance ? ` intervals ${r.compliance.avg}% (min ${r.compliance.min}%, ${r.compliance.reps} reps)` : '';
-  console.log(`  ${r.id.slice(0, 10)} ${dow(r.id.slice(0, 10))}  ${r.name}${r.workoutId ? ` [${r.workoutId}]` : ''}  ${Math.round(r.durSec / 60)} min  TSS ${r.tss}  IF ${r.if}  HR ${r.avgHr ?? '-'}${c}${r.decoupling != null ? ` drift ${r.decoupling}%` : ''}`);
+  console.log(`  ${r.id.slice(0, 10)} ${dow(r.id.slice(0, 10))}  ${r.name}${r.workoutId ? ` [${r.workoutId}]` : ''}  ${Math.round(r.durSec / 60)} min  TSS ${r.tss}${r.tssFrom === "hr" ? " (HR)" : ""}  IF ${r.if ?? "-"}  HR ${r.avgHr ?? '-'}${c}${r.decoupling != null ? ` drift ${r.decoupling}%` : ''}`);
 }
 const lastRamp = rides.filter((r) => r.workoutId === 'ramp-test' && r.bests?.[60]).at(-1);
 if (lastRamp) {

@@ -135,6 +135,47 @@ export class GitHubSync {
     throw new Error('Could not update index.json after 3 attempts');
   }
 
+  /**
+   * Adds many rides in ONE commit (history import) through the git data API, with index.json
+   * merged. Files go inline in tree requests, a few MB at a time, so a big import costs a handful
+   * of API calls instead of two commits per ride. Retries if someone else pushed in between.
+   */
+  async pushRides(docs, message, onProgress = () => {}) {
+    const CHUNK = 3e6;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ref = await this.api(`/git/ref/heads/${this.branch}`);
+      const head = ref.object.sha;
+      const commit = await this.api(`/git/commits/${head}`);
+      const cur = await this.api(`/contents/index.json?ref=${head}`);
+      const index = cur ? JSON.parse(unb64(cur.content || (await this.api(`/git/blobs/${cur.sha}`)).content)) : { version: 1, rides: [] };
+      const ids = new Set(docs.map((d) => d.summary.id));
+      index.rides = index.rides.filter((r) => !ids.has(r.id)).concat(docs.map((d) => d.summary));
+      index.rides.sort((a, b) => (a.id < b.id ? -1 : 1));
+      const files = docs.map((d) => ({ path: `rides/${d.summary.id.slice(0, 4)}/${d.summary.id}.json`, content: JSON.stringify(d) }));
+      files.push({ path: 'index.json', content: JSON.stringify(index, null, 2) });
+      let tree = commit.tree.sha, batch = [], size = 0, done = 0;
+      const flush = async () => {
+        if (!batch.length) return;
+        const t = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: tree, tree: batch.map((f) => ({ path: f.path, mode: '100644', type: 'blob', content: f.content })) }) });
+        tree = t.sha; done += batch.length; batch = []; size = 0;
+        onProgress(Math.min(done, docs.length), docs.length);
+      };
+      for (const f of files) {
+        if (size + f.content.length > CHUNK) await flush();
+        batch.push(f); size += f.content.length;
+      }
+      await flush();
+      const c = await this.api('/git/commits', { method: 'POST', body: JSON.stringify({ message, tree, parents: [head] }) });
+      try {
+        await this.api(`/git/refs/heads/${this.branch}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha, force: false }) });
+        return index;
+      } catch (e) {
+        if (e.status !== 422 && e.status !== 409) throw e; // not a fast-forward: someone pushed, start over
+      }
+    }
+    throw new Error('Could not commit the import after 3 attempts');
+  }
+
   async fetchIndex() {
     const r = await this.getJson('index.json');
     return r?.json?.rides || [];

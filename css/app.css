@@ -469,6 +469,8 @@ table.ints { margin-bottom: 14px; }
 .gh-signin { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13.5px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .token-label { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
 .token-label:empty { display: none; }
+.import-intro { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rule); }
+#imp-btn.busy { opacity: .5; pointer-events: none; }
 
 .t-val.combo { font-size: min(70px, 28cqi); padding: 8px 0 6px; white-space: nowrap; }
 .gearviz { height: 26px; display: block; margin-bottom: 2px; max-width: 100%; }

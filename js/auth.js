@@ -1,6 +1,6 @@
 // Sign in with GitHub through the rodillo-auth Cloudflare Worker (auth-worker/worker.js).
 // The session (8-hour user token + ~6-month refresh token) lives in this browser's localStorage.
-import { ls } from './store.js?v=202611102051';
+import { ls } from './store.js?v=202611102138';
 
 // The deployed Worker. Empty = sign-in hidden, only the pasted token works.
 export const AUTH_URL = 'https://rodillo-auth.zrf7ypndrs.workers.dev';

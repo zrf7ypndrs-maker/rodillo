@@ -22,7 +22,7 @@ const since = Date.now() - days * 864e5;
 for (const r of rides.filter((x) => Date.parse(x.start) >= since)) {
   const c = r.compliance ? ` compliance ${r.compliance.avg}% (min ${r.compliance.min}%, ${r.compliance.reps} reps)` : '';
   const d = r.decoupling != null ? ` drift ${r.decoupling}%` : '';
-  console.log(`${r.id}  ${r.name.padEnd(32)} ${Math.round(r.durSec / 60)}min NP ${r.np} IF ${r.if} TSS ${r.tss} HR ${r.avgHr ?? '-'}${c}${d}  [ftp ${r.ftp}]`);
+  console.log(`${r.id}  ${r.name.padEnd(32)} ${Math.round(r.durSec / 60)}min NP ${r.np ?? "-"} IF ${r.if ?? "-"} TSS ${r.tss}${r.tssFrom === "hr" ? " (HR)" : ""} HR ${r.avgHr ?? '-'}${c}${d}  [ftp ${r.ftp}]`);
 }
 
 const wpath = path.join(dir, 'whoop', 'daily.json');

@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/favicon.svg?v=pin" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png?v=pin" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=pin">
-<link rel="stylesheet" href="css/app.css?v=202611102051">
+<link rel="stylesheet" href="css/app.css?v=202611102138">
 </head>
 <body>
 <div id="app">
@@ -247,6 +247,9 @@
       <label for="set-repo">Data repo</label><input id="set-repo" type="text">
       <div class="help">Fine-grained token with Contents: Read and write on rodillo-data only. Stored in this browser, never in the app repo.</div>
       <div class="sync-actions"><button class="primary small" id="btn-token">Save &amp; test</button> <span class="muted" id="token-status"></span></div>
+      <div class="pane-intro import-intro">Import ride history</div>
+      <div class="help">Adds your last 6 months of rides so fitness, fatigue and form start from real numbers. Get your Strava archive (strava.com &gt; Settings &gt; My Account &gt; Download or delete your account &gt; Request your archive), then choose the zip here. A Garmin Connect export or loose .fit, .gpx and .tcx files work too. Rides already in Rodillo are skipped.</div>
+      <div class="sync-actions"><label class="ghost small file-btn" id="imp-btn">Choose export<input type="file" id="imp-file" accept=".zip,.fit,.gz,.gpx,.tcx" multiple hidden></label> <span class="muted" id="imp-status"></span></div>
     </div>
   </aside>
 
@@ -268,6 +271,6 @@
     </div>
   </div>
 </div>
-<script type="module" src="js/app.js?v=202611102051"></script>
+<script type="module" src="js/app.js?v=202611102138"></script>
 </body>
 </html>

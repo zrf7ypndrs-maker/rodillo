@@ -1,18 +1,18 @@
-import { Trainer } from './ble/trainer.js?v=202611102051';
-import { HeartRate } from './ble/hr.js?v=202611102051';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611102051';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611102051';
-import { log, logMsg } from './ble/base.js?v=202611102051';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102051';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102051';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102051';
-import { encodeActivity } from './fit.js?v=202611102051';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102051';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102051';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102051';
-import { reconcile, applyPending } from './settings-sync.js?v=202611102051';
-import { ls, rides } from './store.js?v=202611102051';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102051';
+import { Trainer } from './ble/trainer.js?v=202611102138';
+import { HeartRate } from './ble/hr.js?v=202611102138';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611102138';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611102138';
+import { log, logMsg } from './ble/base.js?v=202611102138';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102138';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102138';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102138';
+import { encodeActivity } from './fit.js?v=202611102138';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102138';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102138';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102138';
+import { reconcile, applyPending } from './settings-sync.js?v=202611102138';
+import { ls, rides } from './store.js?v=202611102138';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102138';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -787,7 +787,7 @@ function renderCalendar() {
   const wd = whoopDay(sel);
   if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}</div>`;
   for (const r of info.ridden) {
-    html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)} &middot; NP ${r.np} W &middot; TSS ${r.tss}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
+    html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
   }
   $('#cal-detail').innerHTML = html;
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
@@ -1004,7 +1004,7 @@ async function renderTraining() {
       const comp = x.compliance ? `<span class="pct ${x.compliance.min < 95 ? 'low' : 'ok'}">${x.compliance.avg}%</span> <span class="muted">min ${x.compliance.min}%</span>` : '';
       const status = r.demo ? '<span class="tag">demo</span>' : r.interrupted ? '<span class="tag">interrupted</span>' : r.synced ? '' : '<span class="tag warn">not synced</span>';
       return `<tr data-ride="${esc(x.id)}"><td>${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-      <td>${esc(x.name)} ${status}</td><td>${fmtTime(x.durSec)}</td><td>${x.np} W</td><td>${x.if}</td><td>${x.tss}</td><td>${x.avgHr ?? '-'}</td>
+      <td>${esc(x.name)} ${status}</td><td>${fmtTime(x.durSec)}</td><td>${x.np != null ? `${x.np} W` : '-'}</td><td>${x.if ?? '-'}</td><td>${x.tss}${x.tssFrom === 'hr' ? ' <span class="muted">HR</span>' : ''}</td><td>${x.avgHr ?? '-'}</td>
       <td>${comp}</td><td>${x.decoupling != null ? x.decoupling + '%' : ''}</td>
       <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
     }).join('')}</table>` : '<p class="muted">No rides yet.</p>';
@@ -2134,6 +2134,49 @@ $('#btn-token').onclick = async () => {
     await loadCoachData();
     st.textContent = 'Connected and synced';
   } catch (e) { st.textContent = e.message; }
+};
+// ------------------------------------------------------------------ history import (Settings > Sync)
+// Strava / Garmin export or loose activity files -> rides in rodillo-data, in one commit.
+$('#imp-file').onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  const st = $('#imp-status'), btn = $('#imp-btn');
+  const gh = syncClient();
+  if (!gh) { tell(`${syncHint()} above first: imported rides go to rodillo-data.`, 'Not connected'); return; }
+  btn.classList.add('busy');
+  try {
+    const { scanFiles, buildImport, IMPORT_DAYS } = await import('./importer.js?v=202611102138');
+    const since = Date.now() - IMPORT_DAYS * 864e5;
+    st.textContent = 'Opening...';
+    const { found, skip } = await scanFiles(files, { since, onProgress: (a, b) => { st.textContent = `Reading ${a} of ${b} activities...`; } });
+    st.textContent = 'Checking your history...';
+    const existing = await gh.fetchIndex();
+    const rhrs = Object.values(app.whoop || {}).map((d) => d.rhr).filter(Boolean).sort((a, b) => a - b);
+    const restHr = rhrs.length ? rhrs[Math.floor(rhrs.length / 2)] : 55;
+    const { docs, stats, hrCfg, withPower } = buildImport(found, existing, { ftp: app.settings.ftp, restHr });
+    const skipped = [
+      stats.already && `${stats.already} already in Rodillo`, stats.dupes && `${stats.dupes} recorded twice`,
+      skip.old && `${skip.old} older than 6 months`, skip.notRide && `${skip.notRide} not rides`, skip.ebike && `${skip.ebike} e-bike`,
+      (stats.short + stats.noData) && `${stats.short + stats.noData} too short or without power and heart rate`, skip.unreadable && `${skip.unreadable} unreadable`,
+    ].filter(Boolean).join(', ');
+    if (!docs.length) { st.textContent = ''; tell(`No new rides to add.${skipped ? ` Skipped: ${skipped}.` : ''}`, 'Nothing to import'); return; }
+    const day = (d) => new Date(d.summary.start).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const hrOnly = docs.length - withPower;
+    const msg = `${day(docs[0])} to ${day(docs.at(-1))}: ${withPower} with power (TSS at your FTP of ${app.settings.ftp} W)${hrOnly ? `, ${hrOnly} with heart rate only (TSS from heart rate, threshold ${hrCfg.lthr} bpm, resting ${hrCfg.rest})` : ''}.${skipped ? ` Skipped: ${skipped}.` : ''}`;
+    st.textContent = '';
+    if (!(await ask(msg, { title: `Add ${docs.length} ride${docs.length > 1 ? 's' : ''} to your history?`, ok: 'Import' }))) return;
+    st.textContent = 'Saving to rodillo-data...';
+    const index = await gh.pushRides(docs, `Import ${docs.length} rides (${day(docs[0])} to ${day(docs.at(-1))})`, (a, b) => { st.textContent = `Saving ${a} of ${b}...`; });
+    ls.set('remoteIndex', index.rides); ls.set('remoteIndexAt', Date.now());
+    st.textContent = `Imported ${docs.length} rides.`;
+    if (app.tab === 'training') renderTraining();
+    refreshPlanViews();
+  } catch (err) {
+    logMsg('sync', `import failed: ${err.message}`);
+    st.textContent = '';
+    tell(err.message, 'Import failed');
+  } finally { btn.classList.remove('busy'); }
 };
 // GitHub sign-in row at the top of the Sync tab (hidden until AUTH_URL is set in js/auth.js).
 function renderSignIn(msg = '') {
