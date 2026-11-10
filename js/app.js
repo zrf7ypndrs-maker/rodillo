@@ -1,17 +1,17 @@
-import { Trainer } from './ble/trainer.js?v=202611101956';
-import { HeartRate } from './ble/hr.js?v=202611101956';
-import { ZwiftRide } from './ble/zwiftride.js?v=202611101956';
-import { SimTrainer, SimHr } from './ble/sim.js?v=202611101956';
-import { log, logMsg } from './ble/base.js?v=202611101956';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101956';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101956';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101956';
-import { encodeActivity } from './fit.js?v=202611101956';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101956';
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101956';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101956';
-import { ls, rides } from './store.js?v=202611101956';
-import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101956';
+import { Trainer } from './ble/trainer.js?v=202611101959';
+import { HeartRate } from './ble/hr.js?v=202611101959';
+import { ZwiftRide } from './ble/zwiftride.js?v=202611101959';
+import { SimTrainer, SimHr } from './ble/sim.js?v=202611101959';
+import { log, logMsg } from './ble/base.js?v=202611101959';
+import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611101959';
+import { DRIVETRAINS } from './engine/drivetrain.js?v=202611101959';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611101959';
+import { encodeActivity } from './fit.js?v=202611101959';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611101959';
+import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101959';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101959';
+import { ls, rides } from './store.js?v=202611101959';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611101959';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -1015,12 +1015,16 @@ function beginSession(opts) {
   renderRide();
 }
 
+// rides with fewer recorded seconds than this are dropped (no summary, not saved).
+// Samples are 1 per second and only while riding, so Ready / Paused time doesn't count.
+const MIN_SAMPLES = 10;
+const tooShort = () => (app.session?.samples.length ?? 0) < MIN_SAMPLES;
 async function endSession() {
   const s = app.session;
   if (!s) return;
   s.finish();
   wakeLock?.release?.().catch(() => {});
-  if (s.samples.length < 10) { app.session = null; show('home'); return; }
+  if (s.samples.length < MIN_SAMPLES) { app.session = null; show('home'); return; }
   // remember what the app learned about this trainer (real rides only)
   if (!app.demo) {
     const simSamples = s.samples.filter((x) => x.grade !== 0).length;
@@ -1180,7 +1184,7 @@ function action(a) {
       case 'back': {
         const now = Date.now();
         if (now - app.endArmed < 3000) { app.endArmed = 0; endSession(); }
-        else { app.endArmed = now; toast('Press B again to end ride'); }
+        else { app.endArmed = now; toast(tooShort() ? 'Under 10 s, nothing saved. B again to end' : 'Press B again to end ride'); }
         break;
       }
       case 'skip': if (s.segs) { s.skip(); toast('Skipped'); } break;
@@ -1730,7 +1734,7 @@ function renderPhone(s) {
   $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
   set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off for this interval');
   if (app.endArmed && Date.now() - app.endArmed > 3000) app.endArmed = 0;
-  set('rp-end', app.endArmed ? 'Tap again to end ride' : 'End ride');
+  set('rp-end', app.endArmed ? (tooShort() ? 'Tap again (under 10 s, not saved)' : 'Tap again to end ride') : 'End ride');
 
   renderPhoneView(s);
   drawPhoneChart();
@@ -2116,7 +2120,10 @@ $('#cal-prev').onclick = () => shiftMonth(-1);
 $('#cal-next').onclick = () => shiftMonth(1);
 $('#cal-today').onclick = () => { app.calMonth = null; app.calSel = null; renderCalendar(); };
 $('#r-pause').onclick = () => { app.session?.togglePause(); renderRide(); };
-$('#r-end').onclick = async () => { if (await ask('', { title: 'End this ride?', ok: 'End ride' })) endSession(); };
+$('#r-end').onclick = async () => {
+  const short = tooShort();
+  if (await ask(short ? 'Less than 10 seconds recorded. Nothing will be saved.' : '', { title: 'End this ride?', ok: 'End ride', danger: short })) endSession();
+};
 
 // main loop: 4 Hz engine, render
 let last = performance.now(), saveAcc = 0;
