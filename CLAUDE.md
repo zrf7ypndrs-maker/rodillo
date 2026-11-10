@@ -2,7 +2,7 @@
 
 Agustín's own Zwift replacement (vanilla JS web app on GitHub Pages). Private data and the training plan live in the sibling repo zrf7ypndrs-maker/rodillo-data; clone both side by side.
 
-- **Build stamp (cache-busting id on CSS and every JS import; without it Bluefy can load new HTML with stale JS and freeze the ride screen):** `.github/workflows/pages.yml` runs tests, stamps and deploys on every push to main. Once Pages' source is "GitHub Actions", nobody stamps by hand. Check with `gh run list -R zrf7ypndrs-maker/rodillo -L 3`: if pushes still also start "pages build and deployment", the old branch deploy is still on and races the stamped one, so run `node tools/stamp.mjs` before pushing until Agustín switches it (Settings > Pages > Source).
+- **Build stamp (cache-busting id on CSS and every JS import; without it Bluefy can load new HTML with stale JS and freeze the ride screen):** `.github/workflows/pages.yml` runs tests, stamps and deploys on every push to main (Pages source = "GitHub Actions" since Nov 10). Don't run `tools/stamp.mjs` before pushing and don't resolve `?v=` conflicts by hand: take either side, the deploy re-stamps. A failing test blocks the deploy, so check `gh run list -R zrf7ypndrs-maker/rodillo -L 3` after pushing.
 - `npm test` before pushing JS changes.
 - Phone layout must never change desktop: phone styles sit behind the `PHONE_MQ` media query in js/app.js.
 - Training work (plan, workouts, coaching decisions): read `rodillo-data/CLAUDE.md`, then `rodillo-data/coach/PROGRAM.md` and `coach/DAILY.md`. Log every plan change in PROGRAM.md.
