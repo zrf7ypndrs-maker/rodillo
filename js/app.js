@@ -11,6 +11,7 @@ import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, formLabel, zone
 import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611101556';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611101556';
 import { ls, rides } from './store.js?v=202611101556';
+import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const $ = (s) => document.querySelector(s);
@@ -470,8 +471,8 @@ function renderHero() {
   const w = today.workout;
   const date = new Date(today.key + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const src = !app.plan ? '' : !syncClient()
-    ? '<p class="plan-src">Showing the public copy of the plan. Add your GitHub token in <a href="#" data-open-settings="sync">Settings</a> to get the coach\'s daily changes on this device.</p>'
-    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check the token in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
+    ? `<p class="plan-src">Showing the public copy of the plan. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to get the coach's daily changes on this device.</p>`
+    : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check sync in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
   const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free">${primary ? 'Start free ride' : 'Free ride'}${BIKE_ICO}</button>`;
   let body;
   if (w) {
@@ -843,9 +844,9 @@ async function renderTraining() {
   const card = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   const cfg = ls.get('sync', {});
   const at = ls.get('remoteIndexAt');
-  $('#sync-status').innerHTML = cfg.token
+  $('#sync-status').innerHTML = syncClient()
     ? `Synced with <b>${esc(cfg.repo || DEFAULT_REPO)}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
-    : 'History is only on this Mac. Add your GitHub token in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.';
+    : `History is only on this device. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.`;
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
     card(Math.round(today.ctl), 'Fitness (CTL)', '', LOAD_INFO.ctl), card(Math.round(today.atl), 'Fatigue (ATL)', '', LOAD_INFO.atl),
@@ -963,17 +964,21 @@ async function saveRide(status) {
 }
 
 // ------------------------------------------------------------------ GitHub sync
+// GitHub sign-in wins over a pasted token; the token stays as the fallback.
 function syncClient() {
   const cfg = ls.get('sync', {});
-  return cfg.token ? new GitHubSync({ token: cfg.token, repo: cfg.repo || DEFAULT_REPO }) : null;
+  const repo = cfg.repo || DEFAULT_REPO;
+  if (authEnabled() && authSession()) return new GitHubSync({ token: authToken, repo });
+  return cfg.token ? new GitHubSync({ token: cfg.token, repo }) : null;
 }
+const syncHint = () => (authEnabled() ? 'Sign in with GitHub' : 'Add your GitHub token');
 
 async function syncRide(ride) {
   const gh = syncClient();
   const el = $('#s-sync');
   const say = (t) => { if (el && app.screen === 'summary') el.textContent = t; };
   if (ride.demo) { say('Demo ride: kept on this Mac only, not added to your training history.'); return false; }
-  if (!gh) { say('Not synced: add your GitHub token in Settings to send rides to rodillo-data.'); return false; }
+  if (!gh) { say(`Not synced: ${syncHint().toLowerCase()} in Settings to send rides to rodillo-data.`); return false; }
   try {
     say('Syncing to rodillo-data...');
     const doc = { ...rideDoc(ride), laps: ride.laps };
@@ -1049,7 +1054,7 @@ function showSummary(ride) {
   if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
   $('#s-extra').innerHTML = extra;
   if ($('#s-setftp')) $('#s-setftp').onclick = (e) => { app.settings.ftp = Math.round(st.bests[60] * 0.75); ls.set('settings', app.settings); e.target.textContent = 'Saved'; };
-  $('#s-sync').textContent = ride.demo ? 'Demo ride: saving keeps it on this Mac only.' : syncClient() ? 'Saving adds it to your training history in rodillo-data.' : 'Saving keeps it on this Mac. Add your GitHub token in Settings to sync it.';
+  $('#s-sync').textContent = ride.demo ? 'Demo ride: saving keeps it on this Mac only.' : syncClient() ? 'Saving adds it to your training history in rodillo-data.' : `Saving keeps it on this device. ${syncHint()} in Settings to sync it.`;
   $('#s-fit').onclick = () => downloadFit(ride);
   $('#s-home').onclick = async () => {
     app.session = null;
@@ -1875,6 +1880,7 @@ $('#btn-settings').onclick = () => {
   $('#set-token').value = cfg.token || '';
   $('#set-repo').value = cfg.repo || DEFAULT_REPO;
   $('#token-status').textContent = cfg.token ? 'Token saved' : '';
+  renderSignIn();
   setDevPop(false);
   $('#controls').classList.add('hidden');
   $('#settings').classList.remove('hidden');
@@ -1895,6 +1901,19 @@ $('#btn-token').onclick = async () => {
     st.textContent = 'Connected and synced';
   } catch (e) { st.textContent = e.message; }
 };
+// GitHub sign-in row at the top of the Sync tab (hidden until AUTH_URL is set in js/auth.js).
+function renderSignIn(msg = '') {
+  const el = $('#gh-signin');
+  el.classList.toggle('hidden', !authEnabled());
+  if (!authEnabled()) return;
+  const s = authSession();
+  el.innerHTML = s
+    ? `<span>Signed in as <b>${esc(s.login || 'GitHub user')}</b></span> <button class="ghost small" id="btn-gh-out">Sign out</button>${msg ? ` <span class="muted">${esc(msg)}</span>` : ''}`
+    : `<button class="primary small" id="btn-gh-in">Sign in with GitHub</button> <span class="muted">${esc(msg || 'Once per browser, about twice a year.')}</span>`;
+  if ($('#btn-gh-in')) $('#btn-gh-in').onclick = startSignIn;
+  if ($('#btn-gh-out')) $('#btn-gh-out').onclick = () => { signOut(); renderSignIn('Signed out on this browser'); renderHero(); };
+  $('#token-label').textContent = s ? 'Or use a token (not needed while signed in)' : 'Or paste a token instead';
+}
 // ------------------------------------------------------------------ theme (light default, dark optional; index.html sets it before first paint)
 function setTheme(t) {
   app.theme = t === 'dark' ? 'dark' : 'light';
@@ -1963,6 +1982,16 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 $("#build-id").textContent = `build ${BUILD}`;
+{
+  // Back from GitHub sign-in: open Settings on Sync so the result is visible, then sync as usual below.
+  const back = takeSignIn();
+  if (back) {
+    ls.set('setTab', 'sync');
+    $('#btn-settings').click();
+    renderSignIn(back.error || 'Connected');
+    if (back.error) logMsg('sync', `sign-in failed: ${back.error}`);
+  }
+}
 renderDevices();
 loadLibrary();
 autoReconnect();

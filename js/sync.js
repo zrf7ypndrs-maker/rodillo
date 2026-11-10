@@ -18,6 +18,7 @@ function unb64(s) {
 }
 
 export class GitHubSync {
+  // token: a string (pasted fine-grained token) or async (force) => string (GitHub sign-in, refreshes itself)
   constructor({ token, repo = DEFAULT_REPO, branch = 'main', fetchImpl } = {}) {
     this.token = token;
     this.repo = repo;
@@ -27,17 +28,20 @@ export class GitHubSync {
 
   get configured() { return !!this.token; }
 
-  async api(path, opts = {}) {
+  async api(path, opts = {}, retried = false) {
+    const token = typeof this.token === 'function' ? await this.token(retried) : this.token;
     const res = await this.fetch(`https://api.github.com/repos/${this.repo}${path}`, {
       ...opts,
       headers: {
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
       },
       cache: 'no-store',
     });
+    // signed-in token revoked or expired early: refresh once and retry
+    if (res.status === 401 && typeof this.token === 'function' && !retried) return this.api(path, opts, true);
     if (res.status === 404) return null;
     if (!res.ok) {
       const body = await res.text().catch(() => '');
