@@ -297,6 +297,29 @@ import { BIKE_PRESETS, BIKE_TYPES, presetSpec, cleanSpec, estimateBikeKg, bikePr
   console.log('ok - bike weight presets and estimate');
 }
 
+test('steep grade at the trainer ceiling: no wound-up trim, no freewheel while grinding', () => {
+  // Nov 11: 20% in 32x14 maxed the trainer; after shifting to 32x52 it stayed maxed (wound-up trim), and grinding
+  // at 20-30 rpm the resistance dropped to nothing when the cadence reading blinked to 0.
+  class Fixed extends SimTrainer { step() { this.data = { power: this.p, cadence: this.c, speedKmh: (this.c / 60) * 5.1 * 3.6 }; } }
+  const t = new Fixed(); t.p = 230; t.c = 40;
+  const s = new Session({ trainer: t, hr: null, settings: { drivetrain: 'mtb-1x12-sram-32', maxSendGrade: 0.16, minSendGrade: -0.10, gradeTrim: 0.12 } });
+  assert.equal(s.gOff, 0.06, 'a large saved trim is not carried into the next ride');
+  s.gradeOffset = 0.2; s.start(); s.gb.rear = s.gb.cogsEasyFirst.indexOf(14);
+  const go = (sec) => { for (let x = 0; x < sec; x += 0.25) { t.step(); s.tick(0.25); } };
+  go(60);
+  assert.ok(s.maxed && s.gOff <= 0.06, `at the ceiling the trim doesn't climb (${s.gOff})`);
+  s.gb.rear = 0; t.p = 200; t.c = 44;
+  go(10);
+  assert.ok(!s.maxed && s.lastSentGrade < 0.1, `32x52 at 20% sends ${s.lastSentGrade}`);
+  // grinding: cadence reading drops to 0 for 2 s while pushing 200 W uphill -> stays engaged, keeps resistance
+  t.c = 0; go(2);
+  assert.ok(s.bike.engaged && s.lastSentGrade > 0.03, `still engaged, sends ${s.lastSentGrade}`);
+  // really stopping (no power) still freewheels to minimum
+  t.p = 0; go(3);
+  assert.equal(s.lastSentGrade, -0.10);
+  assert.ok(s.learned().gradeTrim <= 0.06);
+});
+
 console.log(`\n${passed} tests passed`);
 
 import { Gearbox, DRIVETRAINS, parseTeeth, checkSpec, presetFor, resolveDrivetrain } from '../js/engine/drivetrain.js';

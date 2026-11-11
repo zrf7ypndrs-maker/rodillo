@@ -61,12 +61,16 @@ export class VirtualBike {
   stepSim(dt, power, cadence, grade, ratio) {
     const m = this.p.riderKg + this.p.bikeKg;
     const vPed = (cadence / 60) * this.dev(ratio);
+    // Grinding up a climb (Nov 11, Agustín at 20%): at 20-30 rpm a crank turn takes 2-3 s and the cadence reading
+    // can drop to 0 between turns. Uphill, while the rider is clearly pushing, that is not a stop: keep the
+    // drivetrain engaged and the speed where it was, instead of freewheeling the trainer to minimum resistance.
+    const pushingUphill = grade > 0.02 && power > 40;
     if (this.engaged) {
-      this._slow = cadence < 5 || vPed < this.v - 0.6 ? (this._slow || 0) + dt : 0;
+      this._slow = !pushingUphill && (cadence < 5 || vPed < this.v - 0.6) ? (this._slow || 0) + dt : 0;
       if (this._slow > 0.75) this.engaged = false;
     } else if (cadence >= 5 && vPed >= this.v - 0.15) this.engaged = true;
     if (this.engaged) {
-      this.v += (vPed - this.v) * Math.min(1, dt * 4); // light smoothing of cadence noise
+      if (cadence >= 5 || !pushingUphill) this.v += (vPed - this.v) * Math.min(1, dt * 4); // light smoothing of cadence noise
     } else {
       this.v = Math.max(0, this.v - (resistForce(this.v, grade, this.p) / m) * dt);
       if (this.v < 0.05 && grade >= 0) this.v = 0;

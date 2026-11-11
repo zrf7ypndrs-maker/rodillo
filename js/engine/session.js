@@ -29,6 +29,11 @@ export const DEFAULT_SETTINGS = {
   climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
 };
 
+// The trim carried from one ride to the next stays small: it only has to cancel the trainer's own drag. A large
+// value is a wound-up correction from a ride that sat at the trainer's limit, not something to start with.
+const TRIM_CARRY = 0.06;
+const clampTrim = (t) => Math.max(-TRIM_CARRY, Math.min(TRIM_CARRY, Number(t) || 0));
+
 export class Session extends Emitter {
   constructor({ trainer, hr, settings, workout = null, name }) {
     super();
@@ -42,7 +47,7 @@ export class Session extends Emitter {
     this.name = name || workout?.name || 'Free ride';
     this.bike = new VirtualBike(this.s);
     this.devEst = new DevEstimator(this.s.realDev);
-    this.gOff = this.s.gradeTrim || 0; // closed-loop grade correction (learned per ride)
+    this.gOff = clampTrim(this.s.gradeTrim); // closed-loop grade correction (learned per ride)
     this.cadHist = [];
 
     this.intensity = 1.0;
@@ -282,8 +287,15 @@ export class Session extends Emitter {
         const demand = res.force * res.v;
         if (cadSteady && power > 15 && cadence > 30) {
           const err = demand - power;
-          this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / 4);
-          this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
+          // Anti-windup (Nov 11, Agustín's 20% test): at the trainer's ceiling more grade can't add power, and at
+          // its floor less grade can't take any away. Trimming further that way only winds the correction up; it
+          // then stayed stuck after he shifted from 32x14 to 32x52, so the trainer stayed maxed in the easiest gear.
+          const raw = ff + this.gOff;
+          const stuck = (raw >= this.s.maxSendGrade && err > 0) || (raw <= this.s.minSendGrade && err < 0);
+          if (!stuck) {
+            this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / 4);
+            this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
+          }
         }
         gs = ff + this.gOff;
       } else this.cadHist = [];
@@ -332,7 +344,7 @@ export class Session extends Emitter {
   }
 
   /** Learned calibration values to persist into settings after a ride. */
-  learned() { return { realDev: this.devEst.dev, gradeTrim: Math.round(this.gOff * 1000) / 1000 }; }
+  learned() { return { realDev: this.devEst.dev, gradeTrim: Math.round(clampTrim(this.gOff) * 1000) / 1000 }; }
 }
 
 export { G };
