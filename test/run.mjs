@@ -104,7 +104,8 @@ test('ERG workout, skip, lap, FIT export decodes', () => {
   s.toggleErg();
   assert.equal(s.ergOff, true);
   s.skip();
-  assert.equal(s.ergOff, false, 'ERG off resets on the next interval');
+  assert.equal(s.ergOff, true, 'ERG off stays off across intervals until the rider turns it on');
+  s.toggleErg();
   ride(s, trainer, hr, 60);
   s.bump(+1);
   ride(s, trainer, hr, 30);

@@ -1950,7 +1950,7 @@ function renderPhone(s) {
   $('#rp-skip').classList.toggle('hidden', !seg);
   $('#rp-lap').classList.toggle('hidden', !!seg); // workouts lap every interval on their own
   $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
-  set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off for this interval');
+  set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off');
 
   renderPhoneView(s);
   drawPhoneChart();
@@ -2251,7 +2251,7 @@ function renderControls() {
     ['Grade &plusmn;1%', 'D-pad up / down', '&uarr; / &darr;'],
     ['ERG'],
     ['Effort &plusmn;1% (hold to repeat)', 'Left shifters &minus; / right shifters + (also D-pad)', '&larr; / &rarr; or &darr; / &uarr;'],
-    ['ERG off/on for this interval', 'ERG off button on screen', 'E'],
+    ['ERG off / back on (stays off until you turn it on)', 'ERG off button on screen', 'E'],
     ['Menus'],
     ['Move / select / back', 'D-pad / A / B', '&uarr;&darr; / Enter / Esc'],
     ['Switch home tabs', 'D-pad left / right', '&larr; / &rarr;'],

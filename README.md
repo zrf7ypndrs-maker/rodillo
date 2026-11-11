@@ -32,7 +32,7 @@ That makes trainer power equal road force × virtual speed. The app learns two v
 | End ride (hold 5 s) | Hold B | Hold Esc |
 | Skip interval (hold 3 s) | Hold Y | Hold S |
 | Lap (free ride; workouts lap every interval) | Z | L |
-| ERG off for this interval (resets each interval) | ERG off button on screen | E |
+| ERG off / back on (stays off until you turn it on) | ERG off button on screen | E |
 
 **Controller firmware:** don't update the Ride controllers in Zwift Companion. Firmware above 1.2.0 hides the button service until Zwift unlocks it every 24 hours.
 

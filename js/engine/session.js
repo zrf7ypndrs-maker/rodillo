@@ -42,7 +42,7 @@ export class Session extends Emitter {
 
     this.intensity = 1.0;
     this.gradeOffset = 0;      // manual grade in free ride (fraction)
-    this.ergOff = false;       // rider forced sim during an ERG interval
+    this.ergOff = false;       // rider turned ERG off: ERG intervals ride as slope until the rider turns it back on (never automatic)
     this.paused = true;
     this.started = false;
     this.finished = false;
@@ -119,7 +119,6 @@ export class Session extends Emitter {
   }
   _advance() {
     this._closeLap(); // auto lap per interval (skips included) in the exported FIT
-    this.ergOff = false; // "ERG off for this interval"
     this.segI++; this.segT0 = this.elapsed; this.segD0 = this.bike.dist; this.emit('segment', this.segI);
   }
   /** Cadence vs the current segment's target: null (no target / settling), 'ok', 'low' or 'high'. */
