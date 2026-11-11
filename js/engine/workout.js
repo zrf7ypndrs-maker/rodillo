@@ -31,6 +31,7 @@
 import { speedForPower } from './physics.js?v=202611102147';
 
 const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
+const EST_W = 180; // steady power behind every estimate (durations of distance steps, distances of time steps)
 
 export function flatten(workout, ftp = 200) {
   const out = [];
@@ -57,7 +58,7 @@ export function flatten(workout, ftp = 200) {
       else { seg.kind = 'erg'; seg.from = seg.to = Number(s.power); }
       if (seg.dur == null && seg.dist) {
         // distance step: estimate its duration (for charts and totals) at a steady ~180 W
-        const v = speedForPower(seg.kind === 'erg' ? seg.from * 200 : 180, seg.kind === 'sim' ? seg.grade : 0, EST);
+        const v = speedForPower(seg.kind === 'erg' ? seg.from * 200 : EST_W, seg.kind === 'sim' ? seg.grade : 0, EST);
         seg.dur = Math.round(seg.dist / Math.max(v, 1));
         seg.estDur = true;
       }
@@ -182,6 +183,62 @@ export function segTarget(seg, p) {
 }
 
 export const hasDistance = (w) => flatten(w).some((s) => s.dist);
+
+// ------------------------------------------------------------------ slope workouts as a road
+// A workout made only of slope steps is drawn as an elevation profile over distance (Nov 11, Agustín picked it
+// over grade-height bars). Distance steps keep their length; time steps get the distance covered at EST_W.
+
+/** True when every step is a slope step: the workout is a road with an elevation profile. */
+export const isTrack = (segs) => segs.length > 0 && segs.every((g) => g.kind === 'sim');
+
+/**
+ * Lay slope segments out as a road: per segment d0/d1 (m from the start) and h0/h1 (m, start = 0).
+ * Also the total length D, the lowest and highest point, and the total climbing.
+ */
+export function track(segs) {
+  let d = 0, h = 0, lo = 0, hi = 0, up = 0;
+  const parts = segs.map((g) => {
+    const grade = g.grade || 0;
+    const len = g.dist || g.dur * speedForPower(EST_W, grade, EST);
+    const p = { d0: d, d1: d + len, h0: h, h1: h + len * grade };
+    d = p.d1; h = p.h1; lo = Math.min(lo, h); hi = Math.max(hi, h); up += Math.max(0, len * grade);
+    return p;
+  });
+  return { parts, D: d, lo, hi, ascent: up };
+}
+
+/** Metres along the road for a position on the workout's time axis (Session.chartPos, sample.wx). */
+export function trackDist(tr, segs, t) {
+  for (let i = 0; i < segs.length; i++) {
+    const g = segs[i], p = tr.parts[i];
+    if (t < g.end) return p.d0 + Math.max(0, Math.min(1, (t - g.start) / (g.dur || 1))) * (p.d1 - p.d0);
+  }
+  return tr.D;
+}
+
+/** Elevation (m) at metres d along the road. */
+export function trackHeight(tr, d) {
+  for (const p of tr.parts) if (d < p.d1) return p.h0 + ((Math.max(d, p.d0) - p.d0) / ((p.d1 - p.d0) || 1)) * (p.h1 - p.h0);
+  return tr.parts.length ? tr.parts[tr.parts.length - 1].h1 : 0;
+}
+
+/** Climbing done up to metres d. */
+export function trackClimbed(tr, d) {
+  let up = 0;
+  for (const p of tr.parts) {
+    if (p.h1 <= p.h0 || d <= p.d0) continue;
+    up += (Math.min(d, p.d1) - p.d0) / ((p.d1 - p.d0) || 1) * (p.h1 - p.h0);
+  }
+  return up;
+}
+
+/** The top of the climb segment i is part of (consecutive uphill segments count as one climb), from metres d. */
+export function climbAhead(tr, segs, i, d) {
+  let j = i;
+  while (j + 1 < segs.length && (segs[j + 1].grade || 0) > 0) j++;
+  const top = tr.parts[j];
+  return { top: top.d1, m: Math.max(0, top.d1 - d), rise: Math.max(0, top.h1 - trackHeight(tr, d)), h: top.h1 };
+}
 
 export function segmentAt(segs, t) {
   for (let i = 0; i < segs.length; i++) if (t < segs[i].end) return i;

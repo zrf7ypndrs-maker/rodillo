@@ -6,7 +6,7 @@ import { parseHr } from '../js/ble/hr.js';
 import { SimTrainer, SimHr } from '../js/ble/sim.js';
 import { Session } from '../js/engine/session.js';
 import { powerAt } from '../js/engine/physics.js';
-import { parseZwo, flatten, totalDuration, estimateTSS } from '../js/engine/workout.js';
+import { parseZwo, flatten, totalDuration, estimateTSS, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
 import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
@@ -195,6 +195,33 @@ test('ZWO import', () => {
   }
   console.log('ok - timed messages (times, reps, placeholders, skip, builder lines)');
 }
+
+test('slope workout as a road: elevation, position, climb ahead', () => {
+  const w = JSON.parse(fs.readFileSync(new URL('../workouts/sim-hill-repeats-1500.json', import.meta.url)));
+  const segs = flatten(w);
+  assert.ok(isTrack(segs));
+  assert.ok(!isTrack(flatten({ steps: [{ dur: 60, power: 0.5 }, { dur: 60, grade: 5 }] })), 'mixed ERG + slope stays bars');
+  const tr = track(segs);
+  const climb = tr.parts[1];
+  assert.equal(climb.d1 - climb.d0, 1500); // distance steps keep their length
+  assert.ok(Math.abs(climb.h1 - climb.h0 - 90) < 1e-9); // 1.5 km at 6%
+  const warm = tr.parts[0];
+  assert.ok(warm.d1 > 3000 && warm.d1 < 6000, `10 min warm-up at 1% ~4.6 km, got ${warm.d1}`);
+  assert.ok(Math.abs(tr.ascent - (450 + warm.d1 * 0.01)) < 1e-6);
+  // halfway through the first climb on the time axis = halfway along it on the road
+  const mid = segs[1].start + segs[1].dur / 2;
+  assert.ok(Math.abs(trackDist(tr, segs, mid) - (climb.d0 + 750)) < 1e-6);
+  assert.ok(Math.abs(trackHeight(tr, climb.d0 + 750) - (climb.h0 + 45)) < 1e-6);
+  assert.equal(trackDist(tr, segs, 1e9), tr.D);
+  const c = climbAhead(tr, segs, 1, climb.d0 + 1000);
+  assert.ok(Math.abs(c.m - 500) < 1e-6 && Math.abs(c.rise - 30) < 1e-6);
+  assert.ok(Math.abs(trackClimbed(tr, climb.d0 + 1000) - (warm.h1 + 60)) < 1e-6);
+  // consecutive uphill stretches are one climb; a descent lowers the road
+  const roll = flatten({ steps: [{ dist: 1000, grade: 2 }, { dist: 500, grade: 4 }, { dist: 1000, grade: -2 }] });
+  const rt = track(roll);
+  assert.equal(climbAhead(rt, roll, 0, 0).m, 1500);
+  assert.ok(Math.abs(rt.parts[2].h1 - 20) < 1e-9 && Math.abs(rt.hi - 40) < 1e-9 && Math.abs(rt.ascent - 40) < 1e-9);
+});
 
 console.log(`\n${passed} tests passed`);
 

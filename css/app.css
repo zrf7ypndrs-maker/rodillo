@@ -650,6 +650,8 @@ table.ints { margin-bottom: 14px; }
 .hero-prof .profile { height: 100%; display: block; }
 /* Hover readout on today's profile: the interval under the pointer stays full color, the rest fades,
    and an ink tag above it gives watts and time. */
+/* elevation profile (slope-only workouts): ink line along the top of the road */
+.profile .prof-line { fill: none; stroke: var(--ink); stroke-opacity: .55; stroke-width: 1.25; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
 .prof-hover { position: relative; touch-action: pan-y; }
 .prof-hover .profile [data-i] { transition: opacity .15s; cursor: crosshair; }
 .prof-hover.hov .profile [data-i] { opacity: .35; }

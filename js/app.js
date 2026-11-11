@@ -5,7 +5,7 @@ import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102147';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget } from './engine/workout.js?v=202611102147';
+import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
 import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
@@ -342,8 +342,28 @@ function applyLibrary() {
   refreshPlanViews();
 }
 
+// Elevation profiles are at least this tall in metres, so a flat ride looks flat instead of filling the chart.
+const ELEV_MIN = 60;
+const ascentText = (m) => `+${Math.round(m / 5) * 5} m`;
+
+/** Slope-only workouts: elevation over distance, each stretch filled with its grade color, an ink line on top. */
+function trackSvg(segs, width, height) {
+  const tr = track(segs), rng = Math.max(tr.hi - tr.lo, ELEV_MIN);
+  const top = height * 0.06, floor = height * 0.14; // floor: the lowest stretch still shows a band (and stays tappable)
+  const X = (d) => +((d / tr.D) * width).toFixed(1);
+  const Y = (h) => +(top + (1 - (h - tr.lo) / rng) * (height - top - floor)).toFixed(1);
+  let out = '';
+  segs.forEach((g, i) => {
+    const p = tr.parts[i], x0 = X(p.d0), x1 = X(p.d1) + 0.3; // 0.3: no hairline gaps between stretches
+    out += `<polygon data-i="${i}" points="${x0},${height} ${x0},${Y(p.h0)} ${x1},${Y(p.h1)} ${x1},${height}" fill="${gradeHex(g.grade)}" opacity=".9"/>`;
+  });
+  out += `<polyline class="prof-line" points="${tr.parts.map((p) => `${X(p.d0)},${Y(p.h0)}`).join(' ')} ${width},${Y(tr.parts.at(-1).h1)}"/>`;
+  return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
+}
+
 function profileSvg(w, width = 340, height = 54) {
   const segs = flatten(w, app.settings.ftp);
+  if (isTrack(segs)) return trackSvg(segs, width, height);
   const T = segs.length ? segs[segs.length - 1].end : 1;
   const maxF = 1.5;
   let out = '';
@@ -363,8 +383,10 @@ function profileSvg(w, width = 340, height = 54) {
 
 const isSim = (w) => flatten(w).some((s) => s.kind === 'sim');
 function woMeta(w) {
-  const dist = flatten(w).filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
+  const segs = flatten(w);
+  const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
   const mins = Math.round(totalDuration(w) / 60);
+  if (isTrack(segs)) return `${dist ? '~' : ''}${mins} min &middot; ${ascentText(track(segs).ascent)}`; // short: library meta column
   if (dist) return `~${mins} min &middot; ${+(dist / 1000).toFixed(1)} km`; // short: must fit the library's meta column
   const tss = estimateTSS(w);
   return `${mins} min${isSim(w) ? '' : ` &middot; TSS ~${tss}`}`;
@@ -704,12 +726,19 @@ function tipTarget(g, ftp) {
   return a === b ? `${a} W` : `${a}-${b} W`;
 }
 
+/** Height gained or lost over one stretch of an elevation profile: " +90 m" / " -12 m", nothing on the flat. */
+function riseHtml(p) {
+  const m = Math.round(p.h1 - p.h0);
+  return m ? ` <span>${m > 0 ? '+' : '&minus;'}${Math.abs(m)} m</span>` : '';
+}
+
 /** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
 function bindProfileHover(box, w) {
   if (!box) return;
   const segs = flatten(w, app.settings.ftp);
   if (!segs.length) return;
   const T = segs[segs.length - 1].end, ftp = app.settings.ftp;
+  const tr = isTrack(segs) ? track(segs) : null; // elevation profile: the x axis is distance
   const tip = document.createElement('div');
   tip.className = 'prof-tip';
   tip.setAttribute('role', 'status');
@@ -721,8 +750,8 @@ function bindProfileHover(box, w) {
     let i;
     if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
       // A finger is imprecise: anywhere in the interval's column counts.
-      const t = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999) * T;
-      i = segs.findIndex((g) => t >= g.start && t < g.end);
+      const f = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999);
+      i = tr ? tr.parts.findIndex((p) => f * tr.D >= p.d0 && f * tr.D < p.d1) : segs.findIndex((g) => f * T >= g.start && f * T < g.end);
     } else {
       // Mouse: only inside the filled area under the curve, not the empty space above it.
       const hit = e.target.closest?.('[data-i]');
@@ -738,13 +767,14 @@ function bindProfileHover(box, w) {
       const len = g.dist ? `${fmtDist(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur);
       const cad = g.cadence !== '' ? ` &middot; ${esc(g.cadence)} rpm` : '';
       tip.innerHTML = `<div class="pt-lbl">${esc(g.label)}${rep}</div>
-        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}</div>
+        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}${tr ? riseHtml(tr.parts[i]) : ''}</div>
         <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
       box.classList.add('hov');
     }
     // Centered over the interval, kept inside the chart.
     const b = box.getBoundingClientRect(), g = segs[cur];
-    const mid = r.left - b.left + ((g.start + g.end) / 2 / T) * r.width;
+    const f = tr ? (tr.parts[cur].d0 + tr.parts[cur].d1) / 2 / tr.D : (g.start + g.end) / 2 / T;
+    const mid = r.left - b.left + f * r.width;
     const half = tip.offsetWidth / 2;
     tip.style.left = `${Math.min(Math.max(mid, half), b.width - half)}px`;
   };
@@ -2204,6 +2234,7 @@ function drawChart() {
   const maxP = Math.max(ftp * 1.6, ...s.samples.slice(-1200).map((x) => x.power + 20));
   const Yp = (p) => H - pad - (Math.min(p, maxP) / maxP) * plotH;
 
+  if (s.segs && isTrack(s.segs)) return drawTrack(ctx, s, { W, H, dpr, top: pad, bot: H - pad, area: 0.6, compact: false });
   if (s.segs) {
     const T = Math.max(s.segs[s.segs.length - 1].end, s.chartPos + 1);
     const X = (t) => (t / T) * W;
@@ -2244,6 +2275,102 @@ function drawChart() {
   ctx.stroke();
   drawHrTrace(ctx, data, (x, i) => X(i), W, H, pad, dpr);
   ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 6 * dpr, 16 * dpr);
+}
+
+// ------------------------------------------------------------------ slope workouts on the ride screen
+const trackCache = new WeakMap(); // session -> track(segs)
+const rideTrack = (s) => { let t = trackCache.get(s); if (!t) { t = track(s.segs); trackCache.set(s, t); } return t; };
+const trackKmStep = (D) => (D > 40000 ? 10 : D > 12000 ? 5 : D > 5000 ? 2 : 1);
+
+/**
+ * Slope-only workout on the ride screen (desktop and phone; Nov 11, picked by Agustín from the mockups): the road's
+ * elevation over distance, filled with each stretch's grade color and faded where ridden, power and HR on top, a dot
+ * where the rider is, and on a climb (3%+) a flag at the top with a tag: "618 m to the top · +37 m".
+ */
+function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
+  const segs = s.segs, tr = rideTrack(s), ftp = app.settings.ftp, plotH = bot - top;
+  const pos = trackDist(tr, segs, s.chartPos), hNow = trackHeight(tr, pos);
+  const X = (d) => (d / tr.D) * W;
+  const xOf = (x) => X(trackDist(tr, segs, x.wx ?? x.wt));
+  const rng = Math.max(tr.hi - tr.lo, ELEV_MIN), aTop = bot - plotH * area, floor = plotH * 0.06;
+  const Y = (h) => aTop + (1 - (h - tr.lo) / rng) * (bot - floor - aTop);
+
+  // the road: ridden part faded, the rest at full strength
+  segs.forEach((g, i) => {
+    const p = tr.parts[i];
+    const pieces = p.d1 <= pos ? [[p.d0, p.d1, true]] : p.d0 >= pos ? [[p.d0, p.d1, false]] : [[p.d0, pos, true], [pos, p.d1, false]];
+    ctx.fillStyle = gradeHex(g.grade);
+    for (const [a, b, done] of pieces) {
+      ctx.globalAlpha = done ? 0.4 : 0.8;
+      ctx.beginPath(); ctx.moveTo(X(a), bot); ctx.lineTo(X(a), Y(trackHeight(tr, a)));
+      ctx.lineTo(X(b) + 0.5 * dpr, Y(trackHeight(tr, b))); ctx.lineTo(X(b) + 0.5 * dpr, bot); ctx.closePath(); ctx.fill();
+    }
+  });
+  ctx.globalAlpha = 0.55; ctx.strokeStyle = INK; ctx.lineWidth = 1.25 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+  tr.parts.forEach((p, i) => (i ? ctx.lineTo(X(p.d0), Y(p.h0)) : ctx.moveTo(X(p.d0), Y(p.h0))));
+  ctx.lineTo(W, Y(tr.parts.at(-1).h1)); ctx.stroke();
+  ctx.globalAlpha = 1;
+  if (!compact) { // km marks along the bottom
+    ctx.fillStyle = MUTED; ctx.textAlign = 'center';
+    const step = trackKmStep(tr.D);
+    for (let k = step; k * 1000 < tr.D * 0.97; k += step) ctx.fillText(`${k} km`, X(k * 1000), bot - 5 * dpr);
+    ctx.textAlign = 'left';
+  }
+
+  // FTP line, power and heart rate over the ridden part
+  const maxP = Math.max(ftp * (compact ? 1.4 : 1.6), ...s.samples.slice(-1200).map((x) => x.power + 20));
+  const Yp = (p) => bot - (Math.min(p, maxP) / maxP) * plotH;
+  ctx.strokeStyle = FTP_LINE; ctx.lineWidth = dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
+  ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, (compact ? 2 : 6) * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
+  ctx.strokeStyle = INK; ctx.lineWidth = (compact ? 1.8 : 2) * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+  s.samples.forEach((x, i) => { const px = xOf(x), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.stroke();
+  drawHrTrace(ctx, s.samples, xOf, W, H, top, dpr);
+
+  // where you are: a line through the chart and a dot on the road
+  const mx = X(pos), my = Y(hNow);
+  ctx.fillStyle = INK; ctx.fillRect(mx - dpr, compact ? top - 4 * dpr : 0, 2 * dpr, compact ? bot - top + 4 * dpr : H);
+  ctx.beginPath(); ctx.arc(mx, my, (compact ? 5 : 7) * dpr, 0, Math.PI * 2);
+  ctx.fillStyle = TOK.sheet; ctx.fill(); ctx.lineWidth = (compact ? 2.5 : 3) * dpr; ctx.strokeStyle = INK; ctx.stroke();
+
+  // on a climb: flag at the top and what's left to it
+  const seg = s.seg;
+  if (seg && (seg.grade || 0) >= 0.03) {
+    const c = climbAhead(tr, segs, s.segIndex, pos);
+    if (c.m > 1) {
+      const tx = X(c.top), ty = Y(c.h), pole = (compact ? 16 : 20) * dpr, fl = (compact ? 8 : 10) * dpr;
+      ctx.fillStyle = INK;
+      ctx.fillRect(tx - 0.75 * dpr, ty - pole, 1.5 * dpr, pole);
+      ctx.beginPath(); ctx.moveTo(tx, ty - pole); ctx.lineTo(tx + fl, ty - pole + fl * 0.35); ctx.lineTo(tx, ty - pole + fl * 0.7); ctx.closePath(); ctx.fill();
+      const big = fmtDist(c.m), small = `${compact ? '' : ' to the top'} · +${Math.round(c.rise)} m`; // phone: short, the flag marks the top
+      const fb = `800 ${(compact ? 15 : 19) * dpr}px ${NUM_FONT}`, fs = `600 ${(compact ? 12 : 13.5) * dpr}px ${NUM_FONT}`;
+      ctx.font = fb; const wb = ctx.measureText(big).width;
+      ctx.font = fs; const ws = ctx.measureText(small).width;
+      const px = 8 * dpr, th = (compact ? 24 : 30) * dpr, tw = wb + ws + px * 2;
+      // behind the dot (over the ridden part) so it never hides the road ahead; ahead only when there's no room behind
+      const bx = mx - 12 * dpr - tw >= 2 * dpr ? mx - 12 * dpr - tw : Math.min(mx + 12 * dpr, W - tw - 2 * dpr);
+      const by = Math.max(top, my - th - 14 * dpr);
+      ctx.fillStyle = INK; ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(bx, by, tw, th, 5 * dpr) : ctx.rect(bx, by, tw, th); ctx.fill();
+      ctx.textBaseline = 'middle'; ctx.fillStyle = TOK.sheet;
+      ctx.font = fb; ctx.fillText(big, bx + px, by + th / 2 + dpr);
+      ctx.globalAlpha = 0.72; ctx.font = fs; ctx.fillText(small, bx + px + wb, by + th / 2 + dpr);
+      ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  if (!compact) { // progress along the road, top right
+    ctx.font = `600 ${13 * dpr}px ${NUM_FONT}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right';
+    ctx.fillText(trackProgress(s), W - 12 * dpr, 20 * dpr);
+    ctx.textAlign = 'left';
+  }
+}
+
+/** "12.5 of 24.9 km · +215 of 495 m" for a slope-only ride. */
+function trackProgress(s) {
+  const tr = rideTrack(s), d = trackDist(tr, s.segs, s.chartPos);
+  return `${(d / 1000).toFixed(1)} of ${(tr.D / 1000).toFixed(1)} km · +${Math.round(trackClimbed(tr, d))} of ${Math.round(tr.ascent / 5) * 5} m`;
 }
 
 // Heart rate on its own scale (at least 80-190 bpm, widened to fit).
@@ -2410,7 +2537,7 @@ function renderPhoneView(s) {
   for (const b of $('#rp-view-tg').children) b.classList.toggle('on', b.dataset.view === (list ? 'list' : 'chart'));
   if (!s.segs) return;
   const n = s.segs.length, done = Math.min(s.segIndex < 0 ? n : s.segIndex, n);
-  const k = `Workout &middot; ${done}/${n} done`;
+  const k = isTrack(s.segs) ? trackProgress(s) : `Workout &middot; ${done}/${n} done`;
   const kEl = $('#rp-view-k');
   if (kEl.innerHTML !== k) kEl.innerHTML = k;
   if (!list) return;
@@ -2466,6 +2593,7 @@ function drawPhoneChart() {
     return;
   }
 
+  if (isTrack(s.segs)) return drawTrack(ctx, s, { W, H, dpr, top, bot, area: 0.7, compact: true });
   const segs = s.segs, pos = s.chartPos;
   const T = Math.max(segs.at(-1).end, pos + 1);
   const X = (t) => (t / T) * W;
