@@ -29,8 +29,8 @@ That makes trainer power equal road force × virtual speed. The app learns two v
 | Easier / harder gear | Left / right shifters and paddles | ← / → |
 | ERG intensity (1%) or free-ride grade (1%), hold to repeat | D-pad up / down | ↑ / ↓ |
 | Start / pause | A | Space |
-| End ride (twice) | B | Esc |
-| Skip interval | Y | S |
+| End ride (hold 5 s) | Hold B | Hold Esc |
+| Skip interval (hold 3 s) | Hold Y | Hold S |
 | Lap | Z | L |
 | ERG off for this interval | Left power-up | E |
 

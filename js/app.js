@@ -45,7 +45,6 @@ const app = {
   library: [], plan: null,
   session: null, rideId: null,
   screen: 'home', tab: 'workouts', focus: 0, woKind: ls.get('woKind', 'erg'),
-  endArmed: 0,
 };
 
 // ------------------------------------------------------------------ logging
@@ -1113,7 +1112,7 @@ function beginSession(opts) {
   s.on('autostart', () => toast('Go!'));
   s.on('autopause', () => toast('Auto-paused'));
   s.on('autoresume', () => toast('Resumed'));
-  s.on('workoutDone', () => toast('Workout complete. Free ride, or B twice to finish'));
+  s.on('workoutDone', () => toast('Workout complete. Free ride, or hold B to finish'));
   rideMsgReset();
   s.on('message', (t) => rideMsg(t));
   // a new step: anything still waiting belongs to the step that just ended, and its first message can replace what's up
@@ -1300,7 +1299,7 @@ function showSummary(ride) {
 }
 
 // ------------------------------------------------------------------ actions (controller + keyboard)
-function action(a) {
+function action(a, src = 'tap') {
   if (modalOpen()) return modalAction(a);
   if (builderOpen()) { if (a === 'back') closeBuilder(); return; } // the builder is keyboard/touch only
   const s = app.session;
@@ -1312,13 +1311,8 @@ function action(a) {
       case 'up': s.bump(+1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
       case 'down': s.bump(-1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
       case 'select': s.togglePause(); break;
-      case 'back': {
-        const now = Date.now();
-        if (now - app.endArmed < 3000) { app.endArmed = 0; endSession(); }
-        else { app.endArmed = now; toast(tooShort() ? 'Under 10 s, nothing saved. B again to end' : 'Press B again to end ride'); }
-        break;
-      }
-      case 'skip': if (s.segs) { s.skip(); toast('Skipped'); } break;
+      case 'back': holdStart('end', src); break;
+      case 'skip': holdStart('skip', src); break;
       case 'lap': s.lap(); break;
       case 'ergToggle': if (s.segs) { s.toggleErg(); toast(s.ergOff ? 'ERG off: slope mode' : 'ERG on'); } break;
     }
@@ -1421,14 +1415,68 @@ function onButton(b, dev) {
   const a = BUTTON_ACTIONS[b];
   logMsg('controller', `${dev?.side || ''} ${b}${a ? ' -> ' + a : ''}`);
   if (!a) return;
-  action(a);
+  action(a, 'ctl');
   if (REPEATABLE.has(a) && app.screen === 'ride') {
     clearTimeout(holdTimers[b]);
     const rep = () => { action(a); holdTimers[b] = setTimeout(rep, 120); };
     holdTimers[b] = setTimeout(rep, 450);
   }
 }
-function onRelease(b) { clearTimeout(holdTimers[b]); delete holdTimers[b]; }
+function onRelease(b) {
+  clearTimeout(holdTimers[b]); delete holdTimers[b];
+  const a = BUTTON_ACTIONS[b];
+  if (a === 'skip') holdEnd('skip');
+  else if (a === 'back') holdEnd('end');
+}
+
+// ------------------------------------------------------------------ hold to confirm
+// Skip (Y) and End ride (B) only happen if the button is held the whole time; letting go early cancels.
+// Same for the S / Esc keys and the phone sheet buttons. One overlay (#hold) for both.
+const HOLDS = {
+  skip: { ms: 3000, ctl: 'Y', key: 'S', word: 'Skip', msg: '', sub: (k) => `Keep holding ${k} to skip` },
+  end: { ms: 5000, ctl: 'B', key: 'Esc', word: 'End', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
+};
+let hold = null; // { kind, t }
+function holdStart(kind, src) {
+  const s = app.session;
+  if (!s || app.screen !== 'ride') return;
+  if (kind === 'skip' && !s.segs) return;
+  if (hold) { if (hold.kind === kind) return; holdEnd(); }
+  const h = HOLDS[kind];
+  const k = src === 'ctl' ? h.ctl : src === 'key' ? h.key : '';
+  const el = $('#hold');
+  el.classList.remove('run', 'skip', 'end');
+  el.classList.add(kind);
+  el.style.setProperty('--hold-ms', `${h.ms}ms`);
+  $('#hold-msg').textContent = h.msg;
+  const key = $('#hold-key');
+  key.textContent = k || h.word;
+  key.classList.toggle('word', !k || k.length > 1);
+  $('#hold-sub').textContent = h.sub(k || 'the button');
+  el.classList.remove('hidden');
+  void el.offsetWidth; // restart the fill animation
+  el.classList.add('run');
+  hold = { kind, t: setTimeout(() => holdDone(kind), h.ms) };
+}
+function holdEnd(kind) {
+  if (!hold || (kind && hold.kind !== kind)) return;
+  clearTimeout(hold.t);
+  hold = null;
+  $('#hold').classList.add('hidden');
+  $('#hold').classList.remove('run');
+}
+function holdDone(kind) {
+  holdEnd(kind);
+  const s = app.session;
+  if (!s || app.screen !== 'ride') return;
+  app.controllers.forEach((c) => c.vibrate?.());
+  $('#rp-sheet').classList.add('hidden');
+  if (kind === 'skip') { if (s.segs) { s.skip(); toast('Skipped'); } renderRide(); }
+  else endSession();
+}
+// a key released while the window is in the background never sends keyup
+window.addEventListener('blur', () => holdEnd());
+document.addEventListener('visibilitychange', () => { if (document.hidden) holdEnd(); });
 
 document.addEventListener('keydown', (e) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
@@ -1440,7 +1488,14 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   const a = map[e.key];
-  if (a) { e.preventDefault(); action(a); }
+  if (!a) return;
+  e.preventDefault();
+  if (e.repeat && (a === 'skip' || a === 'back') && app.screen === 'ride') return; // held: the first keydown started the hold
+  action(a, 'key');
+});
+document.addEventListener('keyup', (e) => {
+  if (e.key === 's') holdEnd('skip');
+  else if (e.key === 'Escape') holdEnd('end');
 });
 
 function focusables() {
@@ -1645,7 +1700,7 @@ function renderRide() {
   } else if (s.segs) {
     card.style.setProperty('--zc', ZC.z3);
     setHTML($('#r-int-label'), 'Workout complete');
-    setHTML($('#r-int-text'), 'keep riding or press B twice to finish');
+    setHTML($('#r-int-text'), 'keep riding or hold B to finish');
     setHTML($('#r-int-big'), '<span class="msg">Done. Nice work.</span>');
     bar.classList.add('hidden');
     setHTML($('#r-int-next'), '');
@@ -1662,8 +1717,8 @@ function renderRide() {
   renderPaused(s);
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
   $('#r-hints').innerHTML = s.mode === 'erg'
-    ? '<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; <b>Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>B&times;2</b> end'
-    : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>B&times;2</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
+    ? '<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; <b>Hold Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>Hold B</b> end'
+    : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>Hold B</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
   renderRideStatus();
   drawChart();
 }
@@ -1866,8 +1921,6 @@ function renderPhone(s) {
   $('#rp-skip').classList.toggle('hidden', !seg);
   $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
   set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off for this interval');
-  if (app.endArmed && Date.now() - app.endArmed > 3000) app.endArmed = 0;
-  set('rp-end', app.endArmed ? (tooShort() ? 'Tap again (under 10 s, not saved)' : 'Tap again to end ride') : 'End ride');
 
   renderPhoneView(s);
   drawPhoneChart();
@@ -1998,14 +2051,22 @@ rpTap('rp-more', () => $('#rp-sheet').classList.toggle('hidden'));
 rpTap('rp-sheet-close', () => $('#rp-sheet').classList.add('hidden'));
 rpTap('rp-gdown', () => action('down'));
 rpTap('rp-gup', () => action('up'));
-rpTap('rp-skip', () => { action('skip'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
-rpTap('rp-end', () => {
-  if (app.endArmed && Date.now() - app.endArmed < 3000) { app.endArmed = 0; $('#rp-sheet').classList.add('hidden'); endSession(); }
-  else app.endArmed = Date.now();
-});
+// press and hold (pointer + touch, since Bluefy doesn't always send pointer events); the sheet closes when the hold completes
+function bindHold(id, kind) {
+  const el = document.getElementById(id);
+  const down = (e) => { e.preventDefault(); holdStart(kind, 'tap'); };
+  const up = () => holdEnd(kind);
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('touchstart', down, { passive: false });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel']) el.addEventListener(ev, up);
+  el.addEventListener('click', (e) => e.preventDefault());
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+bindHold('rp-skip', 'skip');
+bindHold('rp-end', 'end');
 
 // ------------------------------------------------------------------ workout messages
 // Timed messages from the workout (session 'message' events) float over the top of the ride chart.
@@ -2150,8 +2211,8 @@ function renderControls() {
   const rows = [
     ['Riding'],
     ['Start / pause', 'A', 'Space'],
-    ['End ride (press twice)', 'B', 'Esc'],
-    ['Skip interval', 'Y', 'S'],
+    ['End ride (hold 5 s)', 'Hold B', 'Hold Esc'],
+    ['Skip interval (hold 3 s)', 'Hold Y', 'Hold S'],
     ['Lap', 'Z', 'L'],
     ['Slope'],
     ['Rear: easier / harder', sram ? 'Left side / right side' : 'Right shift-down / shift-up', '&larr; / &rarr;'],
