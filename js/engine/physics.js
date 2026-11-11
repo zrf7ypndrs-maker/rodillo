@@ -77,6 +77,13 @@ export class VirtualBike {
   }
 
   /** ERG/power-driven tick: integrate speed from measured power. */
+  /** ERG: ride at the trainer's own (flywheel) speed, so speed and distance match a watch paired to it. */
+  stepTrainer(dt, v) {
+    this.v = v;
+    this.dist += v * dt;
+    return { v };
+  }
+
   stepPower(dt, power, grade) {
     const m = this.p.riderKg + this.p.bikeKg;
     const vEff = Math.max(this.v, 1.0);

@@ -84,10 +84,14 @@ export class Session extends Emitter {
     this._advance();
     this.emit('change');
   }
+  /** Manual lap (free ride, or after a workout ends). In a workout every interval is its own lap. */
   lap() {
+    this._closeLap();
+    this.emit('lap');
+  }
+  _closeLap() {
     const n = this.samples.length;
     if (n - 1 > this.lapStart) { this.laps.push({ startIdx: this.lapStart, endIdx: n - 1 }); this.lapStart = n; }
-    this.emit('lap');
   }
   finish() {
     this.finished = true; this.paused = true;
@@ -113,7 +117,11 @@ export class Session extends Emitter {
     const last = this.segs?.at(-1);
     return last ? last.end + (this.elapsed - this.segT0) : this.elapsed;
   }
-  _advance() { this.segI++; this.segT0 = this.elapsed; this.segD0 = this.bike.dist; this.emit('segment', this.segI); }
+  _advance() {
+    this._closeLap(); // auto lap per interval (skips included) in the exported FIT
+    this.ergOff = false; // "ERG off for this interval"
+    this.segI++; this.segT0 = this.elapsed; this.segD0 = this.bike.dist; this.emit('segment', this.segI);
+  }
   /** Cadence vs the current segment's target: null (no target / settling), 'ok', 'low' or 'high'. */
   get cadStatus() {
     const g = this.seg;
@@ -184,7 +192,10 @@ export class Session extends Emitter {
       }
       this.target = Math.round(this._guard ? ergTarget * 0.6 : ergTarget);
       this.trainer.setErg(this.target);
-      this.bike.stepPower(dt, power, 0);
+      // speed and distance: the trainer's own speed (matches the FR970 with the KICKR paired);
+      // physics only when the trainer reports none (dropout, or coasting to a stop)
+      if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);
+      else this.bike.stepPower(dt, power, 0);
       this.maxed = false;
     } else {
       this.mode = 'sim';

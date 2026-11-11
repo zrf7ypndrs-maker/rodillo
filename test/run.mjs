@@ -99,8 +99,12 @@ test('ERG workout, skip, lap, FIT export decodes', () => {
   ride(s, trainer, hr, 120);
   assert.equal(trainer.mode, 'erg');
   assert.equal(trainer.erg, Math.round(200 * (segs[0].from + (segs[0].to - segs[0].from) * (120 / segs[0].dur))));
-  s.lap();
+  // trainer speed in ERG: speed and distance come from the trainer, not road physics
+  assert.ok(Math.abs(s.bike.v - trainer.data.speedKmh / 3.6) < 0.01, 'ERG speed = trainer speed');
+  s.toggleErg();
+  assert.equal(s.ergOff, true);
   s.skip();
+  assert.equal(s.ergOff, false, 'ERG off resets on the next interval');
   ride(s, trainer, hr, 60);
   s.bump(+1);
   ride(s, trainer, hr, 30);
@@ -111,7 +115,10 @@ test('ERG workout, skip, lap, FIT export decodes', () => {
   const { messages, errors } = dec.read();
   assert.equal(errors.length, 0, JSON.stringify(errors));
   assert.equal(messages.recordMesgs.length, s.samples.length);
-  assert.equal(messages.lapMesgs.length, 2);
+  // one lap per interval ridden (skips included), nothing extra
+  const intervals = new Set(s.samples.map((x) => x.si)).size;
+  assert.ok(intervals >= 2);
+  assert.equal(messages.lapMesgs.length, intervals);
   const ses = messages.sessionMesgs[0];
   assert.equal(ses.sport, 'cycling'); assert.equal(ses.subSport, 'virtualActivity');
   assert.ok(ses.avgPower > 100 && ses.avgHeartRate > 60);

@@ -1313,7 +1313,7 @@ function action(a, src = 'tap') {
       case 'select': s.togglePause(); break;
       case 'back': holdStart('end', src); break;
       case 'skip': holdStart('skip', src); break;
-      case 'lap': s.lap(); break;
+      case 'lap': if (s.seg) toast('Laps are automatic per interval'); else s.lap(); break;
       case 'ergToggle': if (s.segs) { s.toggleErg(); toast(s.ergOff ? 'ERG off: slope mode' : 'ERG on'); } break;
     }
     renderRide();
@@ -1346,7 +1346,7 @@ const fmtGradeSet = (s) => `${(s.gradeOffset * 100).toFixed(0)}%`;
 
 const BUTTON_ACTIONS = {
   up: 'up', down: 'down', left: 'left', right: 'right',
-  a: 'select', b: 'back', y: 'skip', z: 'lap', powerUpL: 'ergToggle',
+  a: 'select', b: 'back', y: 'skip', z: 'lap', // ERG off is on screen only (button / phone sheet / E key)
 };
 const SHIFT_BUTTONS = new Set(['shiftUpL', 'shiftDnL', 'paddleL', 'shiftUpR', 'shiftDnR', 'paddleR']);
 const isLeft = (b) => b.endsWith('L');
@@ -1726,9 +1726,14 @@ function renderRide() {
 
   renderPaused(s);
   $('#r-pause').textContent = !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause';
-  $('#r-hints').innerHTML = s.mode === 'erg'
-    ? '<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; <b>Hold Y</b> skip &middot; <b>Z</b> lap &middot; <b>Left power-up</b> ERG off &middot; <b>A</b> pause &middot; <b>Hold B</b> end'
-    : '<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; <b>Z</b> lap &middot; <b>A</b> pause &middot; <b>Hold B</b> end' + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
+  // in a workout every interval is its own lap, so Z only laps in free ride (or after the workout ends)
+  const lapOrSkip = s.seg ? '<b>Hold Y</b> skip' : '<b>Z</b> lap';
+  $('#r-hints').innerHTML = (s.mode === 'erg'
+    ? `<b>Shifters</b> or <b>Up/Down</b> effort &plusmn;1% &middot; ${lapOrSkip} &middot; <b>A</b> pause &middot; <b>Hold B</b> end`
+    : `<b>Shifters</b> gears &middot; <b>Up/Down</b> grade &plusmn;1% &middot; ${lapOrSkip} &middot; <b>A</b> pause &middot; <b>Hold B</b> end`) + (app.demo ? ' &middot; demo: <b>+/-</b> rider power' : '');
+  const ergBtn = $('#r-erg'), segNow = s.seg;
+  ergBtn.classList.toggle('hidden', !segNow || (segNow.kind !== 'erg' && !s.ergOff));
+  ergBtn.textContent = s.ergOff ? 'ERG back on' : 'ERG off';
   renderRideStatus();
   drawChart();
 }
@@ -1799,18 +1804,32 @@ function drawChart() {
 }
 
 // Heart rate on its own scale (at least 80-190 bpm, widened to fit).
+// HR line is drawn as a trailing rolling average (display only: stored samples, FIT, averages and the live number stay raw).
+// Strap jitter of a few bpm made the raw 1 Hz line spiky. Agustín suggested 3 s; 5 s to try first, change here.
+const HR_SMOOTH_S = 5;
+function smoothHr(samples) {
+  const out = new Array(samples.length);
+  let sum = 0, win = [];
+  samples.forEach((x, i) => {
+    if (!(x.hr > 0)) { out[i] = 0; sum = 0; win = []; return; } // gaps break the line and restart the average
+    win.push(x.hr); sum += x.hr;
+    if (win.length > HR_SMOOTH_S) sum -= win.shift();
+    out[i] = sum / win.length;
+  });
+  return out;
+}
 function drawHrTrace(ctx, samples, xOf, W, H, pad, dpr) {
-  const hrs = samples.filter((x) => x.hr > 0);
-  if (!hrs.length) return;
+  const sm = smoothHr(samples);
+  if (!sm.some((h) => h > 0)) return;
   let lo = 80, hi = 190;
-  for (const x of hrs) { if (x.hr < lo + 5) lo = x.hr - 5; if (x.hr > hi - 5) hi = x.hr + 5; }
+  for (const h of sm) { if (!h) continue; if (h < lo + 5) lo = h - 5; if (h > hi - 5) hi = h + 5; }
   const Y = (h) => H - pad - ((h - lo) / (hi - lo)) * (H - pad * 2);
   ctx.save();
   ctx.strokeStyle = HR_LINE; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   let pen = false;
   samples.forEach((x, i) => {
-    if (!(x.hr > 0)) { pen = false; return; }
-    const px = xOf(x, i), py = Y(x.hr);
+    if (!sm[i]) { pen = false; return; }
+    const px = xOf(x, i), py = Y(sm[i]);
     pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
     pen = true;
   });
@@ -1929,6 +1948,7 @@ function renderPhone(s) {
   set('rp-pause', !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause');
   $('#rp-grade-row').classList.toggle('hidden', erg);
   $('#rp-skip').classList.toggle('hidden', !seg);
+  $('#rp-lap').classList.toggle('hidden', !!seg); // workouts lap every interval on their own
   $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
   set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off for this interval');
 
@@ -2062,6 +2082,7 @@ rpTap('rp-sheet-close', () => $('#rp-sheet').classList.add('hidden'));
 rpTap('rp-gdown', () => action('down'));
 rpTap('rp-gup', () => action('up'));
 rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
+$('#r-erg').onclick = (e) => { e.currentTarget.blur(); action('ergToggle'); };
 rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
 // phone sheet: press and hold (pointer + touch, since Bluefy doesn't always send pointer events); the sheet closes when it completes
@@ -2223,14 +2244,14 @@ function renderControls() {
     ['Start / pause', 'A', 'Space'],
     ['End ride (hold 5 s)', 'Hold B', 'Hold Esc'],
     ['Skip interval (hold 3 s)', 'Hold Y', 'Hold S'],
-    ['Lap', 'Z', 'L'],
+    ['Lap (free ride; workouts lap every interval)', 'Z', 'L'],
     ['Slope'],
     ['Rear: easier / harder', sram ? 'Left side / right side' : 'Right shift-down / shift-up', '&larr; / &rarr;'],
     ['Front shift (2x)', sram ? 'Left + right together' : 'Left shift-up / shift-down', 'F'],
     ['Grade &plusmn;1%', 'D-pad up / down', '&uarr; / &darr;'],
     ['ERG'],
     ['Effort &plusmn;1% (hold to repeat)', 'Left shifters &minus; / right shifters + (also D-pad)', '&larr; / &rarr; or &darr; / &uarr;'],
-    ['ERG off/on for this interval', 'Left power-up', 'E'],
+    ['ERG off/on for this interval', 'ERG off button on screen', 'E'],
     ['Menus'],
     ['Move / select / back', 'D-pad / A / B', '&uarr;&darr; / Enter / Esc'],
     ['Switch home tabs', 'D-pad left / right', '&larr; / &rarr;'],
