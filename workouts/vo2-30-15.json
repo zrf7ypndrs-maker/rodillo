@@ -11,7 +11,28 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.7,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "30/15s today: 3 sets of 10."
+        },
+        {
+          "at": 40,
+          "text": "30 seconds hard, 15 easy. The easy part goes fast."
+        },
+        {
+          "at": 120,
+          "text": "Cadence 100+ on the hard bits. Stay seated."
+        },
+        {
+          "at": 240,
+          "text": "Don't blow up on the first few. It adds up."
+        },
+        {
+          "at": -20,
+          "text": "First set in 20 seconds."
+        }
+      ]
     },
     {
       "repeat": 10,
@@ -19,7 +40,25 @@
         {
           "dur": 30,
           "power": 1.25,
-          "cadence": "100+"
+          "cadence": "100+",
+          "messages": [
+            {
+              "rep": "first",
+              "text": "First set. {watts} W, spin fast."
+            },
+            {
+              "rep": 6,
+              "text": "Halfway through the set."
+            },
+            {
+              "rep": 8,
+              "text": "3 left. Keep it smooth."
+            },
+            {
+              "rep": "last",
+              "text": "Last one of the set. Go!"
+            }
+          ]
         },
         {
           "dur": 15,
@@ -30,7 +69,16 @@
     {
       "dur": 300,
       "power": 0.5,
-      "label": "Set recovery"
+      "label": "Set recovery",
+      "messages": [
+        {
+          "text": "Set 1 done. Easy 5 minutes."
+        },
+        {
+          "at": -20,
+          "text": "Set 2 in 20 seconds."
+        }
+      ]
     },
     {
       "repeat": 10,
@@ -38,7 +86,25 @@
         {
           "dur": 30,
           "power": 1.25,
-          "cadence": "100+"
+          "cadence": "100+",
+          "messages": [
+            {
+              "rep": "first",
+              "text": "Second set. {watts} W, spin fast."
+            },
+            {
+              "rep": 6,
+              "text": "Halfway through the set."
+            },
+            {
+              "rep": 8,
+              "text": "3 left. Keep it smooth."
+            },
+            {
+              "rep": "last",
+              "text": "Last one of the set. Go!"
+            }
+          ]
         },
         {
           "dur": 15,
@@ -49,7 +115,16 @@
     {
       "dur": 300,
       "power": 0.5,
-      "label": "Set recovery"
+      "label": "Set recovery",
+      "messages": [
+        {
+          "text": "Two sets done. One to go."
+        },
+        {
+          "at": -20,
+          "text": "Last set in 20 seconds."
+        }
+      ]
     },
     {
       "repeat": 10,
@@ -57,7 +132,25 @@
         {
           "dur": 30,
           "power": 1.25,
-          "cadence": "100+"
+          "cadence": "100+",
+          "messages": [
+            {
+              "rep": "first",
+              "text": "Last set. {watts} W, spin fast."
+            },
+            {
+              "rep": 6,
+              "text": "Halfway through the set."
+            },
+            {
+              "rep": 8,
+              "text": "3 left. Keep it smooth."
+            },
+            {
+              "rep": "last",
+              "text": "Very last one. Go!"
+            }
+          ]
         },
         {
           "dur": 15,
@@ -68,13 +161,23 @@
     {
       "dur": 300,
       "power": 0.5,
-      "label": "Set recovery"
+      "label": "Set recovery",
+      "messages": [
+        {
+          "text": "All 3 sets done. Nice work. Easy spin."
+        }
+      ]
     },
     {
       "dur": 180,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }

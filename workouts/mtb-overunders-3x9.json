@@ -11,7 +11,24 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.7,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "Over-unders: 3 sets of 3 surges."
+        },
+        {
+          "at": 40,
+          "text": "Under at 95%, over at 115%. Stand and attack the overs."
+        },
+        {
+          "at": 140,
+          "text": "After each surge, settle back. Don't ease off."
+        },
+        {
+          "at": -20,
+          "text": "First set in 20 seconds."
+        }
+      ]
     },
     {
       "repeat": 3,
@@ -22,20 +39,76 @@
             {
               "dur": 120,
               "power": 0.95,
-              "label": "Under"
+              "label": "Under",
+              "messages": [
+                {
+                  "rep": "first",
+                  "text": "Set start. Settle at {watts} W."
+                },
+                {
+                  "rep": [
+                    2,
+                    3
+                  ],
+                  "text": "Settle back to {watts} W. Don't ease off."
+                },
+                {
+                  "at": -10,
+                  "text": "Surge in 10 seconds. Get ready to stand."
+                }
+              ]
             },
             {
               "dur": 60,
               "power": 1.15,
               "label": "Over",
-              "text": "Stand and attack"
+              "text": "Stand and attack",
+              "messages": [
+                {
+                  "text": "Stand and attack! {watts} W."
+                },
+                {
+                  "at": -20,
+                  "rep": [
+                    1,
+                    2
+                  ],
+                  "text": "20 seconds. Keep it up."
+                },
+                {
+                  "at": -15,
+                  "rep": "last",
+                  "text": "Last surge of the set. Finish it!"
+                }
+              ]
             }
           ]
         },
         {
           "dur": 240,
           "power": 0.5,
-          "label": "Recovery"
+          "label": "Recovery",
+          "messages": [
+            {
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Set done. Easy 4 minutes."
+            },
+            {
+              "at": -20,
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Next set in 20 seconds."
+            },
+            {
+              "rep": "last",
+              "text": "All 3 sets done. Nice work."
+            }
+          ]
         }
       ]
     },
@@ -43,7 +116,12 @@
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }

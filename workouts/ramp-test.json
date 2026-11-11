@@ -9,16 +9,55 @@
     {
       "dur": 300,
       "power": 0.5,
-      "label": "Easy spin"
+      "label": "Easy spin",
+      "messages": [
+        {
+          "text": "Ramp test today. Easy spin for the first 5 minutes."
+        },
+        {
+          "at": 25,
+          "text": "Then 1-minute steps, a little harder every minute."
+        },
+        {
+          "at": 70,
+          "text": "Go until you truly can't hold the target. Then B twice."
+        },
+        {
+          "at": 125,
+          "text": "Your new FTP is 75% of your best minute."
+        },
+        {
+          "at": 185,
+          "text": "Stay seated the whole way. Cadence 90 to 100."
+        },
+        {
+          "at": -40,
+          "text": "Is the FR970 recording? Start it now if not."
+        }
+      ]
     },
     {
       "dur": 120,
-      "power": 0.5
+      "power": 0.5,
+      "messages": [
+        {
+          "text": "Two more easy minutes. Breathe, loosen your grip."
+        },
+        {
+          "at": -15,
+          "text": "The ramp starts in 15 seconds."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 0.5,
-      "label": "Step 1"
+      "label": "Step 1",
+      "messages": [
+        {
+          "text": "Step 1: {watts} W. Easy for now."
+        }
+      ]
     },
     {
       "dur": 60,
@@ -28,7 +67,12 @@
     {
       "dur": 60,
       "power": 0.62,
-      "label": "Step 3"
+      "label": "Step 3",
+      "messages": [
+        {
+          "text": "Still easy. Save it for later."
+        }
+      ]
     },
     {
       "dur": 60,
@@ -43,7 +87,12 @@
     {
       "dur": 60,
       "power": 0.8,
-      "label": "Step 6"
+      "label": "Step 6",
+      "messages": [
+        {
+          "text": "{watts} W. Getting real now, stay smooth."
+        }
+      ]
     },
     {
       "dur": 60,
@@ -53,42 +102,110 @@
     {
       "dur": 60,
       "power": 0.92,
-      "label": "Step 8"
+      "label": "Step 8",
+      "messages": [
+        {
+          "text": "Around FTP now. Every step from here counts."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 0.98,
-      "label": "Step 9"
+      "label": "Step 9",
+      "messages": [
+        {
+          "text": "{watts} W. Breathe deep and steady."
+        },
+        {
+          "at": -15,
+          "text": "15 seconds. Finish the step."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.04,
-      "label": "Step 10"
+      "label": "Step 10",
+      "messages": [
+        {
+          "text": "Keep the cadence up. Don't let it sag."
+        },
+        {
+          "at": -15,
+          "text": "Hold on to the end of the step."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.1,
-      "label": "Step 11"
+      "label": "Step 11",
+      "messages": [
+        {
+          "text": "This is where the test is decided."
+        },
+        {
+          "at": -15,
+          "text": "15 seconds. You can do 15 seconds."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.16,
-      "label": "Step 12"
+      "label": "Step 12",
+      "messages": [
+        {
+          "text": "{watts} W. One more minute. Then one more."
+        },
+        {
+          "at": -15,
+          "text": "Almost there. Keep the legs turning."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.22,
-      "label": "Step 13"
+      "label": "Step 13",
+      "messages": [
+        {
+          "text": "Don't quit mid-step. Get to the end of this one."
+        },
+        {
+          "at": -15,
+          "text": "15 seconds. Finish it!"
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.28,
-      "label": "Step 14"
+      "label": "Step 14",
+      "messages": [
+        {
+          "text": "{watts} W. Everything you have left."
+        },
+        {
+          "at": -15,
+          "text": "Hold it! 15 seconds!"
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 1.34,
-      "label": "Step 15"
+      "label": "Step 15",
+      "messages": [
+        {
+          "text": "Last step. Empty the tank."
+        },
+        {
+          "at": -15,
+          "text": "Finish it!"
+        }
+      ]
     },
     {
       "dur": 60,
@@ -99,7 +216,12 @@
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "You finished every step. Spin easy, then check your new FTP."
+        }
+      ]
     }
   ]
 }

@@ -2,7 +2,7 @@
 // gears), tracks intervals, and records 1 Hz samples.
 
 import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
-import { flatten, segTarget } from './workout.js?v=202611102147';
+import { flatten, segTarget, fillMessage } from './workout.js?v=202611102147';
 import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
 
@@ -215,6 +215,7 @@ export class Session extends Emitter {
       this.trainer.setGrade(gs);
     }
     this.altitude += this.bike.v * dt * Math.sin(Math.atan(this.grade));
+    this._messages();
 
     // ---- record at 1 Hz ----
     this._sampleAcc += dt;
@@ -229,6 +230,20 @@ export class Session extends Emitter {
       this._aggregate(this.samples.at(-1));
     }
     this.emit('tick');
+  }
+
+  /** Emits 'message' (text) for each timed message the rider just reached. Skipped steps stay silent. */
+  _messages() {
+    const g = this.seg;
+    if (!g?.msgs?.length) return;
+    const done = (this._msgDone ||= new Set());
+    const pos = Math.min(1, this.segProgress) * g.dur;
+    g.msgs.forEach((m, k) => {
+      const key = `${this.segI}:${k}`;
+      if (done.has(key) || pos < m.t) return;
+      done.add(key);
+      if (pos - m.t <= 15) this.emit('message', fillMessage(m.text, { seg: g, watts: this.target ?? (g.kind === 'erg' ? segTarget(g, this.segProgress) * this.s.ftp * this.intensity : null), ftp: this.s.ftp }));
+    });
   }
 
   _aggregate(x) {

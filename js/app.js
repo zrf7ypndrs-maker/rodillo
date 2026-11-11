@@ -1114,6 +1114,10 @@ function beginSession(opts) {
   s.on('autopause', () => toast('Auto-paused'));
   s.on('autoresume', () => toast('Resumed'));
   s.on('workoutDone', () => toast('Workout complete. Free ride, or B twice to finish'));
+  rideMsgReset();
+  s.on('message', (t) => rideMsg(t));
+  // a new step: anything still waiting belongs to the step that just ended, and its first message can replace what's up
+  s.on('segment', () => { rideMsgQ.list = []; rideMsgQ.stale = true; });
   show('ride');
   $('#r-name').textContent = s.name;
   sizeChart(); sizePhoneChart();
@@ -1131,6 +1135,7 @@ async function endSession() {
   const s = app.session;
   if (!s) return;
   s.finish();
+  rideMsgReset();
   wakeLock?.release?.().catch(() => {});
   if (s.samples.length < MIN_SAMPLES) { app.session = null; show('home'); return; }
   // remember what the app learned about this trainer (real rides only)
@@ -2001,6 +2006,35 @@ rpTap('rp-end', () => {
   if (app.endArmed && Date.now() - app.endArmed < 3000) { app.endArmed = 0; $('#rp-sheet').classList.add('hidden'); endSession(); }
   else app.endArmed = Date.now();
 });
+
+// ------------------------------------------------------------------ workout messages
+// Timed messages from the workout (session 'message' events) float over the top of the ride chart.
+// One at a time: a new one waits until the current one has been up for at least MSG_MIN ms,
+// except the first message of a new step, which replaces the old step's message right away.
+const MSG_MIN = 3500;
+const rideMsgQ = { list: [], shownAt: 0, timer: 0, stale: false };
+const msgMs = (t) => Math.min(11000, Math.max(5000, 2500 + t.length * 70));
+function rideMsgReset() {
+  clearTimeout(rideMsgQ.timer); rideMsgQ.list = []; rideMsgQ.shownAt = 0; rideMsgQ.stale = false;
+  const el = $('#r-msg'); el.classList.remove('show'); el.textContent = '';
+}
+function rideMsg(text) {
+  rideMsgQ.list.push(text);
+  if (!rideMsgQ.shownAt || rideMsgQ.stale) return rideMsgNext();
+  const up = Date.now() - rideMsgQ.shownAt;
+  clearTimeout(rideMsgQ.timer);
+  rideMsgQ.timer = setTimeout(rideMsgNext, Math.max(0, MSG_MIN - up));
+}
+function rideMsgNext() {
+  clearTimeout(rideMsgQ.timer);
+  const el = $('#r-msg');
+  const text = rideMsgQ.list.shift();
+  if (text == null) { el.classList.remove('show'); rideMsgQ.shownAt = 0; return; }
+  el.classList.remove('show'); void el.offsetWidth; // restart the animation for each message
+  el.textContent = text; el.classList.add('show');
+  rideMsgQ.shownAt = Date.now(); rideMsgQ.stale = false;
+  rideMsgQ.timer = setTimeout(rideMsgNext, rideMsgQ.list.length ? MSG_MIN : msgMs(text));
+}
 
 // ------------------------------------------------------------------ toast
 let toastTimer;

@@ -10,16 +10,51 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.7,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "VO2 day: 4 x 4 min at 108% FTP."
+        },
+        {
+          "at": 30,
+          "text": "The goal is time near max oxygen, not max watts."
+        },
+        {
+          "at": 100,
+          "text": "Cadence 95+ on the reps. High cadence spares your legs."
+        },
+        {
+          "at": 200,
+          "text": "Last minute of each rep: hard, but you could do 60 s more."
+        },
+        {
+          "at": -20,
+          "text": "Opener next: 1 minute near threshold."
+        }
+      ]
     },
     {
       "dur": 60,
       "power": 0.95,
-      "label": "Opener"
+      "label": "Opener",
+      "messages": [
+        {
+          "text": "Wake the legs up. {watts} W."
+        }
+      ]
     },
     {
       "dur": 180,
-      "power": 0.5
+      "power": 0.5,
+      "messages": [
+        {
+          "text": "Easy now. Get your breath back."
+        },
+        {
+          "at": -20,
+          "text": "Rep 1 in 20 seconds. Spin up to 95."
+        }
+      ]
     },
     {
       "repeat": 4,
@@ -28,11 +63,91 @@
           "dur": 240,
           "power": 1.08,
           "cadence": "95+",
-          "text": "Smooth and high cadence"
+          "text": "Smooth and high cadence",
+          "messages": [
+            {
+              "rep": "first",
+              "text": "Rep 1. Settle in, don't spike the start."
+            },
+            {
+              "rep": [
+                2,
+                3
+              ],
+              "text": "Rep {rep} of {of}. {watts} W."
+            },
+            {
+              "rep": "last",
+              "text": "Last rep. {watts} W. Make it count."
+            },
+            {
+              "at": 60,
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Breathe deep and rhythmic. Relax your shoulders."
+            },
+            {
+              "at": "50%",
+              "text": "Halfway. Keep the cadence above 95."
+            },
+            {
+              "at": -60,
+              "rep": [
+                1,
+                2,
+                3
+              ],
+              "text": "One minute. This is where it counts."
+            },
+            {
+              "at": -60,
+              "rep": "last",
+              "text": "Last minute of the last rep. Everything you have."
+            },
+            {
+              "at": -15,
+              "rep": [
+                1,
+                2,
+                3
+              ],
+              "text": "15 seconds. Hold it."
+            },
+            {
+              "at": -15,
+              "rep": "last",
+              "text": "Finish it!"
+            }
+          ]
         },
         {
           "dur": 240,
-          "power": 0.5
+          "power": 0.5,
+          "messages": [
+            {
+              "rep": [
+                1,
+                2,
+                3
+              ],
+              "text": "Easy. Drop the cadence, breathe."
+            },
+            {
+              "at": -20,
+              "rep": [
+                1,
+                2,
+                3
+              ],
+              "text": "Next rep in 20 seconds. {left} to go."
+            },
+            {
+              "rep": "last",
+              "text": "All 4 reps done. Nice work."
+            }
+          ]
         }
       ]
     },
@@ -40,7 +155,12 @@
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }

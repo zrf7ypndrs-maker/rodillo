@@ -2,7 +2,7 @@
 // pull a selected bar's top edge for power/grade and its right edge for length. The selected block's
 // details (cadence, name, cue, exact numbers) are edited below the timeline.
 // Saving goes through deps.onSave (app.js stores it in rodillo-data workouts/mine.json).
-import { flatten } from './engine/workout.js?v=202611102147';
+import { flatten, parseMessageLines, formatMessageLines } from './engine/workout.js?v=202611102147';
 import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mine.js?v=202611102147';
 
 let D = null;   // deps from app.js
@@ -325,6 +325,8 @@ function renderSteps() {
       <div class="b-line2">
         <input class="b-in" data-f="label" data-fp="${p}" value="${D.esc(s.label || '')}" placeholder="Name on screen" aria-label="Step name">
         <input class="b-in" data-f="text" data-fp="${p}" value="${D.esc(s.text || '')}" placeholder="Cue on screen" aria-label="Cue">
+        <span class="b-msgs-k muted">Messages over the chart, one per line</span>
+        <textarea class="b-in b-msgs" data-f="messages" data-fp="${p}" rows="${Math.min(6, Math.max(2, (s.messages?.length || 0) + 1))}" placeholder="0:30 Settle in  ·  -0:15 Hold it  ·  50% Halfway  ·  last -0:20 Last one  ·  {watts} = target watts" aria-label="Messages, one per line">${D.esc(formatMessageLines(s.messages))}</textarea>
       </div>
     </div>`;
   };
@@ -560,6 +562,7 @@ function onInput(e) {
     case 'repeat': { const n = num(v, 1, 50); ok = n != null && Number.isInteger(n); if (ok) s.repeat = n; break; }
     case 'cadence': ok = v === '' || /^\d{2,3}\s*(-\s*\d{2,3}|\+)?$/.test(v); if (ok) { if (v === '') delete s.cadence; else s.cadence = /^\d+$/.test(v) ? +v : v.replace(/\s+/g, ''); } break;
     case 'label': case 'text': if (v) s[f] = el.value; else delete s[f]; break;
+    case 'messages': { const r = parseMessageLines(el.value); ok = !r.bad.length; if (ok) { if (r.messages.length) s.messages = r.messages; else delete s.messages; } break; }
   }
   el.classList.toggle('bad', !ok);
   touched();

@@ -131,7 +131,7 @@ test('All library workouts parse', () => {
 test('ZWO import', () => {
   const zwo = `<workout_file><name>Test ZWO</name><description>d</description><workout>
     <Warmup Duration="600" PowerLow="0.4" PowerHigh="0.75"/>
-    <IntervalsT Repeat="3" OnDuration="60" OffDuration="60" OnPower="1.2" OffPower="0.5"><textevent timeoffset="0" message="Go!"/></IntervalsT>
+    <IntervalsT Repeat="3" OnDuration="60" OffDuration="60" OnPower="1.2" OffPower="0.5"><textevent timeoffset="0" message="Go!"/><textevent timeoffset="130" message="Rep 2 halfway"/><textevent timeoffset="70" message="Rest"/></IntervalsT>
     <SteadyState Duration="300" Power="0.7" Cadence="85"/>
     <FreeRide Duration="120"/>
     <Cooldown Duration="300" PowerLow="0.6" PowerHigh="0.4"/></workout></workout_file>`;
@@ -139,10 +139,53 @@ test('ZWO import', () => {
   const segs = flatten(w);
   assert.equal(w.name, 'Test ZWO');
   assert.equal(segs.length, 1 + 6 + 1 + 1 + 1);
-  assert.equal(segs[1].text, 'Go!');
+  assert.deepEqual(segs[1].msgs, [{ t: 0, text: 'Go!' }]);
+  assert.deepEqual(segs[2].msgs, [{ t: 10, text: 'Rest' }]);
+  assert.deepEqual(segs[3].msgs, [{ t: 10, text: 'Rep 2 halfway' }]);
+  assert.equal(segs[5].msgs.length, 0);
   assert.equal(totalDuration(w), 600 + 360 + 300 + 120 + 300);
 });
 
+{
+  const { msgTime, parseMessageLines, formatMessageLines, fillMessage } = await import('../js/engine/workout.js');
+  assert.equal(msgTime(0, 240), 0); assert.equal(msgTime(-30, 240), 210); assert.equal(msgTime('50%', 240), 120);
+  assert.equal(msgTime(999, 240), 239); assert.equal(msgTime(-999, 240), 0);
+  const w = { steps: [{ dur: 60, power: 0.5, messages: [{ at: -10, text: 'b' }, { text: 'a' }] },
+    { repeat: 3, steps: [{ dur: 30, power: 1.1, messages: [{ at: '50%', text: 'Rep {rep} of {of}, {left} left, hold {watts}' }, { at: -5, rep: 'last', text: 'Last one' }, { rep: [1, 2], text: 'early' }] }, { dur: 20, power: 0.5 }] }] };
+  const segs = flatten(w, 200);
+  assert.deepEqual(segs[0].msgs.map((m) => m.text), ['a', 'b'], 'sorted by time');
+  assert.equal(segs[1].msgs.length, 2); assert.equal(segs[5].msgs.length, 2);
+  assert.deepEqual(segs[5].msgs.map((m) => m.text), ['Rep {rep} of {of}, {left} left, hold {watts}', 'Last one']);
+  assert.equal(fillMessage(segs[5].msgs[0].text, { seg: segs[5], watts: 219.6, ftp: 200 }), 'Rep 3 of 3, 0 left, hold 220');
+  // a ride fires each once, in order, with the live target
+  const trainer = new SimTrainer(); const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { ftp: 200 }, workout: w });
+  const got = []; s.on('message', (t) => got.push([Math.round(s.elapsed), t]));
+  s.start(); trainer.ergCadence = 90; ride(s, trainer, hr, 60 + 3 * 50 + 2);
+  assert.deepEqual(got.map((g) => g[1]), ['a', 'b', 'early', 'Rep 1 of 3, 2 left, hold 220', 'early', 'Rep 2 of 3, 1 left, hold 220', 'Rep 3 of 3, 0 left, hold 220', 'Last one']);
+  assert.ok(Math.abs(got[1][0] - 50) <= 1 && Math.abs(got.at(-1)[0] - (60 + 100 + 25)) <= 1, JSON.stringify(got));
+  // skipping a step drops its messages
+  const s2 = new Session({ trainer: new SimTrainer(), hr: null, settings: {}, workout: w });
+  const got2 = []; s2.on('message', (t) => got2.push(t));
+  s2.start(); s2.tick(0.25); s2.skip(); s2.skip(); s2.tick(0.25);
+  assert.deepEqual(got2, ['a']);
+  // builder text form round-trips
+  const { messages, bad } = parseMessageLines('Welcome\n-0:30 Thirty seconds\nlast -10s Empty the tank\nrep 2: 50% Halfway\n1:15: colon ok\n\n-0:20');
+  assert.deepEqual(messages, [{ text: 'Welcome' }, { at: -30, text: 'Thirty seconds' }, { at: -10, rep: 'last', text: 'Empty the tank' }, { at: '50%', rep: 2, text: 'Halfway' }, { at: 75, text: 'colon ok' }]);
+  assert.deepEqual(bad, [7]);
+  assert.equal(formatMessageLines(messages), 'Welcome\n-0:30 Thirty seconds\nlast -0:10 Empty the tank\nrep 2 50% Halfway\n1:15 colon ok');
+  assert.deepEqual(parseMessageLines(formatMessageLines(messages)).messages, messages);
+  const lists = [{ rep: [2, 3, 4], text: 'Rep {rep}' }, { at: -60, rep: 'first', text: 'x' }];
+  assert.equal(formatMessageLines(lists), 'rep 2,3,4: Rep {rep}\nfirst -1:00 x');
+  assert.deepEqual(parseMessageLines('Last step. Go\nRep 1. Settle\n0:00 last: plain\n30s Last 15 seconds').messages, [{ text: 'Last step. Go' }, { text: 'Rep 1. Settle' }, { text: 'last: plain' }, { at: 30, text: 'Last 15 seconds' }]);
+  assert.deepEqual(parseMessageLines(formatMessageLines(lists)).messages, lists);
+  // every library workout's messages survive the builder's text form
+  for (const f of fs.readdirSync(new URL('../workouts/', import.meta.url)).filter((x) => x.endsWith('.json') && x !== 'index.json')) {
+    const walk = (steps) => steps.forEach((st) => st.steps ? walk(st.steps) : st.messages && assert.deepEqual(parseMessageLines(formatMessageLines(st.messages)).messages, st.messages, f));
+    walk(JSON.parse(fs.readFileSync(new URL(`../workouts/${f}`, import.meta.url))).steps);
+  }
+  console.log('ok - timed messages (times, reps, placeholders, skip, builder lines)');
+}
 
 console.log(`\n${passed} tests passed`);
 

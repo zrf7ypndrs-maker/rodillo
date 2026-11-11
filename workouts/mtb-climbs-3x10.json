@@ -12,7 +12,24 @@
     {
       "dur": 600,
       "grade": 1,
-      "label": "Warm-up roll"
+      "label": "Warm-up roll",
+      "messages": [
+        {
+          "text": "MTB climbs: 3 x 10 min at 7%."
+        },
+        {
+          "at": 30,
+          "text": "On the climbs: big gear, 60-65 rpm, seated."
+        },
+        {
+          "at": 100,
+          "text": "Aim for about 90% FTP on the power card."
+        },
+        {
+          "at": -20,
+          "text": "First climb in 20 seconds. Shift to a big gear."
+        }
+      ]
     },
     {
       "repeat": 3,
@@ -22,25 +39,82 @@
           "grade": 7,
           "cadence": "60-65",
           "label": "Climb",
-          "text": "Big gear, seated, ~90% FTP"
+          "text": "Big gear, seated, ~90% FTP",
+          "messages": [
+            {
+              "text": "Climb {rep} of {of}. Big gear, 60-65 rpm."
+            },
+            {
+              "at": 60,
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Stay seated. Push through the whole pedal stroke."
+            },
+            {
+              "at": "50%",
+              "text": "Halfway up. Keep the torque on."
+            },
+            {
+              "at": -60,
+              "text": "One minute, then stand for the last 30 seconds."
+            }
+          ]
         },
         {
           "dur": 30,
           "grade": 8,
           "label": "Over the top",
-          "text": "Stand and push"
+          "text": "Stand and push",
+          "messages": [
+            {
+              "text": "Stand and push over the top!"
+            },
+            {
+              "at": -10,
+              "rep": "last",
+              "text": "Over the top!"
+            }
+          ]
         },
         {
           "dur": 240,
           "grade": 0,
-          "label": "Flat roll"
+          "label": "Flat roll",
+          "messages": [
+            {
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Over the top. Shift down and spin easy."
+            },
+            {
+              "at": -20,
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Next climb in 20 seconds. Big gear ready."
+            },
+            {
+              "rep": "last",
+              "text": "All climbs done. Nice work."
+            }
+          ]
         }
       ]
     },
     {
       "dur": 240,
       "grade": 0,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }

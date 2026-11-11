@@ -15,6 +15,14 @@
 //     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0%
 //   ]
 // }
+//
+// Timed messages (shown over the ride chart): any step can carry
+//   "messages": [ { "at": 0, "text": "..." },          // seconds from the start of the step
+//                 { "at": -30, "text": "..." },        // negative = seconds before the end
+//                 { "at": "50%", "text": "..." },      // share of the step
+//                 { "at": -20, "rep": "last", "text": "Last one" } ]  // rep: number, "first", "last" or a list
+// Text can use {watts} (target now), {ftp}, {rep}, {of} and {left} (reps left after this one).
+// Distance steps time their messages on the estimated duration.
 
 import { speedForPower } from './physics.js?v=202611102147';
 
@@ -48,6 +56,10 @@ export function flatten(workout, ftp = 200) {
         seg.dur = Math.round(seg.dist / Math.max(v, 1));
         seg.estDur = true;
       }
+      seg.msgs = (s.messages || [])
+        .filter((m) => m && String(m.text || '').trim() && repMatches(m.rep, rep))
+        .map((m) => ({ t: msgTime(m.at, seg.dur), text: String(m.text).trim() }))
+        .sort((a, b) => a.t - b.t);
       out.push(seg);
     }
   };
@@ -55,6 +67,70 @@ export function flatten(workout, ftp = 200) {
   let t = 0;
   for (const s of out) { s.start = t; t += s.dur; s.end = t; }
   return out;
+}
+
+/** Second within a step (0..dur) at which a message shows. */
+export function msgTime(at, dur) {
+  let t = 0;
+  if (typeof at === 'string' && /^\s*\d+(\.\d+)?\s*%\s*$/.test(at)) t = (parseFloat(at) / 100) * dur;
+  else if (Number.isFinite(Number(at))) { const n = Number(at); t = n < 0 ? dur + n : n; }
+  return Math.max(0, Math.min(Math.max(0, dur - 1), Math.round(t)));
+}
+
+function repMatches(want, rep) {
+  if (want == null || want === '') return true;
+  const i = rep ? rep.i : 1, of = rep ? rep.of : 1;
+  const one = (w) => w === 'first' ? i === 1 : w === 'last' ? i === of : Number(w) === i;
+  return Array.isArray(want) ? want.some(one) : one(want);
+}
+
+/** Fills {watts} {ftp} {rep} {of} {left} in a message. */
+export function fillMessage(text, { seg, watts, ftp }) {
+  const rep = seg?.rep;
+  const v = { watts: watts != null ? Math.round(watts) : '', ftp: ftp != null ? Math.round(ftp) : '', rep: rep ? rep.i : '', of: rep ? rep.of : '', left: rep ? rep.of - rep.i : '' };
+  return text.replace(/\{(watts|ftp|rep|of|left)\}/g, (_, k) => String(v[k]));
+}
+
+// ---- builder text form: one message per line, "[first|last|rep 3|rep 1,2] [when] text",
+// when = 1:30, -0:20, 45s, -10s or 50% (no when = start of the step)
+// a rep filter only counts when a time or a colon follows it, so "Last step. Go" stays plain text
+const WHEN = String.raw`(?=-?\d+:[0-5]\d\b|-?\d+s\b|\d{1,3}%)`;
+const REP_FIRST_LAST = new RegExp(String.raw`^(first|last)\s*(?::\s*|\s+${WHEN})`, 'i');
+const REP_NUM = new RegExp(String.raw`^reps?\s*(\d+(?:\s*,\s*\d+)*)\s*(?::\s*|\s+${WHEN})`, 'i');
+export function parseMessageLines(str) {
+  const out = [], bad = [];
+  String(str || '').split('\n').forEach((raw, n) => {
+    let line = raw.trim();
+    if (!line) return;
+    const m = {};
+    let x;
+    if ((x = line.match(REP_FIRST_LAST))) { m.rep = x[1].toLowerCase(); line = line.slice(x[0].length); }
+    else if ((x = line.match(REP_NUM))) { const r = x[1].split(',').map((n) => +n); m.rep = r.length > 1 ? r : r[0]; line = line.slice(x[0].length); }
+    if ((x = line.match(/^(-?)(\d+):([0-5]\d)\b\s*/))) { m.at = (x[1] ? -1 : 1) * (+x[2] * 60 + +x[3]); line = line.slice(x[0].length); }
+    else if ((x = line.match(/^(-?)(\d+)s\b\s*/i))) { m.at = (x[1] ? -1 : 1) * +x[2]; line = line.slice(x[0].length); }
+    else if ((x = line.match(/^(\d{1,3})%\s*/))) { m.at = `${Math.min(100, +x[1])}%`; line = line.slice(x[0].length); }
+    line = line.replace(/^[:\-]\s*/, '').trim();
+    if (!line) { bad.push(n + 1); return; }
+    out.push({ ...(m.at != null && m.at !== 0 ? { at: m.at } : {}), ...(m.rep != null ? { rep: m.rep } : {}), text: line });
+  });
+  return { messages: out, bad };
+}
+
+export function formatMessageLines(msgs) {
+  const t = (at) => {
+    if (at == null || at === 0) return '';
+    if (typeof at === 'string') return at.trim() + ' ';
+    const a = Math.abs(at);
+    return `${at < 0 ? '-' : ''}${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')} `;
+  };
+  const r = (rep) => rep == null ? '' : Array.isArray(rep) ? `rep ${rep.join(',')} ` : typeof rep === 'number' ? `rep ${rep} ` : `${rep} `;
+  return (msgs || []).map((m) => {
+    const when = t(m.at), rep = r(m.rep);
+    if (rep && !when) return `${rep.trim()}: ${m.text}`;
+    // plain text that would read as a filter or a time gets an explicit 0:00
+    if (!rep && !when && (REP_FIRST_LAST.test(m.text) || REP_NUM.test(m.text) || /^(-?\d+:[0-5]\d\b|-?\d+s\b|\d{1,3}%)/i.test(m.text))) return `0:00 ${m.text}`;
+    return `${rep}${when}${m.text}`;
+  }).join('\n');
 }
 
 function defaultLabel(s) {
@@ -137,25 +213,33 @@ export function parseZwo(xml) {
   while ((m = re.exec(body))) {
     const tag = m[1], a = attrs(m[2]);
     const dur = Number(a.Duration || 0);
-    const texts = [];
-    if (m[4]) m[4].replace(/<textevent\b([^>]*)\/?>/g, (_, t) => { const ta = attrs(t); if (ta.message) texts.push(ta.message); return ''; });
-    const text = texts.join(' / ');
+    // Zwift textevents become timed messages (offset from the block start)
+    const evs = [];
+    if (m[4]) m[4].replace(/<textevent\b([^>]*)\/?>/g, (_, t) => { const ta = attrs(t); if (ta.message) evs.push({ at: Math.max(0, Math.round(Number(ta.timeoffset) || 0)), text: ta.message }); return ''; });
+    const messages = evs.length ? evs : undefined;
     const cad = a.Cadence ? String(a.Cadence) : '';
     switch (tag) {
       case 'Warmup': case 'Cooldown': case 'Ramp':
-        steps.push({ dur, from: Number(a.PowerLow), to: Number(a.PowerHigh), label: tag === 'Ramp' ? undefined : tag === 'Warmup' ? 'Warm-up' : 'Cool-down', text, cadence: cad });
+        steps.push({ dur, from: Number(a.PowerLow), to: Number(a.PowerHigh), label: tag === 'Ramp' ? undefined : tag === 'Warmup' ? 'Warm-up' : 'Cool-down', messages, cadence: cad });
         break;
       case 'SteadyState': case 'SolidState':
-        steps.push({ dur, power: Number(a.Power), text, cadence: cad });
+        steps.push({ dur, power: Number(a.Power), messages, cadence: cad });
         break;
-      case 'IntervalsT':
+      case 'IntervalsT': {
+        const on = Number(a.OnDuration), off = Number(a.OffDuration), per = on + off || 1;
+        const onMsgs = [], offMsgs = [];
+        for (const e of evs) {
+          const rep = Math.floor(e.at / per) + 1, w = e.at % per;
+          (w < on ? onMsgs : offMsgs).push({ at: w < on ? w : w - on, rep, text: e.text });
+        }
         steps.push({ repeat: Number(a.Repeat || 1), steps: [
-          { dur: Number(a.OnDuration), power: Number(a.OnPower), cadence: a.Cadence || '', text },
-          { dur: Number(a.OffDuration), power: Number(a.OffPower), cadence: a.CadenceResting || '' },
+          { dur: on, power: Number(a.OnPower), cadence: a.Cadence || '', messages: onMsgs.length ? onMsgs : undefined },
+          { dur: off, power: Number(a.OffPower), cadence: a.CadenceResting || '', messages: offMsgs.length ? offMsgs : undefined },
         ] });
         break;
+      }
       case 'FreeRide': case 'MaxEffort':
-        steps.push({ dur, free: true, label: tag === 'MaxEffort' ? 'Max effort' : 'Free ride', text });
+        steps.push({ dur, free: true, label: tag === 'MaxEffort' ? 'Max effort' : 'Free ride', messages });
         break;
     }
   }

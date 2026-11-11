@@ -424,6 +424,17 @@ table.ints { margin-bottom: 14px; }
 .ride-body.with-segs { grid-template-columns: 1fr 330px; }
 .ride-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .chart { width: 100%; flex: 1; min-height: 140px; background: var(--sheet); border-radius: var(--r); }
+/* timed workout messages: floating text over the top of the ride chart (desktop) */
+.chart-box { position: relative; flex: 1; min-height: 140px; }
+.chart-box > .chart { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; }
+.r-msg { position: absolute; top: 14px; left: 0; right: 0; padding: 0 64px; text-align: center; pointer-events: none;
+  font-size: clamp(22px, 2.3vw, 32px); font-weight: 800; line-height: 1.15; letter-spacing: -0.005em; color: var(--ink); text-wrap: balance;
+  text-shadow: 0 0 2px var(--sheet), 0 0 6px var(--sheet), 0 0 14px var(--sheet), 0 0 24px var(--sheet);
+  opacity: 0; transform: translateY(-6px); transition: opacity .5s, transform .5s; }
+.r-msg.show { opacity: 1; transform: none; animation: msg-in .55s cubic-bezier(.3, 1.6, .5, 1), msg-pulse 1.3s ease-in-out .55s 3; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(-10px) scale(.9); } }
+@keyframes msg-pulse { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.045); } }
+@media (prefers-reduced-motion: reduce) { .r-msg, .r-msg.show { animation: none; transform: none; } }
 .ride-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: relative; z-index: 6; } /* above .paused-overlay so End ride / Resume stay clickable while paused */
 .hints { font-size: 13px; color: var(--muted); }
 .hints b { color: var(--ink); font-weight: 650; }
@@ -790,6 +801,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
 .b-line2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin: 6px 0 0 14px; }
 .b-line2 .b-in { font-size: 13px; padding: 4px 8px; background: transparent; border-color: transparent; border-bottom-color: var(--rule); border-radius: 0; }
 .b-line2 .b-in:focus { border-bottom-color: var(--ink); }
+.b-line2 .b-msgs-k { grid-column: 1 / -1; font-size: 12px; margin: 6px 0 -6px 8px; }
+.b-line2 .b-msgs { grid-column: 1 / -1; resize: vertical; line-height: 1.45; font-family: inherit; }
 .b-sw { width: 6px; align-self: stretch; min-height: 30px; border-radius: 3px; flex: none; }
 .b-type { width: 104px; flex: none; }
 .b-len { display: inline-flex; flex: none; }

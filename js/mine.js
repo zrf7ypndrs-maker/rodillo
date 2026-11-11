@@ -92,6 +92,14 @@ export function cleanWorkout(w) {
     if (s.cadence != null && String(s.cadence).trim() !== '') o.cadence = /^\d+$/.test(String(s.cadence).trim()) ? +s.cadence : String(s.cadence).replace(/\s+/g, '');
     if (s.label?.trim()) o.label = s.label.trim();
     if (s.text?.trim()) o.text = s.text.trim();
+    const msgs = (s.messages || []).filter((m) => String(m?.text || '').trim()).map((m) => {
+      const x = {};
+      if (m.at != null && m.at !== 0 && m.at !== '') x.at = m.at;
+      if (m.rep != null && m.rep !== '') x.rep = m.rep;
+      x.text = String(m.text).trim();
+      return x;
+    });
+    if (msgs.length) o.messages = msgs;
     return o;
   };
   const out = { id: w.id, name: String(w.name).trim(), tags: [...new Set(w.tags || [])], description: String(w.description || '').trim(), steps: w.steps.map(step) };

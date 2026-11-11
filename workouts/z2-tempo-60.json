@@ -11,31 +11,84 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.68,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "Easy day: zone 2 with one 20-minute tempo block."
+        },
+        {
+          "at": 60,
+          "text": "Is the FR970 recording? Garmin needs it for VO2max."
+        },
+        {
+          "at": 180,
+          "text": "Stay conversational. This should feel easy."
+        }
+      ]
     },
     {
       "dur": 600,
       "power": 0.68,
       "cadence": 90,
-      "label": "Zone 2"
+      "label": "Zone 2",
+      "messages": [
+        {
+          "text": "Zone 2. Around 90 rpm, easy breathing."
+        },
+        {
+          "at": -30,
+          "text": "Tempo block in 30 seconds."
+        }
+      ]
     },
     {
       "dur": 1200,
       "power": 0.8,
       "cadence": "85-95",
       "label": "Steady tempo",
-      "text": "Smooth and steady: this is the block Garmin reads"
+      "text": "Smooth and steady: this is the block Garmin reads",
+      "messages": [
+        {
+          "text": "20 minutes at {watts} W. Smooth and steady."
+        },
+        {
+          "at": "25%",
+          "text": "Settle in. Relax your shoulders."
+        },
+        {
+          "at": "50%",
+          "text": "Halfway. No surges, Garmin wants it steady."
+        },
+        {
+          "at": -300,
+          "text": "5 minutes left in the tempo."
+        },
+        {
+          "at": -30,
+          "text": "30 seconds. Hold it to the end."
+        }
+      ]
     },
     {
       "dur": 900,
       "power": 0.66,
-      "label": "Zone 2"
+      "label": "Zone 2",
+      "messages": [
+        {
+          "text": "Tempo done. Back to easy zone 2."
+        }
+      ]
     },
     {
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }
