@@ -633,6 +633,11 @@ table.ints { margin-bottom: 14px; }
 .hero:not(.nowo):not(.done) .ghost:hover { background: rgba(255,255,255,.8); border-color: var(--on-zone); }
 .hero-btns button.focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 .play-ico { width: 15px; height: 17px; fill: currentColor; flex: none; }
+/* Start workout launch (launchFrom() in js/app.js): the pill clips the melting letters and the sprinting icon */
+.hero-start.launching { overflow: hidden; pointer-events: none; }
+.hero-start .play-ico { transform-origin: 50% 60%; }
+.hs-label i { display: inline-block; font-style: normal; transform-origin: 50% 0; }
+.launch-cover { position: fixed; inset: 0; z-index: 9999; background: #000; pointer-events: all; will-change: clip-path; }
 .hero-free .bike-ico { width: 28px; height: 17px; }
 .hero-prof { height: 120px; margin-top: 24px; }
 .hero-prof .profile { height: 100%; display: block; }
