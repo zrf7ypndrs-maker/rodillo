@@ -24,7 +24,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Only the newest commit on main may go live. A run GitHub left stuck and starts late (Nov 11) is for an older
+  # commit: it stops here and the deploy job is skipped, so the site never goes back to an older version.
+  current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      ok: ${{ steps.head.outputs.ok }}
+    steps:
+      - id: head
+        run: |
+          head=$(git ls-remote "https://github.com/${{ github.repository }}" refs/heads/main | cut -f1)
+          if [ "$head" = "$GITHUB_SHA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::Not deploying $GITHUB_SHA: main is already at $head"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+
   deploy:
+    needs: current
+    if: needs.current.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
