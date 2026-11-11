@@ -5,6 +5,7 @@ import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds, gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
+import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
@@ -2933,7 +2934,7 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') moda
 // ------------------------------------------------------------------ settings
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
-  rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1], ['bikeKg', 'Bike weight (kg)', 0.1, 1, 'All settings are saved to your plan, so every device gets them.']],
+  rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1]],
   ride: [['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.']],
   gearing: [],
   road: [
@@ -3000,6 +3001,69 @@ function editDrivetrain() {
   return true;
 }
 
+// ---- bike: a preset or your own spec estimates the weight; or type the weight
+function bikeOptions() {
+  const build = app.settings.bikeSpec?.build || 'mid', groups = {};
+  for (const [k, p] of Object.entries(BIKE_PRESETS)) (groups[p.group] ||= []).push(`<option value="${k}">${esc(p.name)} \u00b7 ${estimateBikeKg(presetSpec(k, build)).toFixed(1)} kg</option>`);
+  return Object.entries(groups).map(([g, o]) => `<optgroup label="${esc(g)}">${o.join('')}</optgroup>`).join('') +
+    `<option value="${BIKE_CUSTOM}">Your own spec (type, frame, travel, build)</option><option value="${BIKE_EXACT}">Exact weight (type it)</option>`;
+}
+const optHtml = (o) => Object.entries(o).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+function bikeHtml() {
+  return `<label for="set-bike">Bike</label><select id="set-bike" class="wide-select"></select>
+    ${numField(['bikeKg', 'Bike weight (kg)', 0.1])}
+    <div class="bike-fields">
+      <label for="set-btype">Type</label><select id="set-btype" class="wide-select">${optHtml(BIKE_TYPES)}</select>
+      <label for="set-bmat">Frame</label><select id="set-bmat">${optHtml(MATERIALS)}</select>
+      <label for="set-bfront" class="bike-mtb">Fork travel (mm, 0 = rigid)</label><input id="set-bfront" class="bike-mtb" type="number" step="10" min="0" max="${MAX_TRAVEL}">
+      <label for="set-brear" class="bike-mtb">Rear travel (mm, 0 = hardtail)</label><input id="set-brear" class="bike-mtb" type="number" step="10" min="0" max="${MAX_TRAVEL}">
+      <label for="set-bbuild">Build</label><select id="set-bbuild" class="wide-select">${optHtml(BUILDS)}</select>
+    </div>
+    <div class="help" id="bike-sum"></div>`;
+}
+/** Shows the bike settings. keepWeight: leave the weight field alone (it's being typed in). */
+function fillBike(keepWeight = false) {
+  const spec = app.settings.bikeSpec ? cleanSpec(app.settings.bikeSpec) : null;
+  $('#set-bike').innerHTML = bikeOptions();
+  $('#set-bike').value = spec ? bikePresetFor(spec) || BIKE_CUSTOM : BIKE_EXACT;
+  $('.bike-fields').classList.toggle('hidden', !spec);
+  if (!keepWeight) $('#set-bikeKg').value = +app.settings.bikeKg.toFixed(1);
+  if (spec) {
+    $('#set-btype').value = spec.type;
+    $('#set-bmat').value = spec.material;
+    $('#set-bfront').value = spec.front;
+    $('#set-brear').value = spec.rear;
+    $('#set-bbuild').value = spec.build;
+    $$('.bike-mtb').forEach((el) => el.classList.toggle('hidden', BIKE_TYPES[spec.type].fam !== 'mtb'));
+  }
+  $('#bike-sum').textContent = spec
+    ? 'Estimated from frame, suspension and build (size M, no pedals). Type a weight to use your own. Only slope mode uses it.'
+    : 'Your own weight. Only slope mode uses it (climbing and coasting).';
+}
+function setBikeSpec(spec) {
+  app.settings.bikeSpec = spec && cleanSpec(spec);
+  if (spec) app.settings.bikeKg = estimateBikeKg(spec);
+}
+function pickBike(id) {
+  const cur = app.settings.bikeSpec;
+  if (id === BIKE_EXACT) app.settings.bikeSpec = null;
+  else if (id === BIKE_CUSTOM) setBikeSpec(cur || presetSpec('road-carbon'));
+  else setBikeSpec(presetSpec(id, cur?.build));
+  fillBike();
+}
+/** Reads the spec fields. A new type starts from that type's usual travel. */
+function editBike(el) {
+  const s = {
+    type: $('#set-btype').value, material: $('#set-bmat').value, build: $('#set-bbuild').value,
+    front: $('#set-bfront').value, rear: $('#set-brear').value,
+  };
+  if (el.id === 'set-btype') { s.front = BIKE_TYPES[s.type].front; s.rear = BIKE_TYPES[s.type].rear; }
+  if ((el.id === 'set-bfront' || el.id === 'set-brear') && el.value === '') return false;
+  setBikeSpec(s);
+  fillBike();
+  return true;
+}
+
 // ---- trainer: the grade range it can simulate
 function trainerOptions() {
   return Object.entries(TRAINERS).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join('') +
@@ -3043,6 +3107,7 @@ function detectTrainer(dev) {
 function renderSettings() {
   const f = $('#settings-form');
   const extra = {
+    rider: `${bikeHtml()}<div class="help">All settings are saved to your plan, so every device gets them.</div>`,
     ride: `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
       <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`,
     gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${dtOptions()}</select>
@@ -3067,6 +3132,7 @@ function renderSettings() {
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   fillDrivetrain();
   fillTrainer();
+  fillBike();
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
     const el = e.target;
@@ -3075,6 +3141,14 @@ function renderSettings() {
     else if (el.id === 'set-dt') pickDrivetrain(el.value);
     else if (['set-rings', 'set-cogs', 'set-wheel'].includes(el.id)) { if (!editDrivetrain()) return; }
     else if (el.id === 'set-trainer') pickTrainer(el.value);
+    else if (el.id === 'set-bike') pickBike(el.value);
+    else if (['set-btype', 'set-bmat', 'set-bfront', 'set-brear', 'set-bbuild'].includes(el.id)) { if (!editBike(el)) return; }
+    else if (el.id === 'set-bikeKg') {
+      if (el.value === '' || !(Number(el.value) > 0)) return;
+      app.settings.bikeKg = Number(el.value);
+      // a typed weight that isn't the estimate replaces it
+      if (app.settings.bikeSpec && Math.abs(estimateBikeKg(app.settings.bikeSpec) - app.settings.bikeKg) > 0.05) { app.settings.bikeSpec = null; fillBike(true); }
+    }
     else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);

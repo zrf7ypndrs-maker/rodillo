@@ -269,6 +269,34 @@ test('virtual shifting: steepest grade each gear can ride inside the trainer ran
   assert.ok(z.every((x) => x.dev > 0));
 });
 
+import { BIKE_PRESETS, BIKE_TYPES, presetSpec, cleanSpec, estimateBikeKg, bikePresetFor } from '../js/engine/bikes.js';
+{
+  // presets land where real bikes do (mid-range build unless noted)
+  const kg = (id, b = 'mid') => estimateBikeKg(presetSpec(id, b));
+  assert.equal(kg('road-carbon', 'high'), 6.9);
+  assert.equal(kg('road-carbon'), 7.9);
+  assert.ok(kg('road-aluminum') > kg('road-carbon') && kg('road-steel') > kg('road-aluminum'));
+  assert.ok(kg('xc-ht-carbon') < kg('xc-fs-carbon') && kg('xc-fs-carbon') < kg('downcountry-carbon'));
+  assert.ok(kg('downcountry-carbon') > 11 && kg('downcountry-carbon') < 12);
+  assert.ok(kg('trail-carbon') < kg('enduro-carbon') && kg('enduro-carbon') < kg('dh-aluminum'));
+  for (const id of Object.keys(BIKE_PRESETS)) {
+    for (const b of ['entry', 'mid', 'high']) { const w = kg(id, b); assert.ok(w > 6 && w < 21, `${id} ${b} ${w}`); }
+    assert.ok(kg(id, 'entry') > kg(id) && kg(id) > kg(id, 'high'), id);
+    assert.equal(bikePresetFor(presetSpec(id, 'high')), id, `${id} is the only preset with its spec`);
+  }
+  // drop-bar bikes have no travel; MTB travel defaults to the type's and is clamped
+  assert.deepEqual(cleanSpec({ type: 'gravel', front: 40 }), { type: 'gravel', material: 'carbon', front: 0, rear: 0, build: 'mid' });
+  assert.equal(cleanSpec({ type: 'trail' }).front, BIKE_TYPES.trail.front);
+  assert.equal(cleanSpec({ type: 'enduro', front: 999, rear: -5 }).front, 220);
+  assert.equal(cleanSpec({ type: 'enduro', rear: -5 }).rear, 0);
+  assert.equal(cleanSpec({ type: 'nope', material: 'wood' }).type, 'road');
+  // more travel weighs more; a rigid fork is lighter than any suspension fork
+  const t = (front, rear) => estimateBikeKg({ type: 'xc', front, rear });
+  assert.ok(t(0, 0) < t(100, 0) && t(100, 0) < t(100, 100) && t(100, 100) < t(140, 140));
+  assert.equal(bikePresetFor({ type: 'xc', front: 110, rear: 100 }), null);
+  console.log('ok - bike weight presets and estimate');
+}
+
 console.log(`\n${passed} tests passed`);
 
 import { Gearbox, DRIVETRAINS, parseTeeth, checkSpec, presetFor, resolveDrivetrain } from '../js/engine/drivetrain.js';

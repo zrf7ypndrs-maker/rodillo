@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   ftp: 200,
   riderKg: 77,
   bikeKg: 9,
+  bikeSpec: null,        // { type, material, front, rear, build } (engine/bikes.js) when bikeKg is estimated; null = typed
   cda: 0.32,
   crr: 0.004,
   wheelCirc: 2.105,
