@@ -9,6 +9,8 @@ import { powerAt } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
 import { withDetail, profileSteps, defaultDetail, DETAIL_MAX } from '../js/engine/climb.js';
+import { steepestGrade } from '../js/engine/trainers.js';
+import { gearList } from '../js/engine/drivetrain.js';
 import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
 import { cleanWorkout } from '../js/mine.js';
@@ -247,6 +249,24 @@ test('real climbs: profile cut at every detail level', () => {
     assert.equal(withDetail(w, 99).detail, DETAIL_MAX);
     assert.equal(withDetail({ steps: [] }, 3).steps.length, 0, 'no profile: unchanged');
   }
+});
+
+test('virtual shifting: steepest grade each gear can ride inside the trainer range', () => {
+  const s = { riderKg: 77, bikeKg: 9, crr: 0.004, trainerMassKg: 75, realDev: 5.1, maxSendGrade: 0.16 };
+  // 32x52 on a 29 x 2.4: the trainer only needs ~28% of the road force, so far steeper than 16% fits
+  const easy = steepestGrade((32 / 52) * 2.32, s);
+  assert.ok(easy > 0.5 && easy < 0.65, `32x52 holds ${easy}`);
+  // a gear matching the trainer's own development: just under 16% (rider + bike heavier than the trainer's 75 kg)
+  const same = steepestGrade(5.1, s);
+  assert.ok(same > 0.13 && same < 0.14, `1:1 holds ${same}`);
+  assert.equal(steepestGrade(0.1, s), Infinity);
+  const g = gearList({ rings: [32], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 52], wheel: 2.32 });
+  assert.equal(g.length, 12);
+  assert.equal(g[0].label, '32\u00d752');
+  assert.ok(g.every((x, i) => !i || x.dev >= g[i - 1].dev));
+  const z = gearList('zwift-24');
+  assert.equal(z.length, 24);
+  assert.ok(z.every((x) => x.dev > 0));
 });
 
 console.log(`\n${passed} tests passed`);

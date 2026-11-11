@@ -152,3 +152,11 @@ export class Gearbox {
   }
   toggleFront() { return this.isDouble ? this.shiftFront(this.front === 0 ? 1 : -1) : false; }
 }
+
+/** Every gear of a drivetrain as { label, dev } (development in metres per crank turn), easiest first. */
+export function gearList(id) {
+  const gb = new Gearbox(id), w = gb.wheel;
+  const out = gb.seq ? gb.d.seq.map((r, i) => ({ label: String(i + 1), dev: r * w }))
+    : gb.d.rings.flatMap((ring) => gb.d.cogs.map((cog) => ({ label: `${ring}\u00d7${cog}`, dev: (ring / cog) * w })));
+  return out.sort((a, b) => a.dev - b.dev);
+}

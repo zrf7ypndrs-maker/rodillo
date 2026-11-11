@@ -4,8 +4,8 @@ import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
 import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
-import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds } from './engine/drivetrain.js?v=202611102147';
-import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange } from './engine/trainers.js?v=202611102147';
+import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds, gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
+import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
@@ -364,23 +364,31 @@ const WARN_ICO = '<svg class="ico-warn" viewBox="0 0 24 24" aria-hidden="true"><
 const pct1 = (f) => `${+(f * 100).toFixed(1)}%`;
 
 /**
- * Open row of a slope workout: steepest and lowest grade, checked against the trainer's range (Settings > Trainer).
- * Uphill grades are compared after Road feel's grade realism, like the session sends them. Updates with the detail slider.
+ * Open row of a slope workout: steepest and lowest grade, and whether your gears can ride the steepest stretch
+ * inside the trainer's range (Settings > Trainer). Shifting is virtual, so the trainer only feels the road force
+ * scaled by gear (`steepestGrade()`): an easy gear rides far steeper than the trainer's own max (Nov 11, Agustín).
+ * Uphill is taken after grade realism, like the session sends it. Updates with the detail slider and settings.
  */
 function gradeRangeHtml(w, i) {
   const segs = flatten(previewOf(w));
   if (!isTrack(segs)) return '';
-  const st = app.settings, gs = st.gradeScale ?? 1;
+  const st = { ...DEFAULT_SETTINGS, ...app.settings }, gs = st.gradeScale ?? 1;
   const hi = Math.max(...segs.map((g) => g.grade)), lo = Math.min(...segs.map((g) => g.grade));
-  const overHi = hi * (hi > 0 ? gs : 1) > st.maxSendGrade + 1e-9, overLo = lo < st.minSendGrade - 1e-9;
+  const need = hi > 0 ? hi * gs : 0;
   const who = TRAINERS[st.trainerModel]?.name || 'your trainer';
-  const notes = [];
-  if (overHi) notes.push(`Steeper than ${who}'s ${pct1(st.maxSendGrade)} max: those stretches ride at ${pct1(st.maxSendGrade)}`);
-  if (overLo) notes.push(`Below ${who}'s ${pct1(st.minSendGrade)} min: those stretches ride at ${pct1(st.minSendGrade)}`);
+  const gears = gearList(resolveDrivetrain(st)).map((g) => ({ ...g, max: steepestGrade(g.dev, st) }));
+  const fits = gears.filter((g) => g.max >= need - 1e-9);
+  let note = '', over = false;
+  if (need > 0 && !fits.length) {
+    over = true;
+    note = `<span class="wo-gnote warn">${WARN_ICO}Too steep for ${who} even in ${gears[0].label}: it tops out at ${pct1(gears[0].max)} there, so the steepest stretches will feel easier than the road</span>`;
+  } else if (need > 0 && fits.length < gears.length) {
+    note = `<span class="wo-gnote">Steepest stretch: ${fits.at(-1).label} or easier stays inside ${who}'s range</span>`;
+  }
   return `<div class="wo-grades" data-gi="${i}">
-    <span class="${overHi ? 'over' : ''}">Max <b>${pct1(hi)}</b>${overHi ? WARN_ICO : ''}</span>
-    <span class="${overLo ? 'over' : ''}">Min <b>${pct1(lo)}</b>${overLo ? WARN_ICO : ''}</span>
-    ${notes.length ? `<span class="wo-gnote">${notes.join('. ')}</span>` : ''}
+    <span class="${over ? 'over' : ''}">Max <b>${pct1(hi)}</b>${over ? WARN_ICO : ''}</span>
+    <span>Min <b>${pct1(lo)}</b></span>
+    ${note}
   </div>`;
 }
 /** Settings changed (trainer range, grade realism): redraw every grade line on screen. */

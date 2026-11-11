@@ -39,3 +39,18 @@ export function cleanRange(min, max) {
   const mn = Math.max(-0.3, Math.min(0, Number.isFinite(min) ? min : -0.1));
   return { min: mn, max: mx };
 }
+
+/**
+ * Rodillo shifts virtually: the trainer's flywheel always turns at cadence x its real development (realDev, ~5.1 m
+ * per crank turn on the Zwift Ride), and a gear with development devM asks it for devM / realDev of the road force
+ * (Session's feedforward). So the steepest course grade a gear can ride before the trainer hits maxSendGrade is
+ * where k * m * (sin + crr * cos) / trainerMass = maxSend, k = devM / realDev. Ignores the closed-loop trim (it
+ * cancels the trainer's own drag, which only adds headroom). Returns a grade (fraction), Infinity when any grade fits.
+ */
+export function steepestGrade(devM, s) {
+  const m = s.riderKg + s.bikeKg, k = devM / s.realDev;
+  const q = (s.maxSendGrade * s.trainerMassKg) / (k * m); // sin + crr * cos must stay under q
+  const R = Math.hypot(1, s.crr), phi = Math.atan(s.crr);
+  if (q >= R) return Infinity;
+  return Math.tan(Math.asin(q / R) - phi);
+}
