@@ -1599,6 +1599,7 @@ function renderRide() {
   $('#r-gradesub').textContent = s.mode !== 'sim' ? '' : !s.seg ? 'up/down to change' : s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}%` : '';
   $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
   $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
+  $('#r-trip').innerHTML = s.mode === 'erg' ? `<b>${(s.bike.dist / 1000).toFixed(2)}</b> km \u00b7 ${(s.bike.v * 3.6).toFixed(1)} km/h` : '';
 
   // interval card
   $('.tiles').classList.toggle('erg', s.mode === 'erg');

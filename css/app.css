@@ -364,6 +364,9 @@ table.ints { margin-bottom: 14px; }
 .rt-right { align-items: flex-end; text-align: right; }
 .ride-name { font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ride-clock { font-size: 48px; font-weight: 800; line-height: 1; }
+.ride-trip { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ride-trip b { color: var(--ink); font-weight: 700; }
+.ride-trip:empty { display: none; }
 .ride-status { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .ride-status .pill { padding: 2px 9px; border-radius: 99px; border: 1px solid var(--rule); font-weight: 600; }
 .ride-status .pill.off { color: var(--bad); border-color: var(--bad-line); }
@@ -653,9 +656,9 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .cal-ride { font-size: 13.5px; padding: 8px 0; border-top: 1px solid var(--rule); color: var(--good); }
 .cal-ride b { color: var(--ink); }
 
-/* ERG: gears and grade are irrelevant */
-.tiles.erg { grid-template-columns: 1.6fr 1fr 1fr 1fr; }
-.tiles.erg .tile.gear, .tiles.erg .tile.grade { display: none; }
+/* ERG: gears, grade and speed are irrelevant (speed + distance move under the clock as #r-trip) */
+.tiles.erg { grid-template-columns: 1.6fr 1fr 1fr; }
+.tiles.erg .tile.gear, .tiles.erg .tile.grade, .tiles.erg .tile.speed { display: none; }
 
 /* ---------- segment list ---------- */
 .segs { display: none; background: var(--sheet); border-radius: var(--r); overflow-y: auto; padding: 4px 6px 6px; }
