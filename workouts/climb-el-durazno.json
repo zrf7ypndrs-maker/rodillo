@@ -1,0 +1,83 @@
+{
+  "id": "climb-el-durazno",
+  "name": "El Durazno to the Buitrera (RFK Clásico)",
+  "tags": [
+    "sim",
+    "climb",
+    "real climb",
+    "distance"
+  ],
+  "description": "Dirt climb in Parque RKF El Durazno, Lo Barnechea, from the park gate up to the Buitrera. Short pitches near 28% are averaged into each stretch, and the trainer caps grade at your max grade setting. 4.4 km from 1014 m to 1409 m, about 390 m of climbing. Profile from Strava segment 11518432 (via bikeclimbs) elevation data, simplified to stretches of 150 m or more. Starts with a 10-minute warm-up roll.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 0,
+      "label": "Warm-up roll"
+    },
+    {
+      "dist": 320,
+      "grade": 6.1,
+      "label": "km 0.0 to 0.3"
+    },
+    {
+      "dist": 180,
+      "grade": 0.3,
+      "label": "km 0.3 to 0.5"
+    },
+    {
+      "dist": 480,
+      "grade": 7.8,
+      "label": "km 0.5 to 1.0"
+    },
+    {
+      "dist": 700,
+      "grade": 7.4,
+      "label": "km 1.0 to 1.7"
+    },
+    {
+      "dist": 320,
+      "grade": 3.1,
+      "label": "km 1.7 to 2.0"
+    },
+    {
+      "dist": 150,
+      "grade": 14.1,
+      "label": "km 2.0 to 2.1"
+    },
+    {
+      "dist": 270,
+      "grade": 11.1,
+      "label": "km 2.1 to 2.4"
+    },
+    {
+      "dist": 160,
+      "grade": 8.0,
+      "label": "km 2.4 to 2.6"
+    },
+    {
+      "dist": 340,
+      "grade": 14.8,
+      "label": "km 2.6 to 2.9"
+    },
+    {
+      "dist": 460,
+      "grade": 8.3,
+      "label": "km 2.9 to 3.4"
+    },
+    {
+      "dist": 240,
+      "grade": 6.9,
+      "label": "km 3.4 to 3.6"
+    },
+    {
+      "dist": 430,
+      "grade": 11.7,
+      "label": "km 3.6 to 4.0"
+    },
+    {
+      "dist": 350,
+      "grade": 15.9,
+      "label": "km 4.0 to 4.4"
+    }
+  ]
+}
