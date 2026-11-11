@@ -595,7 +595,7 @@ function heroDoneBody(w, r, date) {
       </div>
       <div class="hero-btns">
         <button class="ghost hero-see" id="hero-see">${SEE_ICO}See ride</button>
-        <button class="ghost hero-free" id="btn-free">Free ride${BIKE_ICO}</button>
+        <button class="ghost hero-free" id="btn-free"><span class="hs-label">Free ride</span>${BIKE_ICO}</button>
       </div>
     </div>
     ${stats ? `<div class="hero-stats">${stats}</div>` : ''}
@@ -643,7 +643,7 @@ function renderHero() {
   const src = !app.plan ? '' : !syncClient()
     ? `<p class="plan-src">Showing the public copy of the plan. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to get the coach's daily changes on this device.</p>`
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check sync in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
-  const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free">${primary ? 'Start free ride' : 'Free ride'}${BIKE_ICO}</button>`;
+  const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free"><span class="hs-label">${primary ? 'Start free ride' : 'Free ride'}</span>${BIKE_ICO}</button>`;
   let body;
   // Done = the planned workout, or another structured workout in its place (e.g. the red-recovery Zone 2 swap).
   // A free ride alone leaves today's workout open.
@@ -651,7 +651,7 @@ function renderHero() {
   if (doneRide) {
     // Done: a quiet sheet card with the ride's real numbers, then the next planned ride.
     el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date)}</section>${upNextHtml()}`;
-    $('#btn-free').onclick = startFree;
+    $('#btn-free').onclick = (e) => startFree(e.currentTarget);
     $('#hero-see').onclick = () => openRide(doneRide.id);
     if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w);
     bindUpNext(el);
@@ -689,7 +689,7 @@ function renderHero() {
       </div>${heroRecovery(today)}`;
   }
   el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}" style="--c:${w ? workoutColor(w) : 'transparent'}" aria-label="Today">${body}</section>`;
-  $('#btn-free').onclick = startFree;
+  $('#btn-free').onclick = (e) => startFree(e.currentTarget);
   el.querySelectorAll('.hero-done-see').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   const s = $('#hero-start');
   if (s) s.onclick = () => startWorkout(w, 1, s);
@@ -1099,38 +1099,26 @@ async function startWorkout(w, intensity = 1, btn = null) {
    melts down, then the icon sprints off to the right and the button grows into a black screen;
    the ride screen is set up behind the black and the black fades away. Skipped under reduced motion. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function launchFrom(btn, go) {
+async function launchFrom(btn, go, kind = 'workout') {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !btn.animate) return go();
   app.launching = true;
-  const ico = btn.querySelector('.play-ico'), label = btn.querySelector('.hs-label');
+  const free = kind === 'free';
+  const ico = btn.querySelector(free ? '.bike-ico' : '.play-ico'), label = btn.querySelector('.hs-label');
   const text = label?.textContent || '';
   try {
     btn.classList.add('launching');
-    // 1. the icon rocks while a wave runs through the label from the first letter to the last; then the
-    //    letters fall from right to left and vanish as they cross the line they sat on (clip-path on .hs-label)
-    const WAVE = 420, WAVE_STEP = 45, FALL = 380, FALL_STEP = 40;
-    const n = [...text].length;
-    const fallStart = (n - 1) * WAVE_STEP + WAVE;
-    const textEnd = fallStart + (n - 1) * FALL_STEP + FALL;
-    const tilt = [0, -18, 16, -14, 12, -11, 9, -7, 5, -3, 0];
-    ico.animate(tilt.map((d) => ({ transform: `rotate(${d}deg)` })), { duration: textEnd, easing: 'ease-in-out', fill: 'forwards' });
-    if (label) {
-      label.innerHTML = [...text].map((c) => `<i>${c === ' ' ? '&nbsp;' : esc(c)}</i>`).join('');
-      const kids = [...label.children];
-      kids.forEach((ch, i) => {
-        ch.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-0.45em)', easing: 'ease-in' }, { transform: 'translateY(0)' }],
-          { duration: WAVE, delay: i * WAVE_STEP, easing: 'ease-out', composite: 'add' });
-        const tip = (Math.random() * 2 - 1) * 10;
-        ch.animate([{ transform: 'translateY(0) rotate(0)' }, { transform: `translateY(1.6em) rotate(${tip}deg)` }],
-          { duration: FALL, delay: fallStart + (n - 1 - i) * FALL_STEP, easing: 'cubic-bezier(.5, 0, .9, .4)', fill: 'forwards', composite: 'add' });
-      });
-    }
-    await sleep(textEnd);
+    const fx = free ? await freeIntro(btn, ico, label) : (await workoutIntro(ico, label, text), null);
     // 2. sprint: a small wind-up, then off the right edge, stretched by the speed
     const b = btn.getBoundingClientRect(), r = ico.getBoundingClientRect();
     const dx = b.right - r.left + 12;
-    await ico.animate([{ transform: 'translateX(0) scale(1, 1)' }, { transform: 'translateX(-9px) scale(.8, 1.12)', offset: 0.3 },
-      { transform: `translateX(${dx}px) scale(1.9, .8)` }],
+    // the bike keeps its wheelie (and its -2px lift) while it sprints
+    const pose = free ? ' translateY(-2px) rotate(-14deg)' : '';
+    if (fx) { // free ride: a burst of dust as the bike launches, air lines trailing it
+      for (let k = 0; k < 4; k++) puff(btn, fx.wx - Math.random() * 4, fx.wy, true);
+      speedLines(btn, fx, dx);
+    }
+    await ico.animate([{ transform: `translateX(0)${pose} scale(1, 1)` }, { transform: `translateX(-9px)${pose} scale(.8, 1.12)`, offset: 0.3 },
+      { transform: `translateX(${dx}px)${pose} scale(1.9, .8)` }],
       { duration: 480, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' }).finished;
     // 3. the button grows into a black screen
     const rect = btn.getBoundingClientRect(), W = innerWidth, H = innerHeight;
@@ -1145,20 +1133,119 @@ async function launchFrom(btn, go) {
     // 4. ride screen behind the black, then reveal it
     go();
     btn.getAnimations({ subtree: true }).forEach((a) => a.cancel());
-    btn.classList.remove('launching');
+    btn.querySelectorAll('.lz-fx').forEach((x) => x.remove());
+    btn.classList.remove('launching', 'pedal');
     if (label) label.textContent = text;
     await sleep(200);
     await cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 480, easing: 'ease-out', fill: 'forwards' }).finished;
     cover.remove();
   } catch (e) {
     logMsg('app', `launch: ${e.message}`);
-    $$('.launch-cover').forEach((x) => x.remove());
-    btn.classList.remove('launching');
+    $$('.launch-cover, .lz-fx').forEach((x) => x.remove());
+    btn.classList.remove('launching', 'pedal');
     if (label) label.textContent = text;
     go();
   } finally { app.launching = false; }
 }
-async function startFree() { if (await canRide() && !app.session) beginSession({}); }
+
+/** Start workout: the play icon rocks while a wave runs through the label, then the letters fall. */
+async function workoutIntro(ico, label, text) {
+  // 1. the icon rocks while a wave runs through the label from the first letter to the last; then the
+  //    letters fall from right to left and vanish as they cross the line they sat on (clip-path on .hs-label)
+  const WAVE = 420, WAVE_STEP = 45, FALL = 380, FALL_STEP = 40;
+  const n = [...text].length;
+  const fallStart = (n - 1) * WAVE_STEP + WAVE;
+  const textEnd = fallStart + (n - 1) * FALL_STEP + FALL;
+  const tilt = [0, -18, 16, -14, 12, -11, 9, -7, 5, -3, 0];
+  ico.animate(tilt.map((d) => ({ transform: `rotate(${d}deg)` })), { duration: textEnd, easing: 'ease-in-out', fill: 'forwards' });
+  if (label) {
+    label.innerHTML = [...text].map((c) => `<i>${c === ' ' ? '&nbsp;' : esc(c)}</i>`).join('');
+    const kids = [...label.children];
+    kids.forEach((ch, i) => {
+      ch.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-0.45em)', easing: 'ease-in' }, { transform: 'translateY(0)' }],
+        { duration: WAVE, delay: i * WAVE_STEP, easing: 'ease-out', composite: 'add' });
+      const tip = (Math.random() * 2 - 1) * 10;
+      ch.animate([{ transform: 'translateY(0) rotate(0)' }, { transform: `translateY(1.6em) rotate(${tip}deg)` }],
+        { duration: FALL, delay: fallStart + (n - 1 - i) * FALL_STEP, easing: 'cubic-bezier(.5, 0, .9, .4)', fill: 'forwards', composite: 'add' });
+    });
+  }
+  await sleep(textEnd);
+}
+
+/** Free ride (asked for by Agustín, Nov 11): the bike pops onto its rear wheel and pedals; the label winds up
+   and rushes off to the left while the bike leans back further, then settles before the sprint. */
+async function freeIntro(btn, bike, label) {
+  // bike layout box (no transform) in the button's own coordinates; the rear tyre contact (transform-origin 21% 93%)
+  // stays put while the bike rotates, so the dust comes from there
+  const was = bike.style.transform;
+  bike.style.transform = 'none';
+  const bb = btn.getBoundingClientRect(), r0 = bike.getBoundingClientRect();
+  bike.style.transform = was;
+  const k = bb.width / btn.offsetWidth || 1; // the button may be grown by hover
+  const box = { x: (r0.left - bb.left) / k - btn.clientLeft, y: (r0.top - bb.top) / k - btn.clientTop, w: r0.width / k, h: r0.height / k };
+  box.wx = box.x + box.w * 0.21; box.wy = box.y + box.h * 0.93 - 2;
+  btn.classList.add('pedal');
+  const T = 1000;
+  bike.animate([
+    { transform: getComputedStyle(bike).transform }, // already tilted if hovered
+    { transform: 'translateY(-2px) rotate(-14deg)', offset: 0.18 },
+    { transform: 'translateY(-2px) rotate(-14deg)', offset: 0.3 },
+    { transform: 'translateY(-3px) rotate(-26deg)', offset: 0.6 },
+    { transform: 'translateY(-2px) rotate(-12deg)', offset: 0.82 },
+    { transform: 'translateY(-2px) rotate(-14deg)' }],
+    { duration: T, easing: 'ease-in-out', fill: 'forwards' });
+  if (label) {
+    const r = label.getBoundingClientRect();
+    const dx = (r.right - bb.left) / k + 16;
+    label.animate([
+      { transform: 'translateX(0) scale(1, 1)', filter: 'blur(0)' },
+      { transform: 'translateX(8px) scale(.92, 1.04)', filter: 'blur(0)', offset: 0.32, easing: 'cubic-bezier(.6, 0, .9, .5)' },
+      { transform: `translateX(-${dx}px) scale(1.5, .9)`, filter: 'blur(1.5px)' }],
+      { duration: 760, delay: 120, fill: 'forwards' });
+  }
+  // dust off the rear wheel for as long as the front is up
+  await sleep(T * 0.18);
+  const dust = setInterval(() => puff(btn, box.wx - Math.random() * 3, box.wy), 50);
+  await sleep(T * 0.82);
+  clearInterval(dust);
+  return box;
+}
+
+/** One dust puff at (x, y) in the button's coordinates, thrown back and up, growing and fading. */
+function puff(btn, x, y, big = false) {
+  const d = document.createElement('span');
+  const size = (big ? 4.5 : 3.5) + Math.random() * (big ? 3 : 4);
+  d.className = 'lz-fx lz-dust';
+  d.style.cssText = `left:${x - size / 2}px;top:${y - size / 2}px;width:${size}px;height:${size}px`;
+  btn.append(d);
+  const back = (12 + Math.random() * 22) * (big ? 1.6 : 1), up = 2 + Math.random() * (big ? 12 : 8);
+  d.animate([{ transform: 'translate(0, 0) scale(.5)', opacity: big ? 0.38 : 0.42 },
+    { transform: `translate(-${back}px, -${up}px) scale(${1.5 + Math.random()})`, opacity: 0 }],
+    { duration: 480 + Math.random() * 300, easing: 'cubic-bezier(.2, .7, .3, 1)', fill: 'forwards' })
+    .finished.then(() => d.remove(), () => d.remove());
+}
+
+/** Air lines behind the sprinting bike: they ride the same curve as the bike and stretch out as it speeds up. */
+function speedLines(btn, box, dx) {
+  [[0.2, 30], [0.42, 46], [0.62, 38], [0.84, 24]].forEach(([fy, len], i) => {
+    const l = document.createElement('span');
+    l.className = 'lz-fx lz-line';
+    const right = box.x + box.w * 0.12;
+    l.style.cssText = `left:${right - len}px;top:${box.y + box.h * fy}px;width:${len}px`;
+    btn.append(l);
+    l.animate([{ transform: 'translateX(0) scaleX(0)', opacity: 0 }, { transform: 'translateX(-9px) scaleX(0)', opacity: 0, offset: 0.3 },
+      { transform: `translateX(${dx}px) scaleX(1)`, opacity: 0.75 }],
+      { duration: 480, delay: i * 10, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'both' });
+  });
+}
+
+/** `btn` = the Free ride button: with a trainer (or Demo mode) ready, it plays the launch animation first. */
+async function startFree(btn = null) {
+  if (app.launching || app.session) return;
+  const go = () => { if (!app.session) beginSession({}); };
+  if (btn && (app.demo || app.trainer?.state === 'connected')) return launchFrom(btn, go, 'free');
+  if (await canRide()) go();
+}
 
 let wakeLock = null;
 // keep the screen on during a ride; the browser drops the lock when the page is hidden,
