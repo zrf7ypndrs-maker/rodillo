@@ -1109,22 +1109,22 @@ async function launchFrom(btn, go) {
     // 1. tilt + melt
     ico.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-18deg)' }, { transform: 'rotate(16deg)' }, { transform: 'rotate(-13deg)' },
       { transform: 'rotate(10deg)' }, { transform: 'rotate(-6deg)' }, { transform: 'rotate(0)' }],
-      { duration: 620, easing: 'ease-in-out', fill: 'forwards' });
+      { duration: 870, easing: 'ease-in-out', fill: 'forwards' });
     if (label) {
       label.innerHTML = [...text].map((c) => `<i>${c === ' ' ? '&nbsp;' : esc(c)}</i>`).join('');
       [...label.children].forEach((ch, i) => ch.animate([
         { transform: 'translateY(0) scale(1, 1)', filter: 'blur(0)', opacity: 1 },
         { transform: 'translateY(2px) scale(.95, 1.5)', filter: 'blur(.5px)', opacity: 1, offset: 0.4 },
         { transform: 'translateY(26px) scale(.6, 2.6)', filter: 'blur(3px)', opacity: 0 }],
-        { duration: 520, delay: 30 + i * 12 + Math.random() * 100, easing: 'cubic-bezier(.55, 0, .9, .45)', fill: 'forwards' }));
+        { duration: 730, delay: 40 + i * 17 + Math.random() * 140, easing: 'cubic-bezier(.55, 0, .9, .45)', fill: 'forwards' }));
     }
-    await sleep(620);
+    await sleep(870);
     // 2. sprint: a small wind-up, then off the right edge, stretched by the speed
     const b = btn.getBoundingClientRect(), r = ico.getBoundingClientRect();
     const dx = b.right - r.left + 12;
     await ico.animate([{ transform: 'translateX(0) scale(1, 1)' }, { transform: 'translateX(-9px) scale(.8, 1.12)', offset: 0.3 },
       { transform: `translateX(${dx}px) scale(1.9, .8)` }],
-      { duration: 340, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' }).finished;
+      { duration: 480, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' }).finished;
     // 3. the button grows into a black screen
     const rect = btn.getBoundingClientRect(), W = innerWidth, H = innerHeight;
     const cover = document.createElement('div');
@@ -1134,14 +1134,14 @@ async function launchFrom(btn, go) {
     const from = `inset(${rect.top}px ${W - rect.right}px ${H - rect.bottom}px ${rect.left}px round ${rad}px)`;
     await cover.animate([{ clipPath: from, background: getComputedStyle(btn).backgroundColor },
       { clipPath: 'inset(0px 0px 0px 0px round 0px)', background: '#000' }],
-      { duration: 460, easing: 'cubic-bezier(.75, 0, .25, 1)', fill: 'forwards' }).finished;
+      { duration: 640, easing: 'cubic-bezier(.75, 0, .25, 1)', fill: 'forwards' }).finished;
     // 4. ride screen behind the black, then reveal it
     go();
     btn.getAnimations({ subtree: true }).forEach((a) => a.cancel());
     btn.classList.remove('launching');
     if (label) label.textContent = text;
-    await sleep(140);
-    await cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 360, easing: 'ease-out', fill: 'forwards' }).finished;
+    await sleep(200);
+    await cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 480, easing: 'ease-out', fill: 'forwards' }).finished;
     cover.remove();
   } catch (e) {
     logMsg('app', `launch: ${e.message}`);
