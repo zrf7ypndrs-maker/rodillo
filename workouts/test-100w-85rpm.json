@@ -11,7 +11,40 @@
       "watts": 100,
       "cadence": 85,
       "label": "Steady 100 W",
-      "text": "Hold 85 rpm"
+      "text": "Hold 85 rpm",
+      "messages": [
+        {
+          "text": "Equipment test: 100 W, 85 rpm."
+        },
+        {
+          "at": 30,
+          "text": "The cadence card should be green between 80 and 90."
+        },
+        {
+          "at": 120,
+          "text": "Drop below 80 rpm on purpose. The card should turn red."
+        },
+        {
+          "at": 180,
+          "text": "Back to 85. It should go green again."
+        },
+        {
+          "at": 300,
+          "text": "Now try above 90 rpm. Red again?"
+        },
+        {
+          "at": 360,
+          "text": "Settle back to 85."
+        },
+        {
+          "at": "50%",
+          "text": "Halfway. Check HR and power are steady."
+        },
+        {
+          "at": -60,
+          "text": "One minute left."
+        }
+      ]
     }
   ]
 }

@@ -11,19 +11,62 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.68,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "Zone 2 today. Easy, steady, conversational."
+        },
+        {
+          "at": 45,
+          "text": "Is the FR970 recording? Start it now if not."
+        },
+        {
+          "at": 150,
+          "text": "You should be able to talk in full sentences."
+        },
+        {
+          "at": -20,
+          "text": "Zone 2 block next. Around 90 rpm."
+        }
+      ]
     },
     {
       "dur": 1800,
       "power": 0.68,
       "cadence": 90,
-      "label": "Zone 2"
+      "label": "Zone 2",
+      "messages": [
+        {
+          "text": "{watts} W for the next stretch. Settle in."
+        },
+        {
+          "at": "25%",
+          "text": "Relax your shoulders and hands."
+        },
+        {
+          "at": "50%",
+          "text": "Halfway. Keep the breathing easy."
+        },
+        {
+          "at": "75%",
+          "text": "Watch the HR line: steady is the goal."
+        },
+        {
+          "at": -120,
+          "text": "Two minutes left in zone 2."
+        }
+      ]
     },
     {
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Easy spin, then save the ride."
+        }
+      ]
     }
   ]
 }

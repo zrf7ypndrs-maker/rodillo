@@ -11,14 +11,56 @@
       "dur": 600,
       "from": 0.45,
       "to": 0.65,
-      "label": "Warm-up"
+      "label": "Warm-up",
+      "messages": [
+        {
+          "text": "Easy ride today, plus a hardware check."
+        },
+        {
+          "at": 30,
+          "text": "Trainer, HR strap, both Ride hoods: all reading?"
+        },
+        {
+          "at": 90,
+          "text": "Is the FR970 recording as Indoor Bike? Start it now if not."
+        },
+        {
+          "at": 180,
+          "text": "Tap each hood's shifter once: effort moves 1%, then back to 100%."
+        },
+        {
+          "at": 300,
+          "text": "All good? Then just spin. Conversational pace."
+        },
+        {
+          "at": -20,
+          "text": "Easy block next. Around 90 rpm."
+        }
+      ]
     },
     {
       "dur": 900,
       "power": 0.65,
       "cadence": 90,
       "label": "Easy",
-      "text": "Check every sensor is reading"
+      "text": "Check every sensor is reading",
+      "messages": [
+        {
+          "text": "Easy {watts} W. Keep it smooth, 90 rpm."
+        },
+        {
+          "at": 240,
+          "text": "Check the HR line on the chart is drawing."
+        },
+        {
+          "at": "50%",
+          "text": "Halfway through the easy block. Relax your upper body."
+        },
+        {
+          "at": -30,
+          "text": "First spin-up in 30 seconds. 100+ rpm."
+        }
+      ]
     },
     {
       "repeat": 3,
@@ -27,24 +69,69 @@
           "dur": 60,
           "power": 0.85,
           "cadence": "100+",
-          "label": "Spin-up"
+          "label": "Spin-up",
+          "messages": [
+            {
+              "text": "Spin-up {rep} of {of}. Fast legs, 100+ rpm."
+            },
+            {
+              "at": 20,
+              "rep": "first",
+              "text": "Stay seated, no bouncing on the saddle."
+            },
+            {
+              "at": -15,
+              "text": "15 seconds. Keep the legs spinning."
+            }
+          ]
         },
         {
           "dur": 120,
-          "power": 0.6
+          "power": 0.6,
+          "messages": [
+            {
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Easy. Let the cadence come back down."
+            },
+            {
+              "at": -15,
+              "rep": [
+                1,
+                2
+              ],
+              "text": "Next spin-up in 15 seconds."
+            },
+            {
+              "rep": "last",
+              "text": "Spin-ups done. Easy to the finish."
+            }
+          ]
         }
       ]
     },
     {
       "dur": 360,
       "power": 0.65,
-      "label": "Easy"
+      "label": "Easy",
+      "messages": [
+        {
+          "text": "Easy {watts} W. How did everything read?"
+        }
+      ]
     },
     {
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down"
+      "label": "Cool-down",
+      "messages": [
+        {
+          "text": "Cool-down. Save the ride, then check it reached Garmin."
+        }
+      ]
     }
   ]
 }
