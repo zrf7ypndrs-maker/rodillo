@@ -215,6 +215,12 @@ button.danger:hover { border-color: var(--bad); }
 .wo-tags:empty { display: none; }
 .wo-desc { font-size: 13.5px; color: var(--muted); line-height: 1.45; max-width: 72ch; margin-top: 4px; }
 .wo .start-row { display: flex; gap: 8px; padding: 10px 0 2px; }
+/* real climbs: detail slider under the open chart (right = finer stretches) */
+.wo-detail { display: flex; align-items: center; gap: 12px; padding-top: 10px; font-size: 13.5px; }
+.wo-detail label { font-weight: 650; }
+.wo-detail input[type=range] { flex: 0 1 260px; min-width: 120px; accent-color: var(--ink); }
+.wo-det-v { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wo-detail button[hidden] { display: none; }
 /* open row: the mini profile gives way to a full-width one with the hover/tap readout (.prof-hover).
    Once open, the panel stops clipping so the readout tag can sit above the chart. */
 .wo > .profile { transition: opacity .2s ease; }
@@ -979,6 +985,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    ===================================================================== */
 .rp { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  .wo-detail { flex-wrap: wrap; gap: 6px 12px; }
+  .wo-detail input[type=range] { order: 3; flex: 1 1 100%; height: 32px; }
   /* ride page: one column, actions at the bottom, chart edge to edge */
   #ridepage { padding: calc(12px + env(safe-area-inset-top)) 14px calc(30px + env(safe-area-inset-bottom)); }
   .rd-nav { margin-bottom: 12px; }

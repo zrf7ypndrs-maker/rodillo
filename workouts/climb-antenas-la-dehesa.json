@@ -7,7 +7,7 @@
     "real climb",
     "distance"
   ],
-  "description": "Avenida Paseo Pie Andino from the Lo Barnechea side to the antennas, skipping the flat first 4.6 km. 8.7 km from 845 m to 1136 m, about 310 m of climbing. Profile from Climbfinder elevation data, simplified to stretches of 300 m or more. Starts with a 10-minute warm-up roll.",
+  "description": "Avenida Paseo Pie Andino from the Lo Barnechea side to the antennas, skipping the flat first 4.6 km. 8.7 km from 845 m to 1136 m, about 310 m of climbing. Profile from Climbfinder elevation data; open it in the Slope list to change how finely the grades are split. Starts with a 10-minute warm-up roll.",
   "steps": [
     {
       "dur": 600,
@@ -17,12 +17,12 @@
     {
       "dist": 2250,
       "grade": 2.7,
-      "label": "km 0.0 to 2.2"
+      "label": "km 0.0 to 2.3"
     },
     {
       "dist": 800,
       "grade": -2.6,
-      "label": "km 2.2 to 3.0"
+      "label": "km 2.3 to 3.0"
     },
     {
       "dist": 850,
@@ -32,12 +32,12 @@
     {
       "dist": 350,
       "grade": 5.3,
-      "label": "km 3.9 to 4.2"
+      "label": "km 3.9 to 4.3"
     },
     {
       "dist": 700,
       "grade": 8.6,
-      "label": "km 4.2 to 5.0"
+      "label": "km 4.3 to 5.0"
     },
     {
       "dist": 800,
@@ -64,5 +64,19 @@
       "grade": 5.7,
       "label": "km 7.5 to 8.7"
     }
-  ]
+  ],
+  "profile": {
+    "every": 50,
+    "length": 8702,
+    "detail": 5,
+    "source": "Climbfinder",
+    "lead": [
+      {
+        "dur": 600,
+        "grade": 0,
+        "label": "Warm-up roll"
+      }
+    ],
+    "elev": [845.3, 845.7, 846.9, 848.4, 849.7, 850.7, 851.6, 852.3, 853.2, 854.2, 855.5, 856.9, 858.4, 860, 861.4, 862.7, 863.9, 865.2, 866.5, 868, 869.4, 870.9, 872.3, 873.7, 874.8, 875.9, 877.1, 878.4, 879.9, 881.6, 883.6, 885.6, 887.8, 889.9, 891.7, 893.3, 895.2, 897.4, 899.7, 901.3, 901.9, 902, 902.4, 903.5, 904.8, 905.7, 906.1, 905.6, 904.3, 902, 899.2, 896.2, 893.5, 891.7, 890.6, 889.9, 889.3, 888.7, 887.9, 887, 886.1, 885.3, 884.6, 884, 883.3, 882.7, 882.1, 881.5, 881, 880.5, 880.2, 879.9, 879.8, 879.7, 879.6, 879.5, 879.6, 880, 881.1, 883.2, 886.1, 888.9, 891.3, 893.3, 896, 899.7, 904.3, 909.1, 913.5, 917.1, 920.8, 925.2, 931, 936.7, 941.7, 945.6, 949.5, 953.2, 957, 959.9, 960.8, 959.9, 958, 956.9, 957, 958.2, 959.8, 961.5, 963.1, 965, 966.8, 968.6, 970.4, 972.3, 974.5, 976.8, 979.3, 982, 985.1, 988.7, 992.9, 997, 1000.9, 1004.1, 1007.5, 1011.4, 1015.2, 1018.3, 1020.3, 1022.6, 1026.1, 1030.9, 1034.9, 1037.5, 1038.5, 1038.9, 1038.8, 1038, 1036.8, 1036.6, 1038.5, 1042.4, 1047.2, 1051.6, 1055, 1057.5, 1059.6, 1061.7, 1063.6, 1065.2, 1066.9, 1069.6, 1073.3, 1077.5, 1081.4, 1084.8, 1087.7, 1090.3, 1092.6, 1094.5, 1096.4, 1099.3, 1103, 1107, 1110, 1112, 1113.8, 1116.3, 1119.5, 1123.1, 1126.4, 1129.4, 1131.9, 1134.1, 1136, 1136]
+  }
 }

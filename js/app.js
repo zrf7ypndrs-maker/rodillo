@@ -6,6 +6,7 @@ import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
+import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
 import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
@@ -336,11 +337,70 @@ function applyLibrary() {
   // Agustín's own workouts (builder) are private: only with access to rodillo-data (GitHub sign-in or token).
   const mine = !signedIn() ? [] : mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  app.library = [...mine, ...lib]; // newest edit first
   app.plan = app.coachPlan || app.basePlan || null;
   reconcileSettings();
+  app.library = [...mine, ...lib].map(cutClimb); // newest edit first; real climbs cut at the rider's detail
   renderLibrary();
   refreshPlanViews();
+}
+
+// ------------------------------------------------------------------ real climbs: detail slider
+// A climb workout carries its full elevation profile (js/engine/climb.js); the open row in the Slope list has a
+// Detail slider (right = finer stretches) and a Default button. The choice is saved per climb in
+// settings.climbDetail and syncs like every other setting (Nov 11, asked for by Agustín).
+const climbLevel = (w) => clampDetail(app.settings.climbDetail?.[w.id] ?? defaultDetail(w));
+const cutClimb = (w) => (w.profile ? withDetail(w, climbLevel(w)) : w);
+const sliderOf = (lv) => DETAIL_MAX + DETAIL_MIN - lv; // slider value grows with detail, levels grow with stretch length
+const climbSteps = (w) => w.steps.length - (w.profile?.lead?.length || 0);
+const detailText = (w) => `${detailLabel(w.profile, w.detail)} &middot; ${climbSteps(w)} steps`;
+
+function detailRow(w, i) {
+  if (!w.profile) return '';
+  return `<div class="wo-detail">
+    <label for="det-${i}">Detail</label>
+    <input type="range" id="det-${i}" data-detail="${i}" min="${DETAIL_MIN}" max="${DETAIL_MAX}" step="1" value="${sliderOf(w.detail)}" tabindex="-1" aria-describedby="detv-${i}">
+    <span class="wo-det-v" id="detv-${i}">${detailText(w)}</span>
+    <button class="ghost small" data-detdef="${i}" tabindex="-1"${w.detail === defaultDetail(w) ? ' hidden' : ''}>Default</button>
+  </div>`;
+}
+
+/** Re-cut one climb in the library and redraw its row; commit = save the choice and refresh the plan views. */
+function setClimbDetail(i, lv, commit) {
+  const w = withDetail(app.library[i], lv);
+  app.library[i] = w;
+  const card = document.querySelector(`.wo[data-i="${i}"]`);
+  if (card) {
+    const mini = card.querySelector(':scope > .profile');
+    if (mini) mini.outerHTML = profileSvg(w);
+    card.querySelector('.wo-meta').innerHTML = woMeta(w);
+    const old = card.querySelector('.wo-prof');
+    if (old) {
+      const box = document.createElement('div');
+      box.className = 'wo-prof prof-hover';
+      box.innerHTML = profileSvg(w, 1000, 100);
+      old.replaceWith(box);
+      if (card.classList.contains('expanded')) { card.dataset.prof = '1'; bindProfileHover(box, w); } else delete card.dataset.prof;
+    }
+    card.querySelector('.wo-det-v').innerHTML = detailText(w);
+    card.querySelector('.wo-detail input').value = sliderOf(w.detail);
+    card.querySelector('[data-detdef]').hidden = w.detail === defaultDetail(w);
+  }
+  if (!commit) return;
+  const cd = { ...(app.settings.climbDetail || {}) };
+  if (w.detail === defaultDetail(w)) delete cd[w.id]; else cd[w.id] = w.detail;
+  app.settings.climbDetail = cd;
+  ls.set('settings', app.settings);
+  saveSettings();
+  refreshPlanViews();
+}
+
+function bindDetailSliders() {
+  $$('.wo-detail input').forEach((inp) => {
+    const i = +inp.dataset.detail, lv = () => sliderOf(+inp.value);
+    inp.addEventListener('input', () => setClimbDetail(i, lv(), false));
+    inp.addEventListener('change', () => setClimbDetail(i, lv(), true));
+  });
+  $$('[data-detdef]').forEach((b) => b.addEventListener('click', () => setClimbDetail(+b.dataset.detdef, defaultDetail(app.library[+b.dataset.detdef]), true)));
 }
 
 // Elevation profiles are at least this tall in metres, so a flat ride looks flat instead of filling the chart.
@@ -406,6 +466,7 @@ function workoutCard(w, i) {
         <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="wo-desc">${esc(w.description)}</div>
         <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
+        ${detailRow(w, i)}
         <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : signedIn() ? `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>` : ''}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
       </div></div>
     </div>`;
@@ -419,17 +480,19 @@ function renderLibrary() {
   $('#mine-list').innerHTML = mine.join('') || '<p class="muted empty-list mine-empty">Nothing here yet. Build one with New workout, or open any workout and use Edit a copy.</p>';
   $('#kind-btn-mine').classList.toggle('hidden', !signedIn());
   setWoKind(app.woKind);
+  bindDetailSliders();
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
     if (e.target.dataset.edit) return openBuilder(app.library[+e.target.dataset.edit], { mine: true });
     if (e.target.dataset.copy) return openBuilder(app.library[+e.target.dataset.copy]);
     if (e.target.closest('.wo-prof')) return; // the open chart has its own hover/tap readout
+    if (e.target.closest('.wo-detail')) return; // detail slider and Default (own handlers)
     // One open row at a time (across the ERG and slope lists).
     const open = !c.classList.contains('expanded');
-    $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = -1)); });
+    $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((b) => (b.tabIndex = -1)); });
     c.classList.toggle('expanded', open);
-    if (open) c.querySelectorAll('.start-row button').forEach((b) => (b.tabIndex = 0));
+    if (open) c.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((b) => (b.tabIndex = 0));
     // Big chart with the same readout as the today hero; bound on first open (one document listener per chart).
     if (open && !c.dataset.prof) { c.dataset.prof = '1'; bindProfileHover(c.querySelector('.wo-prof'), app.library[+c.dataset.i]); }
   }));

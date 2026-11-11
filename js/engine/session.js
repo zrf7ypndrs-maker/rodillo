@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
   riderName: '',         // the coach uses it in messages ({name})
+  climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
 };
 
 export class Session extends Emitter {

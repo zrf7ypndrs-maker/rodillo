@@ -8,6 +8,7 @@ import { Session } from '../js/engine/session.js';
 import { powerAt } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
+import { withDetail, profileSteps, defaultDetail, DETAIL_MAX } from '../js/engine/climb.js';
 import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
 import { cleanWorkout } from '../js/mine.js';
@@ -221,6 +222,28 @@ test('slope workout as a road: elevation, position, climb ahead', () => {
   const rt = track(roll);
   assert.equal(climbAhead(rt, roll, 0, 0).m, 1500);
   assert.ok(Math.abs(rt.parts[2].h1 - 20) < 1e-9 && Math.abs(rt.hi - 40) < 1e-9 && Math.abs(rt.ascent - 40) < 1e-9);
+});
+
+test('real climbs: profile cut at every detail level', () => {
+  for (const id of ['climb-el-durazno', 'climb-farellones', 'climb-antenas-chicureo', 'climb-antenas-la-dehesa']) {
+    const w = JSON.parse(fs.readFileSync(new URL(`../workouts/${id}.json`, import.meta.url)));
+    const p = w.profile, rise = p.elev.at(-1) - p.elev[0];
+    // the file's own steps are the default cut (tools/climb.mjs), so tools that only read steps agree with the app
+    assert.deepEqual(withDetail(w).steps, w.steps, `${id}: steps out of date, run node tools/climb.mjs`);
+    let prev = Infinity;
+    for (let lv = 1; lv <= DETAIL_MAX; lv++) {
+      const st = profileSteps(p, lv);
+      const len = st.reduce((a, s) => a + s.dist, 0), up = st.reduce((a, s) => a + (s.dist * s.grade) / 100, 0);
+      assert.ok(Math.abs(len - p.length) <= 5, `${id} lv${lv}: length ${len} vs ${p.length}`);
+      assert.ok(Math.abs(up - rise) < Math.max(3, rise * 0.01), `${id} lv${lv}: rise ${up} vs ${rise}`);
+      assert.ok(st.length <= prev, `${id}: coarser levels never add steps`);
+      prev = st.length;
+      assert.ok(isTrack(flatten({ steps: st })));
+    }
+    assert.equal(profileSteps(p, 1).length, p.elev.length - 1, `${id}: level 1 keeps every point`);
+    assert.equal(withDetail(w, 99).detail, DETAIL_MAX);
+    assert.equal(withDetail({ steps: [] }, 3).steps.length, 0, 'no profile: unchanged');
+  }
 });
 
 console.log(`\n${passed} tests passed`);
