@@ -221,6 +221,12 @@ button.danger:hover { border-color: var(--bad); }
 .wo-detail input[type=range] { flex: 0 1 260px; min-width: 120px; accent-color: var(--ink); }
 .wo-det-v { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .wo-detail button[hidden] { display: none; }
+/* slope workouts: steepest / lowest grade vs the trainer's range */
+.wo-grades { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding-top: 10px; font-size: 13.5px; color: var(--muted); }
+.wo-grades b { color: var(--ink); font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; }
+.wo-grades .over, .wo-grades .over b { color: var(--warn); }
+.wo-grades .ico-warn { width: 15px; height: 15px; margin-left: 4px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wo-gnote { color: var(--warn); flex-basis: 100%; }
 /* open row: the mini profile gives way to a full-width one with the hover/tap readout (.prof-hover).
    Once open, the panel stops clipping so the readout tag can sit above the chart. */
 .wo > .profile { transition: opacity .2s ease; }

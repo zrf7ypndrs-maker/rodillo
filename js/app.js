@@ -279,6 +279,7 @@ async function flushSettings(gh = syncClient()) {
 let flushTimer;
 function saveSettings(source = 'settings') {
   reconcileSettings(source);
+  refreshGradeRanges();
   clearTimeout(flushTimer);
   flushTimer = setTimeout(() => flushSettings(), 1500);
 }
@@ -356,6 +357,37 @@ const sliderOf = (lv) => DETAIL_MAX + DETAIL_MIN - lv; // slider value grows wit
 const climbSteps = (w) => w.steps.length - (w.profile?.lead?.length || 0);
 const detailText = (w) => `${detailLabel(w.profile, w.detail)} &middot; ${climbSteps(w)} steps`;
 
+/** Profile previews of a real climb leave out its warm-up (lead steps): the chart is the climb (Nov 11, Agustín). */
+const previewOf = (w) => (w?.profile?.lead?.length ? { ...w, steps: w.steps.slice(w.profile.lead.length) } : w);
+
+const WARN_ICO = '<svg class="ico-warn" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'; // Lucide triangle-alert (ISC)
+const pct1 = (f) => `${+(f * 100).toFixed(1)}%`;
+
+/**
+ * Open row of a slope workout: steepest and lowest grade, checked against the trainer's range (Settings > Trainer).
+ * Uphill grades are compared after Road feel's grade realism, like the session sends them. Updates with the detail slider.
+ */
+function gradeRangeHtml(w, i) {
+  const segs = flatten(previewOf(w));
+  if (!isTrack(segs)) return '';
+  const st = app.settings, gs = st.gradeScale ?? 1;
+  const hi = Math.max(...segs.map((g) => g.grade)), lo = Math.min(...segs.map((g) => g.grade));
+  const overHi = hi * (hi > 0 ? gs : 1) > st.maxSendGrade + 1e-9, overLo = lo < st.minSendGrade - 1e-9;
+  const who = TRAINERS[st.trainerModel]?.name || 'your trainer';
+  const notes = [];
+  if (overHi) notes.push(`Steeper than ${who}'s ${pct1(st.maxSendGrade)} max: those stretches ride at ${pct1(st.maxSendGrade)}`);
+  if (overLo) notes.push(`Below ${who}'s ${pct1(st.minSendGrade)} min: those stretches ride at ${pct1(st.minSendGrade)}`);
+  return `<div class="wo-grades" data-gi="${i}">
+    <span class="${overHi ? 'over' : ''}">Max <b>${pct1(hi)}</b>${overHi ? WARN_ICO : ''}</span>
+    <span class="${overLo ? 'over' : ''}">Min <b>${pct1(lo)}</b>${overLo ? WARN_ICO : ''}</span>
+    ${notes.length ? `<span class="wo-gnote">${notes.join('. ')}</span>` : ''}
+  </div>`;
+}
+/** Settings changed (trainer range, grade realism): redraw every grade line on screen. */
+function refreshGradeRanges() {
+  $$('.wo-grades[data-gi]').forEach((el) => { const w = app.library[+el.dataset.gi]; if (w) el.outerHTML = gradeRangeHtml(w, +el.dataset.gi); });
+}
+
 function detailRow(w, i) {
   if (!w.profile) return '';
   return `<div class="wo-detail">
@@ -384,6 +416,8 @@ function setClimbDetail(i, lv, commit) {
       if (card.classList.contains('expanded')) { card.dataset.prof = '1'; bindProfileHover(box, w); } else delete card.dataset.prof;
     }
     card.querySelector('.wo-det-v').innerHTML = detailText(w);
+    const gr = card.querySelector('.wo-grades');
+    if (gr) gr.outerHTML = gradeRangeHtml(w, i);
     card.querySelector('.wo-detail input').value = sliderOf(w.detail);
     card.querySelector('[data-detdef]').hidden = w.detail === defaultDetail(w);
   }
@@ -425,6 +459,7 @@ function trackSvg(segs, width, height) {
 }
 
 function profileSvg(w, width = 340, height = 54) {
+  w = previewOf(w);
   const segs = flatten(w, app.settings.ftp);
   if (isTrack(segs)) return trackSvg(segs, width, height);
   const T = segs.length ? segs[segs.length - 1].end : 1;
@@ -468,6 +503,7 @@ function workoutCard(w, i) {
         <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="wo-desc">${esc(w.description)}</div>
         <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
+        ${gradeRangeHtml(w, i)}
         ${detailRow(w, i)}
         <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : signedIn() ? `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>` : ''}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
       </div></div>
@@ -801,6 +837,7 @@ function riseHtml(p) {
 /** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
 function bindProfileHover(box, w) {
   if (!box) return;
+  w = previewOf(w); // same steps as the chart it reads
   const segs = flatten(w, app.settings.ftp);
   if (!segs.length) return;
   const T = segs[segs.length - 1].end, ftp = app.settings.ftp;
