@@ -11,7 +11,8 @@ import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, fo
 import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
 import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
-import { ls, rides } from './store.js?v=202611102147';
+import { ls, rides, docs } from './store.js?v=202611102147';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc } from './ridepage.js?v=202611102147';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
 import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
 import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102147';
@@ -27,10 +28,12 @@ const fmtTime = (s) => {
 };
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
-let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE;
+let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, TOK = {};
 function readTokens() {
   const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
   [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line'].map(v);
+  // the ride page chart (js/ridepage.js) takes its colors as one object
+  TOK = { ink: INK, rule: RULE, faint: FAINT, ftp: FTP_LINE, hr: HR_LINE, info: v('--info'), infoLine: v('--info-line'), band: v('--sheet2'), dim: v('--dim'), sheet: v('--sheet') };
 }
 readTokens();
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
@@ -631,14 +634,6 @@ function bindUpNext(root) {
   card.onclick = (e) => { if (e.target.closest('.un-prof')) return; app.calMonth = card.dataset.day.slice(0, 7); app.calSel = card.dataset.day; setTab('calendar'); };
 }
 
-/** "See ride": the Training tab, scrolled to that ride's row, which flashes. */
-function seeRide(id) {
-  app.flashRide = id;
-  setTab('training');
-  clearTimeout(seeRide.t);
-  seeRide.t = setTimeout(() => (app.flashRide = null), 2500);
-}
-
 /** Today: a full-width card in the color of the day's main effort, with Start up front and Free ride as the second choice. */
 function renderHero() {
   const el = $('#today');
@@ -657,7 +652,7 @@ function renderHero() {
     // Done: a quiet sheet card with the ride's real numbers, then the next planned ride.
     el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date)}</section>${upNextHtml()}`;
     $('#btn-free').onclick = startFree;
-    $('#hero-see').onclick = () => seeRide(doneRide.id);
+    $('#hero-see').onclick = () => openRide(doneRide.id);
     if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w);
     bindUpNext(el);
     return;
@@ -665,7 +660,7 @@ function renderHero() {
   if (w) {
     const work = workSummary(w);
     const status = today.done
-      ? `<div class="hero-done">&#10003; ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS</div>` : '';
+      ? `<div class="hero-done">&#10003; ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : '';
     const start = `<button class="primary hero-start" id="hero-start">${PLAY_ICO}Start workout</button>`;
     body = `<div class="hero-main">
         <div class="hero-text">
@@ -688,13 +683,14 @@ function renderHero() {
           <div class="hero-top"><b>Today</b><span>${date}</span></div>
           <h2 class="hero-name">${name}</h2>
           <p class="hero-desc">${sub}</p>
-          ${today.done ? `<div class="hero-done">&#10003; ${esc(today.done.name)} &middot; ${today.done.tss} TSS</div>` : ''}
+          ${today.done ? `<div class="hero-done">&#10003; ${esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : ''}
         </div>
         <div class="hero-btns">${free(true)}</div>
       </div>${heroRecovery(today)}`;
   }
   el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}" style="--c:${w ? workoutColor(w) : 'transparent'}" aria-label="Today">${body}</section>`;
   $('#btn-free').onclick = startFree;
+  el.querySelectorAll('.hero-done-see').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   const s = $('#hero-start');
   if (s) s.onclick = () => startWorkout(w);
   if (w) bindProfileHover(el.querySelector('.hero-prof'), w);
@@ -837,9 +833,10 @@ function renderCalendar() {
   const wd = whoopDay(sel);
   if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}</div>`;
   for (const r of info.ridden) {
-    html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}</div>`;
+    html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}<button class="ghost small cal-see" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   }
   $('#cal-detail').innerHTML = html;
+  $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
   if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
 }
@@ -1058,8 +1055,8 @@ async function renderTraining() {
       <td>${comp}</td><td>${x.decoupling != null ? x.decoupling + '%' : ''}</td>
       <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
     }).join('')}</table>` : '<p class="muted">No rides yet.</p>';
-  const fr = app.flashRide && $(`#ride-table tr[data-ride="${CSS.escape(app.flashRide)}"]`);
-  if (fr) { fr.classList.add('flash'); fr.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+  // a row opens its ride page (the .FIT / Delete buttons keep their own job)
+  $$('#ride-table tr[data-ride]').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('button')) openRide(tr.dataset.ride); }));
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
   $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this Mac?', ok: 'Delete', danger: true })) { await rides.del(+b.dataset.del); renderTraining(); } }));
 }
@@ -1236,6 +1233,187 @@ function downloadFit(ride) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
+// ------------------------------------------------------------------ ride page (one completed ride, js/ridepage.js)
+// Opened from the done hero's "See ride", a Training row or a ridden Calendar day. Back / Esc / controller B returns.
+const rd = { id: null, doc: null, local: null, segs: [], sel: null, t: null, geo: null, from: null, scrollY: 0 };
+const RD_BACK = { training: 'Training', calendar: 'Calendar' };
+const BACK_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+const canHover = matchMedia('(hover: hover)');
+
+async function openRide(id) {
+  if (!id) return;
+  Object.assign(rd, { id, doc: null, local: null, segs: [], sel: null, t: null, geo: null, from: app.tab, scrollY: window.scrollY });
+  $$('.panel').forEach((p) => p.classList.add('hidden'));
+  setDevPop(false);
+  show('ridepage');
+  window.scrollTo(0, 0);
+  const shell = (msg) => `<div class="rd-nav"><button class="ghost small rd-back" data-rd="back">${BACK_ICO}${RD_BACK[rd.from] || 'Home'}</button></div><p class="muted rd-msg">${msg}</p>`;
+  $('#rd').innerHTML = shell('Loading ride...');
+  try {
+    const got = await loadRideDoc(id);
+    if (rd.id !== id || app.screen !== 'ridepage') return;
+    if (!got) { $('#rd').innerHTML = shell(`This ride's details are in rodillo-data. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to see them on this device.`); return; }
+    Object.assign(rd, got);
+    renderRidePage();
+  } catch (e) {
+    if (rd.id === id) $('#rd').innerHTML = shell(`Couldn't load this ride (${esc(String(e.message || e).slice(0, 90))}). Check your connection and try again.`);
+  }
+}
+
+/** This device's recording first (full samples), then the cached copy, then rodillo-data (cached after). */
+async function loadRideDoc(id) {
+  let row = null;
+  try { row = (await rides.list()).find((r) => r.summary?.id === id); } catch { /* no idb */ }
+  if (row) {
+    const full = await rides.get(row.id);
+    if (full?.samples?.length && full.meta) return { doc: { ...rideDoc(full), laps: full.laps }, local: full };
+  }
+  try { const c = await docs.get(id); if (c) return { doc: c, local: null }; } catch { /* no idb */ }
+  const gh = syncClient();
+  if (!gh) return null;
+  const r = await gh.getJson(`rides/${id.slice(0, 4)}/${id}.json`);
+  if (!r?.json?.summary) return null;
+  try { await docs.put(id, r.json); } catch { /* cache is optional */ }
+  return { doc: r.json, local: null };
+}
+
+function closeRide() {
+  rd.id = null;
+  show('home');
+  window.scrollTo(0, rd.scrollY);
+}
+
+const rideFtp = () => rd.doc?.summary?.ftp || app.settings.ftp;
+
+function renderRidePage() {
+  const doc = rd.doc, st = doc.summary;
+  const w = st.workoutId ? app.library.find((x) => x.id === st.workoutId) : null;
+  // the steps as ridden (stored with this device's recording), else the workout as it is in the library now
+  rd.segs = rideSegs(doc, rd.local?.meta?.segs || (w ? flatten(w, rideFtp()) : null));
+  const season = powerCurve((app.rows || []).filter((r) => !r.demo).map((r) => r.summary), 90);
+  $('#rd').innerHTML = pageHtml(doc, {
+    segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
+    profile: w ? profileSvg(w, 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
+    canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!rd.local,
+  });
+  bindRideChart();
+  drawRideChart();
+}
+
+function drawRideChart() {
+  const wrap = $('#rd-wrap');
+  if (!wrap || !rd.doc) return;
+  const c = chartSvg(rd.doc, { width: wrap.clientWidth, phone: isPhone(), ftp: rideFtp(), segs: rd.segs, sel: rd.sel, tok: TOK, zoneHex, gradeHex });
+  const svg = $('#rd-chart');
+  svg.setAttribute('viewBox', `0 0 ${c.width} ${c.height}`);
+  svg.setAttribute('height', c.height);
+  svg.innerHTML = c.svg;
+  rd.geo = c.geo;
+  const s = rd.segs.find((x) => x.i === rd.sel);
+  $('#rd-sel').innerHTML = s ? selHtml(rd.doc, s) : '';
+  $('#rd-sel').classList.toggle('on', !!s);
+  $('#rd-hint').classList.toggle('hidden', !!s);
+  rideCrosshair(rd.t);
+}
+
+/** Crosshair + ink tag at second t (null hides it). */
+function rideCrosshair(t) {
+  const g = rd.geo, xh = $('#rd-chart .rd-xh'), tip = $('#rd-tip');
+  if (!g || !xh) return;
+  if (t == null || !Number.isFinite(t)) { rd.t = null; xh.style.display = 'none'; tip.classList.remove('on'); return; }
+  t = Math.max(0, Math.min(g.T - 1, Math.round(t)));
+  rd.t = t;
+  const x = g.X(t);
+  xh.style.display = '';
+  const line = xh.querySelector('line');
+  line.setAttribute('x1', x); line.setAttribute('x2', x);
+  xh.querySelectorAll('circle').forEach((c) => {
+    const l = g.lanes.find((q) => q.k === c.dataset.k), v = g.vals[c.dataset.k]?.[t];
+    const off = c.dataset.k === 'hr' && !rd.doc.streams.hr[t];
+    c.style.display = off || v == null ? 'none' : '';
+    if (!off && v != null) { c.setAttribute('cx', x); c.setAttribute('cy', g.yOf(l, v)); }
+  });
+  tip.innerHTML = tipHtml(rd.doc, rd.segs, t);
+  tip.style.left = `${x}px`;
+  tip.style.top = `${g.lanes[0].y + 18}px`;
+  // the tag sits beside the line, on the side with more room
+  tip.style.transform = x > $('#rd-wrap').clientWidth / 2 ? 'translateX(calc(-100% - 14px))' : 'translateX(14px)';
+  tip.classList.add('on');
+}
+
+function selectRideSeg(i, fromTable = false) {
+  rd.sel = i == null || rd.sel === i ? null : i;
+  $$('#rd-ints tr[data-i]').forEach((tr) => tr.classList.toggle('sel', +tr.dataset.i === rd.sel));
+  drawRideChart();
+  if (fromTable && rd.sel != null) $('.rd-charts')?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
+/** Mouse/pen: hover reads, click selects the interval under the pointer. Touch: drag or tap reads, tap on the strip selects. */
+function bindRideChart() {
+  const wrap = $('#rd-wrap');
+  if (!wrap) return;
+  const tAt = (clientX) => { const r = wrap.getBoundingClientRect(); return rd.geo ? ((clientX - r.left) / rd.geo.PW) * rd.geo.T : null; };
+  const mouse = (e) => e.pointerType === 'mouse' || e.pointerType === 'pen';
+  wrap.addEventListener('pointermove', (e) => { if (mouse(e)) rideCrosshair(tAt(e.clientX)); });
+  wrap.addEventListener('pointerleave', (e) => { if (mouse(e)) rideCrosshair(null); });
+  const touch = (e) => { if (e.touches.length === 1) rideCrosshair(tAt(e.touches[0].clientX)); };
+  wrap.addEventListener('touchstart', touch, { passive: true });
+  wrap.addEventListener('touchmove', touch, { passive: true });
+  // click works in Bluefy too (its web view doesn't always send pointer events for taps on non-buttons)
+  wrap.addEventListener('click', (e) => {
+    const strip = e.target.closest('.rd-strip [data-i]');
+    if (strip) return selectRideSeg(+strip.dataset.i);
+    const t = tAt(e.clientX);
+    if (!canHover.matches) return rideCrosshair(t);
+    const s = rd.segs.find((x) => t >= x.start && t < x.end);
+    if (s) selectRideSeg(s.i);
+  });
+}
+
+function rideAction(a) {
+  const segs = rd.segs.filter((s) => s.res);
+  const step = (d) => {
+    if (!segs.length) return;
+    const k = segs.findIndex((s) => s.i === rd.sel);
+    const n = k < 0 ? (d > 0 ? 0 : segs.length - 1) : Math.max(0, Math.min(segs.length - 1, k + d));
+    selectRideSeg(segs[n].i, true);
+  };
+  switch (a) {
+    case 'back': if (rd.sel != null) selectRideSeg(null); else closeRide(); break;
+    case 'left': case 'easier': step(-1); break;
+    case 'right': case 'harder': step(+1); break;
+    case 'up': window.scrollBy({ top: -240, behavior: 'smooth' }); break;
+    case 'down': window.scrollBy({ top: 240, behavior: 'smooth' }); break;
+  }
+}
+
+$('#rd').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-rd]');
+  if (b) {
+    const a = b.dataset.rd;
+    if (a === 'back') closeRide();
+    else if (a === 'clear') selectRideSeg(null);
+    else if (a === 'fit') {
+      const st = rd.doc.summary;
+      downloadFit(rd.local || { id: Date.parse(st.start), name: st.name, samples: samplesFromDoc(rd.doc), laps: rd.doc.laps, summary: st });
+    } else if (a === 'delete' && rd.local) {
+      if (!(await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this device?', ok: 'Delete', danger: true }))) return;
+      await rides.del(rd.local.id);
+      closeRide();
+      toast('Ride deleted');
+      if (app.tab === 'training') renderTraining();
+      refreshPlanViews();
+    }
+    return;
+  }
+  const tr = e.target.closest('#rd-ints tr[data-i]');
+  if (tr) selectRideSeg(+tr.dataset.i, true);
+});
+// phone: a tap outside the chart puts the reading away
+document.addEventListener('touchstart', (e) => { if (app.screen === 'ridepage' && rd.t != null && !e.target.closest('#rd-wrap')) rideCrosshair(null); }, { passive: true });
+let rdResize = 0;
+window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return; cancelAnimationFrame(rdResize); rdResize = requestAnimationFrame(drawRideChart); });
+
 function showSummary(ride) {
   const st = ride.summary;
   $('#s-name').textContent = ride.name;
@@ -1303,6 +1481,7 @@ function showSummary(ride) {
 function action(a, src = 'tap') {
   if (modalOpen()) return modalAction(a);
   if (builderOpen()) { if (a === 'back') closeBuilder(); return; } // the builder is keyboard/touch only
+  if (app.screen === 'ridepage') return rideAction(a);
   const s = app.session;
   if (app.screen === 'ride' && s) {
     switch (a) {
@@ -1942,6 +2121,7 @@ function sizePhoneChart() {
 }
 new ResizeObserver(() => { if (app.screen === 'ride' && isPhone()) { sizePhoneChart(); drawPhoneChart(); } }).observe(rpCanvas.parentElement);
 PHONE_MQ.addEventListener('change', () => { if (app.screen === 'ride') { sizeChart(); sizePhoneChart(); renderRide(); } });
+PHONE_MQ.addEventListener('change', () => { if (app.screen === 'ridepage' && rd.doc) renderRidePage(); });
 
 const segColor = (g, s, t = 0.5) => (g.kind === 'erg' ? zoneHex(segTarget(g, t)) : gradeHex(g.grade + (s?.gradeOffset || 0)));
 const segTargetText = (g, s) => (g.kind === 'erg'
@@ -2487,6 +2667,7 @@ function setTheme(t) {
   readTokens();
   if (app.tab === 'training') renderTraining();
   if (app.screen === 'ride') renderRide();
+  if (app.screen === 'ridepage') drawRideChart();
 }
 setTheme(ls.get('theme', 'light'));
 $('#btn-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');

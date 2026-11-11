@@ -147,6 +147,7 @@ export function buildRide(samples, meta) {
       speed: samples.map((s) => Math.round((s.speed || 0) * 100) / 100),
       target: samples.map((s) => s.target || 0),
       gear: samples.map((s) => s.gear || 0),
+      seg: samples.map((s) => (s.si ?? -1)), // workout step per second (-1 = none): the ride page times intervals with it
     },
   };
 }

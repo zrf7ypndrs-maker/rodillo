@@ -401,7 +401,7 @@ export function buildImport(found, existing, { ftp, restHr = 55 } = {}) {
       Object.assign(s, { kj: null, avgP: null, np: null, if: null, ef: null, decoupling: null, bests: {}, zones: null, tss: hrTss(a.samples.map((x) => x.hr), hrCfg), tssFrom: 'hr', lthr: hrCfg.lthr });
     } else if (!a.hasHr) s.decoupling = null;
     s.slopeSec = 0;
-    delete doc.streams.grade; delete doc.streams.target; delete doc.streams.gear;
+    delete doc.streams.grade; delete doc.streams.target; delete doc.streams.gear; delete doc.streams.seg;
     if (!a.hasPower) delete doc.streams.power;
     doc.intervals = [];
     return doc;
