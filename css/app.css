@@ -636,7 +636,10 @@ table.ints { margin-bottom: 14px; }
 /* Start workout launch (launchFrom() in js/app.js): the pill clips the melting letters and the sprinting icon */
 .hero-start.launching { overflow: hidden; pointer-events: none; }
 .hero-start .play-ico { transform-origin: 50% 60%; }
-.hs-label i { display: inline-block; font-style: normal; transform-origin: 50% 0; }
+.hs-label { display: inline-block; line-height: 1; }
+/* while launching, the label's bottom edge (just under the letters) hides anything that falls past it; the wave can rise above */
+.hero-start.launching .hs-label { clip-path: inset(-1em -0.5em 0.06em -0.5em); }
+.hs-label i { display: inline-block; font-style: normal; }
 .launch-cover { position: fixed; inset: 0; z-index: 9999; background: #000; pointer-events: all; will-change: clip-path; }
 .hero-free .bike-ico { width: 28px; height: 17px; }
 .hero-prof { height: 120px; margin-top: 24px; }

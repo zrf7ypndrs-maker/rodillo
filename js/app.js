@@ -1106,19 +1106,26 @@ async function launchFrom(btn, go) {
   const text = label?.textContent || '';
   try {
     btn.classList.add('launching');
-    // 1. tilt + melt
-    ico.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-18deg)' }, { transform: 'rotate(16deg)' }, { transform: 'rotate(-13deg)' },
-      { transform: 'rotate(10deg)' }, { transform: 'rotate(-6deg)' }, { transform: 'rotate(0)' }],
-      { duration: 870, easing: 'ease-in-out', fill: 'forwards' });
+    // 1. the icon rocks while a wave runs through the label from the first letter to the last; then the
+    //    letters fall from right to left and vanish as they cross the line they sat on (clip-path on .hs-label)
+    const WAVE = 420, WAVE_STEP = 45, FALL = 380, FALL_STEP = 40;
+    const n = [...text].length;
+    const fallStart = (n - 1) * WAVE_STEP + WAVE;
+    const textEnd = fallStart + (n - 1) * FALL_STEP + FALL;
+    const tilt = [0, -18, 16, -14, 12, -11, 9, -7, 5, -3, 0];
+    ico.animate(tilt.map((d) => ({ transform: `rotate(${d}deg)` })), { duration: textEnd, easing: 'ease-in-out', fill: 'forwards' });
     if (label) {
       label.innerHTML = [...text].map((c) => `<i>${c === ' ' ? '&nbsp;' : esc(c)}</i>`).join('');
-      [...label.children].forEach((ch, i) => ch.animate([
-        { transform: 'translateY(0) scale(1, 1)', filter: 'blur(0)', opacity: 1 },
-        { transform: 'translateY(2px) scale(.95, 1.5)', filter: 'blur(.5px)', opacity: 1, offset: 0.4 },
-        { transform: 'translateY(26px) scale(.6, 2.6)', filter: 'blur(3px)', opacity: 0 }],
-        { duration: 730, delay: 40 + i * 17 + Math.random() * 140, easing: 'cubic-bezier(.55, 0, .9, .45)', fill: 'forwards' }));
+      const kids = [...label.children];
+      kids.forEach((ch, i) => {
+        ch.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-0.45em)', easing: 'ease-in' }, { transform: 'translateY(0)' }],
+          { duration: WAVE, delay: i * WAVE_STEP, easing: 'ease-out', composite: 'add' });
+        const tip = (Math.random() * 2 - 1) * 10;
+        ch.animate([{ transform: 'translateY(0) rotate(0)' }, { transform: `translateY(1.6em) rotate(${tip}deg)` }],
+          { duration: FALL, delay: fallStart + (n - 1 - i) * FALL_STEP, easing: 'cubic-bezier(.5, 0, .9, .4)', fill: 'forwards', composite: 'add' });
+      });
     }
-    await sleep(870);
+    await sleep(textEnd);
     // 2. sprint: a small wind-up, then off the right edge, stretched by the speed
     const b = btn.getBoundingClientRect(), r = ico.getBoundingClientRect();
     const dx = b.right - r.left + 12;
