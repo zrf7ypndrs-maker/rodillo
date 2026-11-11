@@ -1080,6 +1080,12 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rp-sheet button.danger { color: var(--sheet); background: var(--bad); }
   .rp-sheet-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .rp-sheet button.ghost { background: transparent; color: var(--muted); }
+  /* hold-to-confirm buttons: fill left to right while held, release early empties */
+  .rp-sheet .hold-btn { position: relative; overflow: hidden; isolation: isolate; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .rp-sheet .hold-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; transform: scaleX(0); transform-origin: left; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+  .rp-sheet .hold-btn.danger::before { background: color-mix(in srgb, var(--ink) 38%, transparent); }
+  .rp-sheet .hold-btn.filling::before { animation: hold-bar var(--hold-ms, 1000ms) linear forwards; }
+@keyframes hold-bar { to { transform: scaleX(1); } }
 }
 
 /* phone held sideways: numbers left, workout right */

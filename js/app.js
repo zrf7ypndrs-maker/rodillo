@@ -1431,18 +1431,26 @@ function onRelease(b) {
 
 // ------------------------------------------------------------------ hold to confirm
 // Skip (Y) and End ride (B) only happen if the button is held the whole time; letting go early cancels.
-// Same for the S / Esc keys. Taps and clicks (desktop End ride, phone sheet) use a confirm screen instead.
+// Same for the S / Esc keys (big ring overlay). Phone sheet buttons hold too, shorter, and fill left to right
+// instead of the ring. Mouse clicks (desktop End ride) get a confirm screen.
 const HOLDS = {
-  skip: { ms: 3000, ctl: 'Y', key: 'S', msg: '', sub: (k) => `Keep holding ${k} to skip` },
-  end: { ms: 5000, ctl: 'B', key: 'Esc', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
+  skip: { ms: 3000, tapMs: 1000, ctl: 'Y', key: 'S', msg: '', sub: (k) => `Keep holding ${k} to skip` },
+  end: { ms: 5000, tapMs: 2000, ctl: 'B', key: 'Esc', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
 };
-let hold = null; // { kind, t }
-function holdStart(kind, src) {
+let hold = null; // { kind, t, btn }
+function holdStart(kind, src, btn) {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
   if (kind === 'skip' && !s.segs) return;
   if (hold) { if (hold.kind === kind) return; holdEnd(); }
   const h = HOLDS[kind];
+  if (src === 'tap') { // phone sheet button fills left to right
+    if (!btn) return;
+    btn.style.setProperty('--hold-ms', `${h.tapMs}ms`);
+    btn.classList.remove('filling'); void btn.offsetWidth; btn.classList.add('filling');
+    hold = { kind, btn, t: setTimeout(() => holdDone(kind), h.tapMs) };
+    return;
+  }
   if (src !== 'ctl' && src !== 'key') return;
   const k = src === 'ctl' ? h.ctl : h.key;
   const el = $('#hold');
@@ -1462,6 +1470,7 @@ function holdStart(kind, src) {
 function holdEnd(kind) {
   if (!hold || (kind && hold.kind !== kind)) return;
   clearTimeout(hold.t);
+  hold.btn?.classList.remove('filling');
   hold = null;
   $('#hold').classList.add('hidden');
   $('#hold').classList.remove('run');
@@ -2055,16 +2064,19 @@ rpTap('rp-gup', () => action('up'));
 rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
-// taps and clicks get a confirm screen; holds are only for the controller buttons and keys
-rpTap('rp-skip', async () => {
-  $('#rp-sheet').classList.add('hidden');
-  if (await ask('', { title: 'Skip this interval?', ok: 'Skip' }) && app.session?.segs) { app.session.skip(); toast('Skipped'); renderRide(); }
-});
-rpTap('rp-end', async () => {
-  $('#rp-sheet').classList.add('hidden');
-  const short = tooShort();
-  if (await ask(short ? 'Less than 10 seconds recorded. Nothing will be saved.' : '', { title: 'End this ride?', ok: 'End ride', danger: short })) endSession();
-});
+// phone sheet: press and hold (pointer + touch, since Bluefy doesn't always send pointer events); the sheet closes when it completes
+function bindHold(id, kind) {
+  const el = document.getElementById(id);
+  const down = (e) => { e.preventDefault(); holdStart(kind, 'tap', el); };
+  const up = () => holdEnd(kind);
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('touchstart', down, { passive: false });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel']) el.addEventListener(ev, up);
+  el.addEventListener('click', (e) => e.preventDefault());
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+bindHold('rp-skip', 'skip');
+bindHold('rp-end', 'end');
 
 // ------------------------------------------------------------------ workout messages
 // Timed messages from the workout (session 'message' events) float over the top of the ride chart.
