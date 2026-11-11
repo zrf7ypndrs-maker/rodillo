@@ -11,77 +11,61 @@
 //
 // The workout's own "steps" are the default cut (tools/climb.mjs writes them), so tools that only read steps keep working.
 
-/** tol = Douglas-Peucker tolerance (m of elevation), min = shortest stretch (m). Level 1 keeps every point. */
-export const DETAIL_LEVELS = [
-  { tol: 0, min: 0 },
-  { tol: 0.75, min: 50 },
-  { tol: 1.5, min: 100 },
-  { tol: 2.5, min: 150 },
-  { tol: 4, min: 300 },
-  { tol: 6, min: 500 },
-  { tol: 10, min: 800 },
-];
+/**
+ * Detail levels: the climb is cut on a fixed grid of `len` metres, each stretch at its own average grade, then
+ * neighbours whose grades are within MERGE of each other are joined (closest pair first, compared on the merged
+ * averages), so steady parts become one step and every kick stays its own (Nov 11, Agustín picked this from a
+ * side-by-side with the earlier shape-following cut). Level numbers kept their lengths from that first version.
+ */
+export const DETAIL_LEVELS = [{ len: 25 }, { len: 50 }, { len: 100 }, { len: 150 }, { len: 300 }, { len: 500 }];
+export const MERGE = 0.01; // grade difference (fraction) under which neighbouring stretches are joined
 export const DETAIL_MIN = 1, DETAIL_MAX = DETAIL_LEVELS.length;
 export const clampDetail = (lv) => Math.min(DETAIL_MAX, Math.max(DETAIL_MIN, Math.round(Number(lv)) || 4));
 export const defaultDetail = (w) => clampDetail(w?.profile?.detail ?? 4);
 
-/** "150 m stretches" / "every 25 m" for the slider readout. */
-export function detailLabel(profile, lv) {
-  const L = DETAIL_LEVELS[clampDetail(lv) - 1];
-  return L.min ? `${L.min} m stretches` : `every ${profile.every} m`;
+/** "150 m grid" for the slider readout. */
+export const detailLabel = (profile, lv) => `${DETAIL_LEVELS[clampDetail(lv) - 1].len} m grid`;
+
+/** Elevation at metres d along the profile (linear between points; the last point sits at `length`). */
+function heightAt(profile, d) {
+  const e = profile.elev, every = profile.every, L = profile.length ?? (e.length - 1) * every;
+  const i = Math.min(Math.max(0, Math.floor(d / every)), e.length - 2);
+  const x0 = i * every, x1 = i + 1 === e.length - 1 ? L : (i + 1) * every;
+  return e[i] + (e[i + 1] - e[i]) * Math.min(1, Math.max(0, (d - x0) / ((x1 - x0) || 1)));
 }
 
-function simplify(pts, tol) {
-  if (pts.length < 3 || tol <= 0) return pts;
-  const keep = new Uint8Array(pts.length);
-  keep[0] = keep[pts.length - 1] = 1;
-  const stack = [[0, pts.length - 1]];
-  while (stack.length) {
-    const [a, b] = stack.pop();
-    const [x0, y0] = pts[a], [x1, y1] = pts[b];
-    let best = -1, bi = -1;
-    for (let i = a + 1; i < b; i++) {
-      const [x, y] = pts[i];
-      const d = Math.abs(y - (y0 + ((y1 - y0) * (x - x0)) / (x1 - x0)));
-      if (d > best) { best = d; bi = i; }
-    }
-    if (bi > 0 && best > tol) { keep[bi] = 1; stack.push([a, bi], [bi, b]); }
-  }
-  return pts.filter((_, i) => keep[i]);
-}
-
-/** Stretches [d0, d1, h0, h1] for one detail level: simplify, then merge stretches shorter than min into the neighbour with the closer grade. */
+/** Stretches [d0, d1, h0, h1] for one detail level. */
 export function profileStretches(profile, lv) {
-  const { tol, min } = DETAIL_LEVELS[clampDetail(lv) - 1];
-  const e = profile.elev, every = profile.every;
-  const pts = e.map((h, i) => [i * every, h]);
-  if (profile.length != null && pts.length > 1) pts[pts.length - 1][0] = profile.length; // last point may be closer than `every`
-  const v = simplify(pts, tol);
+  const { len } = DETAIL_LEVELS[clampDetail(lv) - 1];
+  const L = profile.length ?? (profile.elev.length - 1) * profile.every;
   const segs = [];
-  for (let i = 0; i < v.length - 1; i++) segs.push([v[i][0], v[i + 1][0], v[i][1], v[i + 1][1]]);
+  for (let d = 0; d < L - 1e-6; d += len) {
+    const d1 = Math.min(d + len, L);
+    if (d1 - d < len / 2 && segs.length) { const p = segs.pop(); segs.push([p[0], d1, p[2], heightAt(profile, d1)]); continue; } // short tail joins the last stretch
+    segs.push([d, d1, heightAt(profile, d), heightAt(profile, d1)]);
+  }
   const g = (s) => (s[3] - s[2]) / (s[1] - s[0]);
-  for (let changed = true; changed && segs.length > 1;) {
-    changed = false;
-    for (let k = 0; k < segs.length; k++) {
-      if (segs[k][1] - segs[k][0] >= min) continue;
-      const j = k === 0 ? 1 : k === segs.length - 1 ? k - 1
-        : Math.abs(g(segs[k - 1]) - g(segs[k])) <= Math.abs(g(segs[k + 1]) - g(segs[k])) ? k - 1 : k + 1;
-      const a = Math.min(k, j), b = Math.max(k, j);
-      segs.splice(a, 2, [segs[a][0], segs[b][1], segs[a][2], segs[b][3]]);
-      changed = true;
-      break;
+  for (;;) {
+    let best = -1, bd = Infinity;
+    for (let k = 0; k < segs.length - 1; k++) {
+      const dg = Math.abs(g(segs[k]) - g(segs[k + 1]));
+      if (dg <= MERGE + 1e-9 && dg < bd) { bd = dg; best = k; }
     }
+    if (best < 0) break;
+    const a = segs[best], b = segs[best + 1];
+    segs.splice(best, 2, [a[0], b[1], a[2], b[3]]);
   }
   return segs;
 }
 
-const km = (m) => (m / 1000).toFixed(1);
+const km = (m, dec) => (m / 1000).toFixed(dec);
 
 /** Slope steps (distance, grade in %) for one detail level. */
 export function profileSteps(profile, lv) {
   return profileStretches(profile, lv).map(([d0, d1, h0, h1]) => {
     const a = Math.round(d0 / 5) * 5, b = Math.round(d1 / 5) * 5;
-    return { dist: Math.max(5, b - a), grade: Math.round(((h1 - h0) / (d1 - d0)) * 1000) / 10, label: `km ${km(a)} to ${km(b)}` };
+    const dec = a % 100 || b % 100 ? 2 : 1; // "km 2.0 to 2.6", "km 2.15 to 2.30"
+    return { dist: Math.max(5, b - a), grade: Math.round(((h1 - h0) / (d1 - d0)) * 1000) / 10, label: `km ${km(a, dec)} to ${km(b, dec)}` };
   });
 }
 

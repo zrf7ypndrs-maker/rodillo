@@ -236,11 +236,14 @@ test('real climbs: profile cut at every detail level', () => {
       const len = st.reduce((a, s) => a + s.dist, 0), up = st.reduce((a, s) => a + (s.dist * s.grade) / 100, 0);
       assert.ok(Math.abs(len - p.length) <= 5, `${id} lv${lv}: length ${len} vs ${p.length}`);
       assert.ok(Math.abs(up - rise) < Math.max(3, rise * 0.01), `${id} lv${lv}: rise ${up} vs ${rise}`);
-      assert.ok(st.length <= prev, `${id}: coarser levels never add steps`);
+      const gridLen = [25, 50, 100, 150, 300, 500][lv - 1];
+      // every boundary sits on the grid, and no two neighbours are within the merge margin
+      let at = 0;
+      for (const s of st) { assert.ok(Math.abs(Math.round(at / gridLen) * gridLen - at) <= 5 || at === 0, `${id} lv${lv}: boundary ${at} off the ${gridLen} m grid`); at += s.dist; }
+      for (let k = 0; k < st.length - 1; k++) assert.ok(Math.abs(st[k].grade - st[k + 1].grade) > 0.9, `${id} lv${lv}: neighbours ${st[k].grade} and ${st[k + 1].grade} should have merged`);
       prev = st.length;
       assert.ok(isTrack(flatten({ steps: st })));
     }
-    assert.equal(profileSteps(p, 1).length, p.elev.length - 1, `${id}: level 1 keeps every point`);
     assert.equal(withDetail(w, 99).detail, DETAIL_MAX);
     assert.equal(withDetail({ steps: [] }, 3).steps.length, 0, 'no profile: unchanged');
   }
