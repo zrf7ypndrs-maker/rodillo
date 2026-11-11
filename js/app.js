@@ -8,6 +8,7 @@ import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
+import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
 import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
 import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
@@ -1307,11 +1308,12 @@ function beginSession(opts) {
   s.on('autopause', () => toast('Auto-paused'));
   s.on('autoresume', () => toast('Resumed'));
   s.on('workoutDone', () => toast('Workout complete. Free ride, or hold B to finish'));
-  s.on('testEnd', (e) => { toast(`Test over: ${e.label}, ${e.target} W`); app.controllers.forEach((c) => c.vibrate?.()); });
+  s.on('testEnd', (e) => testEnded(s, e));
   rideMsgReset();
   s.on('message', (t) => rideMsg(t));
   // a new step: anything still waiting belongs to the step that just ended, and its first message can replace what's up
-  s.on('segment', () => { rideMsgQ.list = []; rideMsgQ.stale = true; });
+  s.on('segment', () => { rideMsgQ.list = []; rideMsgQ.stale = true; testStep(s); });
+  s.test = s.segs?.some((g) => g.untilFail) ? { st: {}, prevBest: lastTestBest() } : null;
   show('ride');
   $('#r-name').textContent = s.name;
   sizeChart(); sizePhoneChart();
@@ -1327,6 +1329,7 @@ function beginSession(opts) {
 const MIN_SAMPLES = 10;
 const tooShort = () => (app.session?.samples.length ?? 0) < MIN_SAMPLES;
 async function endSession() {
+  hideTakeover();
   const s = app.session;
   if (!s) return;
   s.finish();
@@ -1856,6 +1859,7 @@ function holdEnd(kind) {
   $('#hold').classList.add('hidden');
   $('#hold').classList.remove('run');
 }
+function hideTakeover() { takeoverAnims.forEach((a) => a.cancel()); takeoverAnims = []; $('#takeover').classList.add('hidden'); }
 function holdDone(kind) {
   holdEnd(kind);
   const s = app.session;
@@ -2254,6 +2258,12 @@ function drawChart() {
     ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
     ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, 6 * dpr, Yp(ftp) - 4 * dpr);
+    if (s.test?.prevBest) { // ramp test: where the last test's best minute was
+      const y = Yp(s.test.prevBest);
+      ctx.strokeStyle = INK; ctx.globalAlpha = 0.55; ctx.setLineDash([2 * dpr, 5 * dpr]);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.fillStyle = INK; ctx.fillText(`Last test ${s.test.prevBest}`, 6 * dpr, y - 4 * dpr);
+    }
     // power trace
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
@@ -2699,6 +2709,66 @@ function rideMsgNext() {
   rideMsgQ.timer = setTimeout(rideMsgNext, rideMsgQ.list.length ? MSG_MIN : msgMs(text));
 }
 
+// ------------------------------------------------------------------ ramp test coach
+// Hard test steps and the result take over the screen for a moment (desktop): the interval card grows
+// to fill the window with the coach's line and the target, then shrinks back into place.
+/** Best minute of the last ramp test in the history, or null. */
+function lastTestBest() {
+  const t = (app.rows || []).filter((r) => !r.demo && r.summary?.workoutId === 'ramp-test' && r.summary.bests?.[60])
+    .sort((a, b) => String(a.summary.start).localeCompare(String(b.summary.start))).at(-1);
+  return t ? t.summary.bests[60] : null;
+}
+function testStep(s) {
+  const g = s.seg;
+  if (!s.test || !g?.untilFail) return;
+  const n = s.segs.slice(0, s.segIndex + 1).filter((x) => x.untilFail).length;
+  const watts = Math.round(g.from * s.s.ftp * s.intensity);
+  const cue = stepCue({ n, watts, ftp: s.s.ftp, prevBest: s.test.prevBest, name: app.settings.riderName, st: s.test.st });
+  if (cue.finish && !g.msgs.some((m) => m.text === cue.finish)) g.msgs.push({ t: Math.max(0, g.dur - 15), text: cue.finish });
+  if (cue.takeover) takeover(cue.takeover, { color: zoneHex(g.from) });
+  if (cue.msg) rideMsg(cue.msg);
+}
+function testEnded(s, e) {
+  app.controllers.forEach((c) => c.vibrate?.());
+  const best60 = bestAvg(s.samples.map((x) => x.power), 60);
+  const r = resultCue({ best60, ftp: s.s.ftp, name: app.settings.riderName });
+  s.test.result = r;
+  takeover(r.takeover, { dark: true, hold: 4500 }).then(() => rideMsg(r.msg));
+}
+let takeoverAnims = [];
+/** Full-window coach card grown out of the interval card. Resolves when it is back in place. */
+function takeover({ line, big, sub }, { color = null, dark = false, hold = 2200 } = {}) {
+  const el = $('#takeover');
+  takeoverAnims.forEach((a) => a.cancel());
+  takeoverAnims = [];
+  if (isPhone() || app.screen !== 'ride') { el.classList.add('hidden'); return Promise.resolve(); }
+  $('#to-line').textContent = line; $('#to-big').textContent = big; $('#to-sub').textContent = sub || '';
+  el.classList.toggle('dark', dark);
+  if (color) el.style.setProperty('--zc', color);
+  el.classList.remove('hidden');
+  const r = $('#r-interval').getBoundingClientRect(), W = innerWidth, H = innerHeight;
+  const card = `inset(${r.top}px ${W - r.right}px ${H - r.bottom}px ${r.left}px round 14px)`, full = 'inset(0px 0px 0px 0px round 0px)';
+  const io = 520, total = io * 2 + hold, a = io / total, b = 1 - a;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const grow = reduce
+    ? el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: total })
+    : el.animate([
+      { clipPath: card, easing: 'cubic-bezier(.2, .9, .25, 1.05)' }, { clipPath: full, offset: a },
+      { clipPath: full, offset: b, easing: 'cubic-bezier(.6, 0, .8, .4)' }, { clipPath: card },
+    ], { duration: total });
+  takeoverAnims.push(grow);
+  if (!reduce) {
+    const kids = [['#to-line', 0.06], ['#to-big', 0], ['#to-sub', 0.1]];
+    kids.forEach(([sel, d]) => takeoverAnims.push($(sel).animate([
+      { opacity: 0, transform: 'translateY(18px) scale(.94)' }, { opacity: 0, transform: 'translateY(18px) scale(.94)', offset: a * 0.6 + d * a },
+      { opacity: 1, transform: 'none', offset: Math.min(b - 0.02, a * 1.5 + d * a), easing: 'ease-out' },
+      { opacity: 1, transform: 'none', offset: b - a * 0.25 }, { opacity: 0, transform: 'scale(.97)', offset: b }, { opacity: 0 },
+    ], { duration: total })));
+    takeoverAnims.push($('#to-big').animate([{ scale: 1 }, { scale: 1, offset: a * 1.6 }, { scale: 1.06, offset: a * 2.1 }, { scale: 1, offset: a * 2.8 }, { scale: 1 }], { duration: total, composite: 'add' }));
+  }
+  return grow.finished.then(() => { el.classList.add('hidden'); takeoverAnims = []; }, () => {});
+}
+
 // ------------------------------------------------------------------ toast
 let toastTimer;
 function toast(msg) {
@@ -2768,6 +2838,8 @@ const SET_TABS = {
 const SET_TAB_IDS = ['rider', 'ride', 'gearing', 'road', 'trainer', 'sync'];
 const numField = ([k, label, step, mult = 1, help, offset = 0]) =>
   `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`;
+const nameField = () => `<label for="set-name">Your name</label><input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">
+  <div class="help">The coach uses it in workout messages.</div>`;
 function renderSettings() {
   const f = $('#settings-form');
   const extra = {
@@ -2779,14 +2851,15 @@ function renderSettings() {
     trainer: `<div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>`,
   };
   f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
-    `<div class="settings-form stab-pane hidden" data-pane="${id}">${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
+    `<div class="settings-form stab-pane hidden" data-pane="${id}">${id === 'rider' ? nameField() : ''}${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
     const el = e.target;
-    if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
+    if (el.id === 'set-name') app.settings.riderName = el.value.trim();
+    else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
     else if (el.id === 'set-dt') app.settings.drivetrain = el.value;
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);

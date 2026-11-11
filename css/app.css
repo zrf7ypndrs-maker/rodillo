@@ -461,6 +461,12 @@ table.ints { margin-bottom: 14px; }
 .toast { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); background: var(--ink); color: var(--sheet); border-radius: 10px; padding: 16px 30px; font-size: 32px; font-weight: 800; font-stretch: 75%; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
 .toast.show { opacity: 1; }
 /* hold-to-confirm: big key in a ring that fills over --hold-ms; release early cancels */
+/* ramp test coach: the interval card grows to fill the window for a moment (clip-path animated from js) */
+.takeover { --zc: var(--z5); position: fixed; inset: 0; z-index: 34; background: var(--zc); color: var(--on-zone); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; text-align: center; pointer-events: none; padding: 0 6vw; }
+.takeover.dark { background: var(--ink); color: var(--sheet); }
+.to-line { font-size: clamp(30px, 4.4vw, 68px); font-weight: 850; line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance; }
+.to-big { font-family: var(--num); font-stretch: 68%; font-variant-numeric: tabular-nums; font-size: clamp(110px, 19vw, 300px); font-weight: 850; line-height: .88; letter-spacing: -0.02em; white-space: nowrap; }
+.to-sub { font-size: clamp(17px, 1.9vw, 28px); font-weight: 650; opacity: .78; }
 .hold { position: absolute; inset: 0; z-index: 35; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; pointer-events: none; }
 .hold.end { background: var(--overlay); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .hold-msg { font-size: 34px; font-weight: 800; font-stretch: 75%; color: var(--ink); }

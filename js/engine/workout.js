@@ -25,7 +25,8 @@
 //                 { "at": -30, "text": "..." },        // negative = seconds before the end
 //                 { "at": "50%", "text": "..." },      // share of the step
 //                 { "at": -20, "rep": "last", "text": "Last one" } ]  // rep: number, "first", "last" or a list
-// Text can use {watts} (target now), {ftp}, {rep}, {of} and {left} (reps left after this one).
+// Text can use {watts} (target now), {ftp}, {rep}, {of}, {left} (reps left after this one) and {name}
+// (rider's name from Settings; with no name, "Nice, {name}." reads "Nice.").
 // Distance steps time their messages on the estimated duration.
 
 import { speedForPower } from './physics.js?v=202611102147';
@@ -95,8 +96,12 @@ function repMatches(want, rep) {
   return Array.isArray(want) ? want.some(one) : one(want);
 }
 
-/** Fills {watts} {ftp} {rep} {of} {left} in a message. */
-export function fillMessage(text, { seg, watts, ftp }) {
+/** Fills {watts} {ftp} {rep} {of} {left} {name} in a message. */
+export function fillMessage(text, { seg, watts, ftp, name = '' }) {
+  const nm = String(name || '').trim();
+  const lead = /^\s*\{name\}/.test(text);
+  text = nm ? text.replace(/\{name\}/g, nm) : text.replace(/,?\s+\{name\}|,\s*\{name\}/g, '').replace(/\{name\},?\s*/g, '');
+  if (!nm && lead) text = text.replace(/^\s*([a-z])/, (m, c) => m.replace(c, c.toUpperCase()));
   const rep = seg?.rep;
   const v = { watts: watts != null ? Math.round(watts) : '', ftp: ftp != null ? Math.round(ftp) : '', rep: rep ? rep.i : '', of: rep ? rep.of : '', left: rep ? rep.of - rep.i : '' };
   return text.replace(/\{(watts|ftp|rep|of|left)\}/g, (_, k) => String(v[k]));

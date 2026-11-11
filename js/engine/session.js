@@ -2,7 +2,7 @@
 // gears), tracks intervals, and records 1 Hz samples.
 
 import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
-import { flatten, retime, msgTime, segTarget, fillMessage } from './workout.js?v=202611102147';
+import { flatten, retime, segTarget, fillMessage } from './workout.js?v=202611102147';
 import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
 
@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   shiftStyle: 'sram',     // 'sram' | 'shimano'
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
+  riderName: '',         // the coach uses it in messages ({name})
 };
 
 export class Session extends Emitter {
@@ -130,15 +131,12 @@ export class Session extends Emitter {
     const prev = this.segs[i - 1];
     const inc = prev?.untilFail && prev.kind === 'erg' ? g.from - prev.from : 0.06;
     const n = this.segs.slice(0, i + 1).filter((x) => x.untilFail).length + 1;
-    const first = !this.segsChanged;
-    const msgs = [
-      ...(first ? [{ at: 0, text: '{watts} W. Past the planned steps. Keep going.' }] : n % 2 ? [{ at: 0, text: '{watts} W. One more.' }] : []),
-      { at: -15, text: '15 seconds. Finish the step!' },
-    ].map((m) => ({ t: msgTime(m.at, g.dur), text: m.text }));
-    this.segs.splice(i + 1, 0, {
-      ...g, label: /^Step \d+$/.test(g.label) ? `Step ${n}` : g.label, rep: null,
-      from: Math.round((g.from + inc) * 1000) / 1000, to: Math.round((g.to + inc) * 1000) / 1000, msgs,
-    });
+    const next = {
+      ...g, label: /^Step \d+$/.test(g.label) ? `Step ${n}` : g.label, rep: null, msgs: [],
+      from: Math.round((g.from + inc) * 1000) / 1000, to: Math.round((g.to + inc) * 1000) / 1000,
+    };
+    if (g.watts != null) next.watts = g.watts + (prev?.untilFail && prev.watts != null ? g.watts - prev.watts : 20);
+    this.segs.splice(i + 1, 0, next);
     retime(this.segs);
     this.segsChanged = true;
   }
@@ -308,7 +306,7 @@ export class Session extends Emitter {
       const key = `${this.segI}:${k}`;
       if (done.has(key) || pos < m.t) return;
       done.add(key);
-      if (pos - m.t <= 15) this.emit('message', fillMessage(m.text, { seg: g, watts: this.target ?? (g.kind === 'erg' ? segTarget(g, this.segProgress) * this.s.ftp * this.intensity : null), ftp: this.s.ftp }));
+      if (pos - m.t <= 15) this.emit('message', fillMessage(m.text, { seg: g, watts: this.target ?? (g.kind === 'erg' ? segTarget(g, this.segProgress) * this.s.ftp * this.intensity : null), ftp: this.s.ftp, name: this.s.riderName }));
     });
   }
 

@@ -371,28 +371,29 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
 test('Ramp test is open-ended and ends when the rider fails', () => {
   const wo = JSON.parse(fs.readFileSync(new URL('../workouts/ramp-test.json', import.meta.url)));
   const steps = (s) => s.segs.filter((g) => g.untilFail);
-  // strong rider: holds 330 W at FTP 200 = 165%, past the 16 planned steps (140%)
+  // strong rider: holds 400 W, past the 12 planned steps (100 to 320 W)
   const tr = new SimTrainer(), hr = new SimHr(tr);
-  tr.ergMax = 330;
+  tr.ergMax = 400;
   const s = new Session({ trainer: tr, hr, settings: { ftp: 200 }, workout: wo });
   const ends = []; s.on('testEnd', (e) => ends.push(e));
   s.start();
-  ride(s, tr, hr, 7 * 60 + 25 * 60);
+  ride(s, tr, hr, 7 * 60 + 17 * 60 + 30);
   assert.equal(ends.length, 1, 'test ended once');
   assert.equal(ends[0].reason, 'fail');
-  assert.equal(ends[0].label, 'Step 21', JSON.stringify(ends[0])); // 50% + 20 x 6% = 170% = 340 W > 330 W
-  assert.equal(steps(s).length, 21, 'steps not ridden are gone');
+  assert.equal(ends[0].label, 'Step 17', JSON.stringify(ends[0])); // 100 + 16 x 20 = 420 W > 400 W
+  assert.equal(ends[0].target, 420);
+  assert.equal(steps(s).length, 17, 'steps not ridden are gone');
   assert.equal(s.seg.label, 'Cool-down', 'cool-down follows the failed step');
   const cut = steps(s).at(-1);
   assert.ok(cut.dur >= 8 && cut.dur <= 12, `failed step cut where it failed (${cut.dur} s)`);
-  assert.equal(steps(s)[20].from, 1.7);
-  assert.equal(steps(s)[16].label, 'Step 17');
+  assert.equal(steps(s)[15].watts, 400); assert.equal(steps(s)[15].from, 2);
+  assert.equal(steps(s)[13].label, 'Step 14');
   for (let i = 1; i < s.segs.length; i++) assert.equal(s.segs[i].start, s.segs[i - 1].end, 'chart times stay continuous');
   ride(s, tr, hr, 300);
   const doc = buildRide(s.samples, { ftp: 200, startMs: Date.now(), segs: s.segs, segsChanged: s.segsChanged, tags: ['test'] });
   assert.equal(doc.segs.length, s.segs.length, 'ride doc carries the steps as ridden');
-  assert.ok(doc.summary.bests[60] >= 320, `best minute ${doc.summary.bests[60]} W`);
-  assert.ok(Math.abs(doc.intervals.find((x) => x.label === 'Step 20')?.avgP - 328) <= 3, 'step 20 held at 328 W');
+  assert.ok(doc.summary.bests[60] >= 390, `best minute ${doc.summary.bests[60]} W`);
+  assert.ok(Math.abs(doc.intervals.find((x) => x.label === 'Step 16')?.avgP - 400) <= 3, 'step 16 held at 400 W');
 
   // weaker rider fails inside the plan; holding B in the test ends the test, not the ride
   const tr2 = new SimTrainer(), hr2 = new SimHr(tr2);
@@ -415,5 +416,23 @@ test('Ramp test is open-ended and ends when the rider fails', () => {
   assert.equal(s3.seg.label, 'Cool-down');
 
   // the builder keeps the flag
-  assert.ok(cleanWorkout(wo).steps.filter((x) => x.untilFail).length === 16);
+  assert.ok(cleanWorkout(wo).steps.filter((x) => x.untilFail).length === 12);
+});
+
+test('Ramp test coach and {name}', async () => {
+  const { stepCue, resultCue, bestAvg } = await import('../js/testcoach.js');
+  const st = {};
+  assert.match(stepCue({ n: 1, watts: 100, ftp: 200, name: 'Agustín', st }).takeover.line, /Here we go, Agustín/);
+  assert.equal(stepCue({ n: 3, watts: 140, ftp: 200, st }).takeover, null, 'easy steps: no takeover');
+  assert.match(stepCue({ n: 6, watts: 200, ftp: 200, st }).takeover.line, /Past your FTP/);
+  const later = stepCue({ n: 7, watts: 220, ftp: 200, st });
+  assert.ok(later.takeover && !/Past your FTP/.test(later.takeover.line) && later.finish, 'every hard step: takeover + 15 s cue');
+  assert.match(stepCue({ n: 9, watts: 260, ftp: 200, prevBest: 250, st }).takeover.line, /Past your last test/);
+  assert.equal(bestAvg([...Array(30).fill(100), ...Array(60).fill(300), ...Array(30).fill(100)]), 300);
+  const r = resultCue({ best60: 320, ftp: 200, name: 'Agustín' });
+  assert.equal(r.ftp, 240); assert.equal(r.takeover.big, 'FTP 240 W'); assert.match(r.takeover.line, /Huge effort, Agustín/); assert.match(r.takeover.sub, /\+40 W/);
+  assert.match(resultCue({ best60: 240, ftp: 200 }).takeover.line, /^Solid effort\.$/);
+  const { fillMessage } = await import('../js/engine/workout.js');
+  assert.deepEqual(['Nice, {name}.', '{name}, go!', 'Go {name}!', 'early'].map((t) => fillMessage(t, {})), ['Nice.', 'Go!', 'Go!', 'early']);
+  assert.equal(fillMessage('Nice, {name}.', { name: 'Agustín' }), 'Nice, Agustín.');
 });

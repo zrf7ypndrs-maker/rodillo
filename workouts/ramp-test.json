@@ -4,7 +4,7 @@
   "tags": [
     "test"
   ],
-  "description": "1-minute steps, +6% FTP each minute, with no top step: the ramp keeps going until you can't hold the target. The test ends itself when your power falls off (or hold B), and the cool-down starts. The summary shows your best 1-minute power and a new FTP (75% of it), with a button to apply it.",
+  "description": "Zwift-style ramp: 1-minute steps from 100 W, +20 W every minute, with no top step. The test ends itself when you can't hold the target (or hold B), the coach gives you the result and the cool-down starts. FTP = 75% of your best minute, with a button on the summary to apply it.",
   "steps": [
     {
       "dur": 300,
@@ -16,7 +16,7 @@
         },
         {
           "at": 25,
-          "text": "Then 1-minute steps, a little harder every minute."
+          "text": "Then 1-minute steps from 100 W, +20 W every minute."
         },
         {
           "at": 70,
@@ -51,193 +51,81 @@
     },
     {
       "dur": 60,
-      "power": 0.5,
+      "watts": 100,
       "label": "Step 1",
-      "messages": [
-        {
-          "text": "Step 1: {watts} W. Easy for now."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.56,
+      "watts": 120,
       "label": "Step 2",
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.62,
+      "watts": 140,
       "label": "Step 3",
-      "messages": [
-        {
-          "text": "Still easy. Save it for later."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.68,
+      "watts": 160,
       "label": "Step 4",
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.74,
+      "watts": 180,
       "label": "Step 5",
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.8,
+      "watts": 200,
       "label": "Step 6",
-      "messages": [
-        {
-          "text": "{watts} W. Getting real now, stay smooth."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.86,
+      "watts": 220,
       "label": "Step 7",
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.92,
+      "watts": 240,
       "label": "Step 8",
-      "messages": [
-        {
-          "text": "Around FTP now. Every step from here counts."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 0.98,
+      "watts": 260,
       "label": "Step 9",
-      "messages": [
-        {
-          "text": "{watts} W. Breathe deep and steady."
-        },
-        {
-          "at": -15,
-          "text": "15 seconds. Finish the step."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 1.04,
+      "watts": 280,
       "label": "Step 10",
-      "messages": [
-        {
-          "text": "Keep the cadence up. Don't let it sag."
-        },
-        {
-          "at": -15,
-          "text": "Hold on to the end of the step."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 1.1,
+      "watts": 300,
       "label": "Step 11",
-      "messages": [
-        {
-          "text": "This is where the test is decided."
-        },
-        {
-          "at": -15,
-          "text": "15 seconds. You can do 15 seconds."
-        }
-      ],
       "untilFail": true
     },
     {
       "dur": 60,
-      "power": 1.16,
+      "watts": 320,
       "label": "Step 12",
-      "messages": [
-        {
-          "text": "{watts} W. One more minute. Then one more."
-        },
-        {
-          "at": -15,
-          "text": "Almost there. Keep the legs turning."
-        }
-      ],
-      "untilFail": true
-    },
-    {
-      "dur": 60,
-      "power": 1.22,
-      "label": "Step 13",
-      "messages": [
-        {
-          "text": "Don't quit mid-step. Get to the end of this one."
-        },
-        {
-          "at": -15,
-          "text": "15 seconds. Finish it!"
-        }
-      ],
-      "untilFail": true
-    },
-    {
-      "dur": 60,
-      "power": 1.28,
-      "label": "Step 14",
-      "messages": [
-        {
-          "text": "{watts} W. Everything you have left."
-        },
-        {
-          "at": -15,
-          "text": "Hold it! 15 seconds!"
-        }
-      ],
-      "untilFail": true
-    },
-    {
-      "dur": 60,
-      "power": 1.34,
-      "label": "Step 15",
-      "messages": [
-        {
-          "text": "{watts} W. Everything you have, one step at a time."
-        },
-        {
-          "at": -15,
-          "text": "Finish it!"
-        }
-      ],
-      "untilFail": true
-    },
-    {
-      "dur": 60,
-      "power": 1.4,
-      "label": "Step 16",
       "untilFail": true
     },
     {
       "dur": 300,
       "from": 0.6,
       "to": 0.4,
-      "label": "Cool-down",
-      "messages": [
-        {
-          "text": "Test over. Spin easy, then check your new FTP."
-        }
-      ]
+      "label": "Cool-down"
     }
   ]
 }
