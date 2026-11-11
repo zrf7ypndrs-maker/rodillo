@@ -1,0 +1,68 @@
+{
+  "id": "climb-antenas-la-dehesa",
+  "name": "Antenas from La Dehesa (Pie Andino)",
+  "tags": [
+    "sim",
+    "climb",
+    "real climb",
+    "distance"
+  ],
+  "description": "Avenida Paseo Pie Andino from the Lo Barnechea side to the antennas, skipping the flat first 4.6 km. 8.7 km from 845 m to 1136 m, about 310 m of climbing. Profile from Climbfinder elevation data, simplified to stretches of 300 m or more. Starts with a 10-minute warm-up roll.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 0,
+      "label": "Warm-up roll"
+    },
+    {
+      "dist": 2250,
+      "grade": 2.7,
+      "label": "km 0.0 to 2.2"
+    },
+    {
+      "dist": 800,
+      "grade": -2.6,
+      "label": "km 2.2 to 3.0"
+    },
+    {
+      "dist": 850,
+      "grade": -0.5,
+      "label": "km 3.0 to 3.9"
+    },
+    {
+      "dist": 350,
+      "grade": 5.3,
+      "label": "km 3.9 to 4.2"
+    },
+    {
+      "dist": 700,
+      "grade": 8.6,
+      "label": "km 4.2 to 5.0"
+    },
+    {
+      "dist": 800,
+      "grade": 2.1,
+      "label": "km 5.0 to 5.8"
+    },
+    {
+      "dist": 850,
+      "grade": 6.8,
+      "label": "km 5.8 to 6.6"
+    },
+    {
+      "dist": 400,
+      "grade": 0.9,
+      "label": "km 6.6 to 7.0"
+    },
+    {
+      "dist": 500,
+      "grade": 5.7,
+      "label": "km 7.0 to 7.5"
+    },
+    {
+      "dist": 1200,
+      "grade": 5.7,
+      "label": "km 7.5 to 8.7"
+    }
+  ]
+}

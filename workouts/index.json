@@ -21,6 +21,9 @@
     "vo2-6x4-110.json",
     "mtb-climbs-4x6.json",
     "mtb-climbs-3x10.json",
-    "mtb-overunders-3x9.json"
+    "mtb-overunders-3x9.json",
+    "climb-farellones.json",
+    "climb-antenas-la-dehesa.json",
+    "climb-antenas-chicureo.json"
   ]
 }

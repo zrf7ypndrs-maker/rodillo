@@ -1,0 +1,73 @@
+{
+  "id": "climb-antenas-chicureo",
+  "name": "Antenas from Chicureo (Pie Andino)",
+  "tags": [
+    "sim",
+    "climb",
+    "real climb",
+    "distance"
+  ],
+  "description": "Avenida Paseo Pie Andino from Chicureo (Piedra Roja side) to the antennas. 10.5 km from 557 m to 1136 m, about 580 m of climbing. Profile from Climbfinder elevation data, simplified to stretches of 300 m or more. Starts with a 10-minute warm-up roll.",
+  "steps": [
+    {
+      "dur": 600,
+      "grade": 0,
+      "label": "Warm-up roll"
+    },
+    {
+      "dist": 1550,
+      "grade": 1.7,
+      "label": "km 0.0 to 1.6"
+    },
+    {
+      "dist": 1950,
+      "grade": 2.7,
+      "label": "km 1.6 to 3.5"
+    },
+    {
+      "dist": 600,
+      "grade": 7.8,
+      "label": "km 3.5 to 4.1"
+    },
+    {
+      "dist": 1150,
+      "grade": 8.6,
+      "label": "km 4.1 to 5.2"
+    },
+    {
+      "dist": 500,
+      "grade": 9.6,
+      "label": "km 5.2 to 5.8"
+    },
+    {
+      "dist": 450,
+      "grade": 2.9,
+      "label": "km 5.8 to 6.2"
+    },
+    {
+      "dist": 1150,
+      "grade": 8.2,
+      "label": "km 6.2 to 7.3"
+    },
+    {
+      "dist": 450,
+      "grade": 3.8,
+      "label": "km 7.3 to 7.8"
+    },
+    {
+      "dist": 950,
+      "grade": 8.0,
+      "label": "km 7.8 to 8.8"
+    },
+    {
+      "dist": 650,
+      "grade": 3.7,
+      "label": "km 8.8 to 9.4"
+    },
+    {
+      "dist": 1070,
+      "grade": 7.6,
+      "label": "km 9.4 to 10.5"
+    }
+  ]
+}
