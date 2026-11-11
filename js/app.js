@@ -4,7 +4,8 @@ import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
 import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
-import { DRIVETRAINS } from './engine/drivetrain.js?v=202611102147';
+import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds } from './engine/drivetrain.js?v=202611102147';
+import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
@@ -104,6 +105,7 @@ function bindDevice(d) {
   d._bound = true;
   d.on('state', renderDevices);
   d.on('battery', renderDevices);
+  if (d.kind === 'trainer') d.on('state', (st) => { if (st === 'connected') detectTrainer(d); });
 }
 
 /** On reload Chrome can hand back previously-permitted devices without the chooser. */
@@ -2893,40 +2895,150 @@ const SET_TABS = {
     ['gradeScale', 'Grade realism (%)', 5, 100, 'Zwift defaults to 50%. 100% = real climbs. Descents are always 100%.'],
     ['cda', 'CdA (m²)', 0.01, 1, 'Aero drag. 0.32 hoods, 0.25 drops.'], ['crr', 'Rolling resistance', 0.001],
   ],
-  trainer: [
-    ['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'],
-    ['maxSendGrade', 'Max grade sent to trainer (%)', 1, 100],
-  ],
+  trainer: [],
 };
 const SET_TAB_IDS = ['rider', 'ride', 'gearing', 'road', 'trainer', 'sync'];
 const numField = ([k, label, step, mult = 1, help, offset = 0]) =>
   `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`;
 const nameField = () => `<label for="set-name">Your name</label><input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">
   <div class="help">The coach uses it in workout messages.</div>`;
+// ---- gearing: a known drivetrain, or your own chainrings and cogs
+function dtOptions() {
+  const groups = {};
+  for (const [k, d] of Object.entries(DRIVETRAINS)) (groups[d.group] ||= []).push(`<option value="${k}">${esc(d.name)}</option>`);
+  return Object.entries(groups).map(([g, o]) => `<optgroup label="${esc(g)}">${o.join('')}</optgroup>`).join('') +
+    `<option value="${CUSTOM}">Custom (your own chainrings and cogs)</option>`;
+}
+/** The chainrings/cogs in use: the preset's, or the custom ones. */
+function dtSpec() {
+  const st = app.settings;
+  if (st.drivetrain === CUSTOM) { const r = checkSpec(st.customDrivetrain || {}); if (r.spec) return r.spec; }
+  return DRIVETRAINS[st.drivetrain] || DRIVETRAINS[DEFAULT_SETTINGS.drivetrain];
+}
+function dtSummary(d) {
+  if (d.seq) return `${speeds(d)}, ratios ${d.seq[0].toFixed(2)} to ${d.seq.at(-1).toFixed(2)}. Takes effect on the next ride.`;
+  const lo = d.rings[0], hi = d.rings.at(-1), big = d.cogs.at(-1), small = d.cogs[0];
+  return `${speeds(d)}. Easiest ${lo}\u00d7${big} (${(lo / big).toFixed(2)}), hardest ${hi}\u00d7${small} (${(hi / small).toFixed(2)}). Takes effect on the next ride.`;
+}
+function fillDrivetrain() {
+  const st = app.settings, d = dtSpec();
+  $('#set-dt').value = st.drivetrain === CUSTOM && checkSpec(st.customDrivetrain || {}).spec ? CUSTOM : (DRIVETRAINS[st.drivetrain] ? st.drivetrain : DEFAULT_SETTINGS.drivetrain);
+  $('.dt-fields').classList.toggle('hidden', !!d.seq);
+  if (!d.seq) {
+    $('#set-rings').value = [...d.rings].reverse().join('/');
+    $('#set-cogs').value = d.cogs.join('-');
+    const w = WHEELS.reduce((a, b) => (Math.abs(b[0] - d.wheel) < Math.abs(a[0] - d.wheel) ? b : a));
+    $('#set-wheel').value = String(w[0]);
+  }
+  $('#dt-sum').textContent = dtSummary(d);
+}
+function pickDrivetrain(id) {
+  if (id === CUSTOM) {
+    // start from what's on screen (or the last preset) so there's something to edit
+    const d = dtSpec();
+    app.settings.customDrivetrain = d.seq ? { ...DRIVETRAINS[DEFAULT_SETTINGS.drivetrain] } : { rings: d.rings, cogs: d.cogs, wheel: d.wheel };
+    delete app.settings.customDrivetrain.group; delete app.settings.customDrivetrain.name;
+  }
+  app.settings.drivetrain = id;
+  fillDrivetrain();
+  if (id === CUSTOM) $('#set-rings').focus();
+}
+/** Reads the chainring/cog fields. Saves only a valid set; returns false (and says why) otherwise. */
+function editDrivetrain() {
+  const r = checkSpec({ rings: parseTeeth($('#set-rings').value), cogs: parseTeeth($('#set-cogs').value), wheel: Number($('#set-wheel').value) });
+  if (r.error) { $('#dt-sum').textContent = `Not saved yet. ${r.error}`; return false; }
+  const id = presetFor(r.spec);
+  if (id) app.settings.drivetrain = id;
+  else { app.settings.drivetrain = CUSTOM; app.settings.customDrivetrain = r.spec; }
+  $('#set-dt').value = app.settings.drivetrain;
+  $('#dt-sum').textContent = dtSummary(r.spec);
+  return true;
+}
+
+// ---- trainer: the grade range it can simulate
+function trainerOptions() {
+  return Object.entries(TRAINERS).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join('') +
+    `<option value="${CUSTOM_TRAINER}">Other (set the range yourself)</option>`;
+}
+const pct = (x) => +((x * 100).toFixed(1));
+function fillTrainer() {
+  const st = app.settings;
+  const id = TRAINERS[st.trainerModel] && trainerFits(st.trainerModel, st.minSendGrade, st.maxSendGrade) ? st.trainerModel : CUSTOM_TRAINER;
+  $('#set-trainer').value = id;
+  $('#set-gmax').value = pct(st.maxSendGrade);
+  $('#set-gmin').value = pct(st.minSendGrade);
+}
+function pickTrainer(id) {
+  app.settings.trainerModel = id;
+  const t = TRAINERS[id];
+  if (t) { app.settings.maxSendGrade = t.max; app.settings.minSendGrade = t.min; }
+  fillTrainer();
+}
+function editGradeRange() {
+  const mx = $('#set-gmax').value, mn = $('#set-gmin').value;
+  if (mx === '' || mn === '') return false;
+  const r = cleanRange(Number(mn) / 100, Number(mx) / 100);
+  app.settings.maxSendGrade = r.max;
+  app.settings.minSendGrade = r.min;
+  const cur = app.settings.trainerModel;
+  app.settings.trainerModel = TRAINERS[cur] && trainerFits(cur, r.min, r.max) ? cur : trainerFor(r.min, r.max) || CUSTOM_TRAINER;
+  $('#set-trainer').value = app.settings.trainerModel;
+  return true;
+}
+/** First trainer connection with no trainer chosen yet: use the range of the model it reports. */
+function detectTrainer(dev) {
+  if (app.settings.trainerModel || app.demo) return;
+  const id = matchTrainer(dev?.device?.name);
+  if (!id) return;
+  pickTrainer(id);
+  saveSettings();
+  const t = TRAINERS[id];
+  toast(`${t.name}: grades from ${pct(t.min)}% to ${pct(t.max)}% (Settings > Trainer)`);
+}
 function renderSettings() {
   const f = $('#settings-form');
   const extra = {
     ride: `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
       <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`,
-    gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${Object.entries(DRIVETRAINS).map(([k, d]) => `<option value="${k}">${d.name}</option>`).join('')}</select>
+    gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${dtOptions()}</select>
+      <div class="dt-fields">
+        <label for="set-rings">Chainrings (teeth)</label><input id="set-rings" type="text" inputmode="numeric" autocomplete="off" placeholder="50/34">
+        <label for="set-cogs">Cogs (teeth)</label><input id="set-cogs" class="wide-input" type="text" inputmode="numeric" autocomplete="off" placeholder="11-12-13-14-15-17-19-21-24-27-30-34">
+        <label for="set-wheel">Wheel</label><select id="set-wheel">${WHEELS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>
+      </div>
+      <div class="help" id="dt-sum"></div>
       <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
       <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>`,
-    trainer: `<div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>`,
+    trainer: `<label for="set-trainer">Trainer</label><select id="set-trainer" class="wide-select">${trainerOptions()}</select>
+      <label for="set-gmax">Max grade (%)</label><input id="set-gmax" type="number" step="1" min="1" max="40">
+      <label for="set-gmin">Min grade (%)</label><input id="set-gmin" type="number" step="1" min="-30" max="0">
+      <div class="help">From the trainer's spec. Rodillo never sends a grade outside this range; past the max you'll see Max resistance. Brake trainers can't push you downhill: below 0% they just get as light as they can.</div>
+      ${numField(['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'])}
+      <div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>`,
   };
   f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
     `<div class="settings-form stab-pane hidden" data-pane="${id}">${id === 'rider' ? nameField() : ''}${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
   $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
-  $('#set-dt').value = app.settings.drivetrain || 'road-2x12-shimano-50-34';
+  fillDrivetrain();
+  fillTrainer();
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   f.oninput = (e) => {
     const el = e.target;
     if (el.id === 'set-name') app.settings.riderName = el.value.trim();
     else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
-    else if (el.id === 'set-dt') app.settings.drivetrain = el.value;
+    else if (el.id === 'set-dt') pickDrivetrain(el.value);
+    else if (['set-rings', 'set-cogs', 'set-wheel'].includes(el.id)) { if (!editDrivetrain()) return; }
+    else if (el.id === 'set-trainer') pickTrainer(el.value);
+    else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
     saveSettings();
+  };
+  // tidy the typed teeth / grades once the field is left (only when they were valid)
+  f.onchange = (e) => {
+    if (['set-rings', 'set-cogs'].includes(e.target.id) && !$('.dt-fields').classList.contains('hidden') && editDrivetrain()) fillDrivetrain();
+    if (['set-gmax', 'set-gmin'].includes(e.target.id)) fillTrainer();
   };
   setSetTab(ls.get('setTab', 'rider'));
 }

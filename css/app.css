@@ -343,6 +343,8 @@ table.ints { margin-bottom: 14px; }
 .settings-form input, .settings-form select { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; width: 100%; }
 .settings-form input:focus, .settings-form select:focus { border-color: var(--ink); outline: none; }
 .settings-form select.wide-select { grid-column: 1 / -1; }
+.settings-form .dt-fields { display: contents; }
+.settings-form input.wide-input { grid-column: 1 / -1; font-variant-numeric: tabular-nums; }
 .settings-form .help a { color: inherit; }
 .settings-form .help { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); margin-top: -4px; }
 .settings-form .section { grid-column: 1 / -1; font-size: 15px; color: var(--ink); margin-top: 14px; font-weight: 700; padding-top: 12px; border-top: 1px solid var(--rule); }

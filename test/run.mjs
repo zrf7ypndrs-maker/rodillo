@@ -248,7 +248,8 @@ test('real climbs: profile cut at every detail level', () => {
 
 console.log(`\n${passed} tests passed`);
 
-import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
+import { Gearbox, DRIVETRAINS, parseTeeth, checkSpec, presetFor, resolveDrivetrain } from '../js/engine/drivetrain.js';
+import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../js/engine/trainers.js';
 {
   const g = new Gearbox('road-2x12-shimano-50-34');
   assert.equal(g.label, '50x19'); // start near 2.6 in the big ring
@@ -262,8 +263,66 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.equal(m.wheel, 2.32);
   const z = new Gearbox('zwift-24');
   assert.equal(z.label, '12'); assert.equal(z.ratio, 2.4);
-  for (const [k, d] of Object.entries(DRIVETRAINS)) if (!d.seq) assert.equal(d.cogs.length, 12, k);
+  for (const [k, d] of Object.entries(DRIVETRAINS)) {
+    if (d.seq) continue;
+    assert.ok(d.cogs.length === 11 || d.cogs.length === 12, k);
+    assert.deepEqual(d.cogs, [...d.cogs].sort((a, b) => a - b), `${k} cogs smallest first`);
+    assert.equal(new Set(d.cogs).size, d.cogs.length, `${k} no repeated cog`);
+    assert.deepEqual(d.rings, [...d.rings].sort((a, b) => a - b), `${k} rings small first`);
+    assert.ok(d.group, `${k} has a group`);
+    assert.equal(presetFor(d), k, `${k} is the only preset with its teeth`);
+  }
   console.log('ok - drivetrains');
+}
+{
+  // custom chainrings and cogs
+  assert.deepEqual(parseTeeth('50/34'), [50, 34]);
+  assert.deepEqual(parseTeeth(' 11-12, 13 14\u00d715 '), [11, 12, 13, 14, 15]);
+  assert.equal(parseTeeth('50/3a'), null); assert.equal(parseTeeth(''), null);
+  assert.match(checkSpec({ rings: [50, 34, 24], cogs: [11, 12, 13, 14, 15] }).error, /one or two/);
+  assert.match(checkSpec({ rings: [34], cogs: [11, 34] }).error, /not just the range/);
+  assert.match(checkSpec({ rings: [34], cogs: [10, 12, 12, 14, 16] }).error, /twice/);
+  assert.match(checkSpec({ rings: [34, 34], cogs: [10, 12, 14, 16, 18] }).error, /different/);
+  const ok = checkSpec({ rings: [50, 34], cogs: [34, 30, 27, 24, 21, 19, 17, 15, 14, 13, 12, 11], wheel: 2.105 }).spec;
+  assert.deepEqual(ok.rings, [34, 50]); assert.equal(ok.cogs[0], 11);
+  assert.equal(presetFor(ok), 'road-2x12-shimano-50-34');
+  const mine = { rings: [36], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 52], wheel: 2.32 };
+  assert.equal(presetFor(checkSpec(mine).spec), null);
+  const spec = resolveDrivetrain({ drivetrain: 'custom', customDrivetrain: mine });
+  const g = new Gearbox(spec);
+  assert.equal(g.id, 'custom'); assert.ok(!g.isDouble); assert.equal(g.wheel, 2.32);
+  for (let i = 0; i < 20; i++) g.shiftRear(-1);
+  assert.equal(g.label, '36x52');
+  // broken custom spec or unknown id falls back to the default drivetrain
+  assert.equal(resolveDrivetrain({ drivetrain: 'custom', customDrivetrain: { rings: [], cogs: [] } }), 'road-2x12-shimano-50-34');
+  assert.equal(resolveDrivetrain({ drivetrain: 'nope' }), 'road-2x12-shimano-50-34');
+  const s = new Session({ trainer: new SimTrainer(), hr: null, settings: { drivetrain: 'custom', customDrivetrain: mine } });
+  assert.equal(s.gb.id, 'custom'); assert.equal(s.s.wheelCirc, 2.32);
+  console.log('ok - custom chainrings and cogs');
+}
+{
+  // trainer grade range: picked from the Bluetooth name, and the session never sends outside it
+  assert.equal(matchTrainer('KICKR CORE 5B1C'), 'wahoo-kickr-core');
+  assert.equal(matchTrainer('KICKR 1234'), 'wahoo-kickr');
+  assert.equal(matchTrainer('KICKR SNAP 99'), 'wahoo-kickr-snap');
+  assert.equal(matchTrainer('Tacx Neo 2T 12345'), 'tacx-neo');
+  assert.equal(matchTrainer('Some Trainer'), null);
+  assert.equal(trainerFor(-0.10, 0.16), 'wahoo-kickr-core');
+  assert.ok(trainerFits('zwift-hub', -0.10, 0.16) && !trainerFits('zwift-hub', -0.10, 0.2));
+  assert.equal(trainerFor(-0.05, 0.25), 'tacx-neo');
+  assert.equal(trainerFor(-0.15, 0.25), null);
+  assert.deepEqual(cleanRange(0.05, 0.9), { min: 0, max: 0.4 });
+  for (const t of Object.values(TRAINERS)) assert.ok(t.max > 0 && t.min <= 0);
+  const trainer = new SimTrainer();
+  const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { drivetrain: 'road-2x12-shimano-50-34', maxSendGrade: 0.16, minSendGrade: -0.10 } });
+  s.gradeOffset = 0.2; s.start(); trainer.riderPower = 250;
+  ride(s, trainer, hr, 60);
+  assert.ok(trainer.grade <= 0.16 + 1e-9, `sent ${trainer.grade}`);
+  trainer.riderPower = 0; s.gradeOffset = -0.1;
+  ride(s, trainer, hr, 20);
+  assert.equal(trainer.grade, -0.10);
+  console.log('ok - trainer grade range');
 }
 {
   // sim session on a real drivetrain: front shift to the small ring on a climb drops resistance

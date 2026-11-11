@@ -3,7 +3,7 @@
 
 import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
 import { flatten, retime, segTarget, fillMessage } from './workout.js?v=202611102147';
-import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611102147';
+import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
 
 export const DEFAULT_SETTINGS = {
@@ -15,10 +15,12 @@ export const DEFAULT_SETTINGS = {
   wheelCirc: 2.105,
   realDev: 5.1,          // metres per crank rev the trainer sees (learned)
   trainerMassKg: 75,     // mass the trainer assumes in sim mode (feedforward)
-  maxSendGrade: 0.25,
+  maxSendGrade: 0.25,    // grade range sent to the trainer; Settings > Trainer sets it from the model's spec
   minSendGrade: -0.15,
+  trainerModel: '',      // key in engine/trainers.js, 'custom', or '' = not chosen yet (picked from the name on first connect)
   gradeScale: 1.0,       // 1.0 = full realism (Zwift default is 0.5)
-  drivetrain: DEFAULT_DRIVETRAIN,
+  drivetrain: DEFAULT_DRIVETRAIN, // preset id in engine/drivetrain.js, or 'custom'
+  customDrivetrain: null,         // { rings, cogs, wheel } when drivetrain is 'custom'
   shiftStyle: 'sram',     // 'sram' | 'shimano'
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
@@ -32,7 +34,7 @@ export class Session extends Emitter {
     this.trainer = trainer;
     this.hr = hr;
     this.s = { ...DEFAULT_SETTINGS, ...settings };
-    this.gb = new Gearbox(this.s.drivetrain);
+    this.gb = new Gearbox(resolveDrivetrain(this.s));
     this.s.wheelCirc = this.gb.wheel;
     this.workout = workout;
     this.segs = workout ? flatten(workout, this.s.ftp) : null;
