@@ -16,13 +16,17 @@ permissions:
   pages: write
   id-token: write
 
+# Newest push wins: a new run cancels any older run still queued or deploying. Every run deploys the whole
+# site from its own commit, so nothing is lost, and a run GitHub leaves stuck can't hold up the next one
+# (Nov 11: four runs sat "queued" with no job for 40 min until a manual workflow_dispatch went through).
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
