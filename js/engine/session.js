@@ -118,7 +118,8 @@ export class Session extends Emitter {
     this.segs.splice(i + 1, j - i - 1);
     retime(this.segs);
     this.segsChanged = true;
-    this._failFor = 0;
+    this._failFor = 0; this._stopFor = 0;
+    this._noPauseFor = 30;
     this._advance();
     this.emit('testEnd', { reason, step, label: g.label, target: Math.round(g.to * this.s.ftp * this.intensity) });
     this.emit('change');
@@ -142,8 +143,15 @@ export class Session extends Emitter {
   }
   /** The test ends on its own when the rider can't hold the target: 3 s power under 85% of it
    *  (or the ERG cadence guard kicked in) for 8 s in a row. */
-  _watchTest(dt, ergTarget) {
-    if (!this.seg?.untilFail || ergTarget == null || this.segElapsed < 2) return;
+  _watchTest(dt, ergTarget, power, cadence) {
+    if (!this.seg?.untilFail || ergTarget == null) { this._testHard = false; return; }
+    // stopped pedalling from 70% FTP up: that's the end, well before auto-pause would kick in.
+    // Easier steps: a stop is a break (water, a fan), so auto-pause handles it as usual.
+    this._testHard = ergTarget >= 0.7 * this.s.ftp;
+    const stopped = this._testHard && cadence < 30 && power < 0.3 * ergTarget;
+    this._stopFor = stopped ? (this._stopFor || 0) + dt : 0;
+    if (this._stopFor >= 2) { this.endTest('stopped'); return; }
+    if (this.segElapsed < 2) return;
     const low = this._guard || this.power3s < 0.85 * ergTarget;
     this._failFor = low ? (this._failFor || 0) + dt : 0;
     if (this._failFor >= 8) this.endTest('fail');
@@ -195,6 +203,7 @@ export class Session extends Emitter {
     while (this.cadBuf.length > Math.round(3 / dt)) this.cadBuf.shift();
     while (this.powerBuf.length > Math.round(3 / dt)) this.powerBuf.shift();
 
+    if (this._noPauseFor > 0) this._noPauseFor -= dt;
     // ---- auto start / pause / resume ----
     if (!this.finished) {
       const pedalling = cadence > 15 || power > 15;
@@ -203,10 +212,11 @@ export class Session extends Emitter {
       else if (this.paused && this.autoPaused && this._activeFor >= 1) { this.paused = false; this.autoPaused = false; this.emit('autoresume'); }
       else if (!this.paused && this.s.autoPauseSec > 0) {
         const idle = this.mode === 'erg' ? power < 5 && cadence < 5 : this.bike.v < 0.3 && cadence < 5;
-        this._idleFor = idle ? (this._idleFor || 0) + dt : 0;
+        // no auto-pause in the hard part of a test or for 30 s after it ends (the rider is spent; the result is on screen)
+        const hold = (this.inTest && this._testHard) || this._noPauseFor > 0;
+        this._idleFor = idle && !hold ? (this._idleFor || 0) + dt : 0;
         if (this._idleFor >= this.s.autoPauseSec) {
           this.paused = true; this.autoPaused = true; this._idleFor = 0;
-          if (this.inTest) this.endTest('stopped'); // stopped pedalling mid-test = done; the cool-down waits for the restart
           this.emit('autopause');
         }
       }
@@ -244,7 +254,7 @@ export class Session extends Emitter {
       }
       this.target = Math.round(this._guard ? ergTarget * 0.6 : ergTarget);
       this.trainer.setErg(this.target);
-      this._watchTest(dt, ergTarget);
+      this._watchTest(dt, ergTarget, power, cadence);
       // speed and distance: the trainer's own speed (matches the FR970 with the KICKR paired);
       // physics only when the trainer reports none (dropout, or coasting to a stop)
       if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);

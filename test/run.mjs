@@ -407,13 +407,21 @@ test('Ramp test is open-ended and ends when the rider fails', () => {
   assert.equal(s2.endTest('manual'), false, 'outside the test there is nothing to end');
   assert.equal(s2.finished, false);
 
-  // stopping mid-test (auto-pause) ends it too; the cool-down waits for the restart
+  // stopping mid-test ends it right away, never an auto-pause first
   const tr3 = new SimTrainer(), hr3 = new SimHr(tr3);
   const s3 = new Session({ trainer: tr3, hr: hr3, settings: { ftp: 200 }, workout: wo });
-  s3.start(); ride(s3, tr3, hr3, 7 * 60 + 90);
-  tr3.riderPower = 0; ride(s3, tr3, hr3, 10);
-  assert.equal(s3.paused, true);
+  const ends3 = []; s3.on('testEnd', (e) => ends3.push(e)); let paused3 = 0; s3.on('autopause', () => paused3++);
+  s3.start(); ride(s3, tr3, hr3, 7 * 60 + 70);
+  tr3.riderPower = 0; ride(s3, tr3, hr3, 8); // a break at 120 W: auto-pause, test goes on
+  assert.equal(paused3, 1); assert.equal(s3.seg.label, 'Step 2'); assert.equal(ends3.length, 0);
+  tr3.riderPower = 180; ride(s3, tr3, hr3, 3 * 60);
+  tr3.riderPower = 0; ride(s3, tr3, hr3, 3);
+  assert.equal(ends3[0]?.reason, 'stopped', 'stopping ends the test within 3 s');
   assert.equal(s3.seg.label, 'Cool-down');
+  ride(s3, tr3, hr3, 25);
+  assert.equal(paused3, 1, 'no auto-pause while the result is up');
+  ride(s3, tr3, hr3, 10);
+  assert.equal(paused3, 2, 'auto-pause works again after 30 s');
 
   // the builder keeps the flag
   assert.ok(cleanWorkout(wo).steps.filter((x) => x.untilFail).length === 12);
