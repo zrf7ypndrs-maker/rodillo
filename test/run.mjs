@@ -10,6 +10,7 @@ import { parseZwo, flatten, totalDuration, estimateTSS } from '../js/engine/work
 import { encodeActivity } from '../js/fit.js';
 import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
+import { cleanWorkout } from '../js/mine.js';
 
 const require = createRequire(import.meta.url);
 const { Decoder, Stream } = require('@garmin/fitsdk');
@@ -339,3 +340,53 @@ import { Gearbox, DRIVETRAINS } from '../js/engine/drivetrain.js';
   assert.equal(slope.mode, 'sim');
   console.log('ok - mode known before start');
 }
+
+test('Ramp test is open-ended and ends when the rider fails', () => {
+  const wo = JSON.parse(fs.readFileSync(new URL('../workouts/ramp-test.json', import.meta.url)));
+  const steps = (s) => s.segs.filter((g) => g.untilFail);
+  // strong rider: holds 330 W at FTP 200 = 165%, past the 16 planned steps (140%)
+  const tr = new SimTrainer(), hr = new SimHr(tr);
+  tr.ergMax = 330;
+  const s = new Session({ trainer: tr, hr, settings: { ftp: 200 }, workout: wo });
+  const ends = []; s.on('testEnd', (e) => ends.push(e));
+  s.start();
+  ride(s, tr, hr, 7 * 60 + 25 * 60);
+  assert.equal(ends.length, 1, 'test ended once');
+  assert.equal(ends[0].reason, 'fail');
+  assert.equal(ends[0].label, 'Step 21', JSON.stringify(ends[0])); // 50% + 20 x 6% = 170% = 340 W > 330 W
+  assert.equal(steps(s).length, 21, 'steps not ridden are gone');
+  assert.equal(s.seg.label, 'Cool-down', 'cool-down follows the failed step');
+  const cut = steps(s).at(-1);
+  assert.ok(cut.dur >= 8 && cut.dur <= 12, `failed step cut where it failed (${cut.dur} s)`);
+  assert.equal(steps(s)[20].from, 1.7);
+  assert.equal(steps(s)[16].label, 'Step 17');
+  for (let i = 1; i < s.segs.length; i++) assert.equal(s.segs[i].start, s.segs[i - 1].end, 'chart times stay continuous');
+  ride(s, tr, hr, 300);
+  const doc = buildRide(s.samples, { ftp: 200, startMs: Date.now(), segs: s.segs, segsChanged: s.segsChanged, tags: ['test'] });
+  assert.equal(doc.segs.length, s.segs.length, 'ride doc carries the steps as ridden');
+  assert.ok(doc.summary.bests[60] >= 320, `best minute ${doc.summary.bests[60]} W`);
+  assert.ok(Math.abs(doc.intervals.find((x) => x.label === 'Step 20')?.avgP - 328) <= 3, 'step 20 held at 328 W');
+
+  // weaker rider fails inside the plan; holding B in the test ends the test, not the ride
+  const tr2 = new SimTrainer(), hr2 = new SimHr(tr2);
+  const s2 = new Session({ trainer: tr2, hr: hr2, settings: { ftp: 200 }, workout: wo });
+  s2.start();
+  ride(s2, tr2, hr2, 7 * 60 + 10 * 60 + 30);
+  assert.equal(s2.seg.label, 'Step 11');
+  assert.equal(s2.endTest('manual'), true);
+  assert.equal(s2.seg.label, 'Cool-down');
+  assert.equal(steps(s2).length, 11);
+  assert.equal(s2.endTest('manual'), false, 'outside the test there is nothing to end');
+  assert.equal(s2.finished, false);
+
+  // stopping mid-test (auto-pause) ends it too; the cool-down waits for the restart
+  const tr3 = new SimTrainer(), hr3 = new SimHr(tr3);
+  const s3 = new Session({ trainer: tr3, hr: hr3, settings: { ftp: 200 }, workout: wo });
+  s3.start(); ride(s3, tr3, hr3, 7 * 60 + 90);
+  tr3.riderPower = 0; ride(s3, tr3, hr3, 10);
+  assert.equal(s3.paused, true);
+  assert.equal(s3.seg.label, 'Cool-down');
+
+  // the builder keeps the flag
+  assert.ok(cleanWorkout(wo).steps.filter((x) => x.untilFail).length === 16);
+});

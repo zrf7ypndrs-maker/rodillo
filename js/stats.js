@@ -138,9 +138,14 @@ export function buildRide(samples, meta) {
     compliance: work.length ? { avg: Math.round(mean(work.map((x) => x.pct))), min: Math.min(...work.map((x) => x.pct)), reps: work.length } : null,
     slopeSec: samples.filter((s) => s.grade).length,
   };
+  // steps as ridden when they differ from the workout file (open-ended ramp test), so other devices draw them right
+  const segs = meta.segsChanged && meta.segs
+    ? meta.segs.map((g) => ({ label: g.label, kind: g.kind, dur: g.dur, start: g.start, end: g.end, from: g.from, to: g.to, grade: g.grade, free: g.free, cad: g.cad || undefined, rep: g.rep || undefined, untilFail: g.untilFail }))
+    : undefined;
   return {
     summary,
     intervals,
+    ...(segs ? { segs } : {}),
     streams: {
       power, hr, cadence: cad,
       grade: samples.map((s) => Math.round((s.grade || 0) * 10) / 10),

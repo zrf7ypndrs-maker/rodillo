@@ -18,6 +18,7 @@ export class SimTrainer extends Emitter {
     this.c3 = c3;
     this.riderPower = 180;
     this.ergCadence = 90;
+    this.ergMax = Infinity; // the most the rider can hold in ERG; above it cadence collapses (tests, demo)
     this.mode = 'erg';
     this.erg = 0;
     this.grade = 0;
@@ -32,6 +33,7 @@ export class SimTrainer extends Emitter {
     if (this.mode === 'erg') {
       cad = this.riderPower > 0 ? this.ergCadence : 0;
       power = cad ? this.erg : 0;
+      if (cad && this.erg > this.ergMax) { cad = 35; power = Math.round(this.ergMax * 0.7); }
     } else {
       // Like a KICKR in sim mode: its own mass, rolling and aero drag (it ignores the
       // app's crr/cw), and a physical floor because the brake can't go below zero.

@@ -4,7 +4,7 @@
   "tags": [
     "test"
   ],
-  "description": "1-minute steps, +6% FTP each minute. When you can't hold the target, press B twice to end. The summary shows your best 1-minute power and a new FTP (75% of it), with a button to apply it.",
+  "description": "1-minute steps, +6% FTP each minute, with no top step: the ramp keeps going until you can't hold the target. The test ends itself when your power falls off (or hold B), and the cool-down starts. The summary shows your best 1-minute power and a new FTP (75% of it), with a button to apply it.",
   "steps": [
     {
       "dur": 300,
@@ -20,7 +20,7 @@
         },
         {
           "at": 70,
-          "text": "Go until you truly can't hold the target. Then B twice."
+          "text": "Go until you truly can't hold the target. The test ends itself."
         },
         {
           "at": 125,
@@ -57,12 +57,14 @@
         {
           "text": "Step 1: {watts} W. Easy for now."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
       "power": 0.56,
-      "label": "Step 2"
+      "label": "Step 2",
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -72,17 +74,20 @@
         {
           "text": "Still easy. Save it for later."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
       "power": 0.68,
-      "label": "Step 4"
+      "label": "Step 4",
+      "untilFail": true
     },
     {
       "dur": 60,
       "power": 0.74,
-      "label": "Step 5"
+      "label": "Step 5",
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -92,12 +97,14 @@
         {
           "text": "{watts} W. Getting real now, stay smooth."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
       "power": 0.86,
-      "label": "Step 7"
+      "label": "Step 7",
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -107,7 +114,8 @@
         {
           "text": "Around FTP now. Every step from here counts."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -121,7 +129,8 @@
           "at": -15,
           "text": "15 seconds. Finish the step."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -135,7 +144,8 @@
           "at": -15,
           "text": "Hold on to the end of the step."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -149,7 +159,8 @@
           "at": -15,
           "text": "15 seconds. You can do 15 seconds."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -163,7 +174,8 @@
           "at": -15,
           "text": "Almost there. Keep the legs turning."
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -177,7 +189,8 @@
           "at": -15,
           "text": "15 seconds. Finish it!"
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -191,7 +204,8 @@
           "at": -15,
           "text": "Hold it! 15 seconds!"
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
@@ -199,18 +213,20 @@
       "label": "Step 15",
       "messages": [
         {
-          "text": "Last step. Empty the tank."
+          "text": "{watts} W. Everything you have, one step at a time."
         },
         {
           "at": -15,
           "text": "Finish it!"
         }
-      ]
+      ],
+      "untilFail": true
     },
     {
       "dur": 60,
       "power": 1.4,
-      "label": "Step 16"
+      "label": "Step 16",
+      "untilFail": true
     },
     {
       "dur": 300,
@@ -219,7 +235,7 @@
       "label": "Cool-down",
       "messages": [
         {
-          "text": "You finished every step. Spin easy, then check your new FTP."
+          "text": "Test over. Spin easy, then check your new FTP."
         }
       ]
     }

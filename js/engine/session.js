@@ -2,7 +2,7 @@
 // gears), tracks intervals, and records 1 Hz samples.
 
 import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
-import { flatten, segTarget, fillMessage } from './workout.js?v=202611102147';
+import { flatten, retime, msgTime, segTarget, fillMessage } from './workout.js?v=202611102147';
 import { Gearbox, DEFAULT_DRIVETRAIN } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
 
@@ -81,6 +81,7 @@ export class Session extends Emitter {
   toggleErg() { this.ergOff = !this.ergOff; this.emit('change'); }
   skip() {
     if (!this.seg) return;
+    this._extendTest();
     this._advance();
     this.emit('change');
   }
@@ -98,6 +99,56 @@ export class Session extends Emitter {
     if (this.samples.length - 1 > this.lapStart) this.laps.push({ startIdx: this.lapStart, endIdx: this.samples.length - 1 });
     this.trainer.setErg?.(0);
     this.emit('finish');
+  }
+
+  // ---------- open-ended tests (steps with untilFail) ----------
+  get inTest() { return !!this.seg?.untilFail; }
+  /** Ends the test now: the current step is cut where it is, the test steps not ridden are dropped,
+   *  and the ride moves on to what follows them (the cool-down). Returns false outside a test. */
+  endTest(reason = 'manual') {
+    const g = this.seg;
+    if (!g?.untilFail) return false;
+    const i = this.segI;
+    let j = i + 1;
+    while (j < this.segs.length && this.segs[j].untilFail) j++;
+    const step = this.segs.slice(0, i + 1).filter((x) => x.untilFail).length;
+    g.dur = Math.max(1, Math.round(this.segElapsed));
+    g.msgs = g.msgs.filter((m) => m.t < g.dur);
+    this.segs.splice(i + 1, j - i - 1);
+    retime(this.segs);
+    this.segsChanged = true;
+    this._failFor = 0;
+    this._advance();
+    this.emit('testEnd', { reason, step, label: g.label, target: Math.round(g.to * this.s.ftp * this.intensity) });
+    this.emit('change');
+    return true;
+  }
+  /** Last test step done and the rider is still holding it: add the next one at the same increment. */
+  _extendTest() {
+    const i = this.segI, g = this.segs[i];
+    if (!g?.untilFail || this.segs[i + 1]?.untilFail) return;
+    const prev = this.segs[i - 1];
+    const inc = prev?.untilFail && prev.kind === 'erg' ? g.from - prev.from : 0.06;
+    const n = this.segs.slice(0, i + 1).filter((x) => x.untilFail).length + 1;
+    const first = !this.segsChanged;
+    const msgs = [
+      ...(first ? [{ at: 0, text: '{watts} W. Past the planned steps. Keep going.' }] : n % 2 ? [{ at: 0, text: '{watts} W. One more.' }] : []),
+      { at: -15, text: '15 seconds. Finish the step!' },
+    ].map((m) => ({ t: msgTime(m.at, g.dur), text: m.text }));
+    this.segs.splice(i + 1, 0, {
+      ...g, label: /^Step \d+$/.test(g.label) ? `Step ${n}` : g.label, rep: null,
+      from: Math.round((g.from + inc) * 1000) / 1000, to: Math.round((g.to + inc) * 1000) / 1000, msgs,
+    });
+    retime(this.segs);
+    this.segsChanged = true;
+  }
+  /** The test ends on its own when the rider can't hold the target: 3 s power under 85% of it
+   *  (or the ERG cadence guard kicked in) for 8 s in a row. */
+  _watchTest(dt, ergTarget) {
+    if (!this.seg?.untilFail || ergTarget == null || this.segElapsed < 2) return;
+    const low = this._guard || this.power3s < 0.85 * ergTarget;
+    this._failFor = low ? (this._failFor || 0) + dt : 0;
+    if (this._failFor >= 8) this.endTest('fail');
   }
 
   // ---------- derived ----------
@@ -155,7 +206,11 @@ export class Session extends Emitter {
       else if (!this.paused && this.s.autoPauseSec > 0) {
         const idle = this.mode === 'erg' ? power < 5 && cadence < 5 : this.bike.v < 0.3 && cadence < 5;
         this._idleFor = idle ? (this._idleFor || 0) + dt : 0;
-        if (this._idleFor >= this.s.autoPauseSec) { this.paused = true; this.autoPaused = true; this._idleFor = 0; this.emit('autopause'); }
+        if (this._idleFor >= this.s.autoPauseSec) {
+          this.paused = true; this.autoPaused = true; this._idleFor = 0;
+          if (this.inTest) this.endTest('stopped'); // stopped pedalling mid-test = done; the cool-down waits for the restart
+          this.emit('autopause');
+        }
       }
     }
     if (this.paused || this.finished) {
@@ -165,7 +220,7 @@ export class Session extends Emitter {
     this.elapsed += dt;
 
     // ---- what are we riding right now? ----
-    while (this.seg && this.segProgress >= 1) this._advance();
+    while (this.seg && this.segProgress >= 1) { this._extendTest(); this._advance(); }
     const seg = this.seg;
     let targetGrade = this.gradeOffset;
     let ergTarget = null;
@@ -191,6 +246,7 @@ export class Session extends Emitter {
       }
       this.target = Math.round(this._guard ? ergTarget * 0.6 : ergTarget);
       this.trainer.setErg(this.target);
+      this._watchTest(dt, ergTarget);
       // speed and distance: the trainer's own speed (matches the FR970 with the KICKR paired);
       // physics only when the trainer reports none (dropout, or coasting to a stop)
       if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);

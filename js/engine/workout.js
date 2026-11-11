@@ -13,7 +13,11 @@
 //     (cadence can also be a range "80-90" or a floor "100+"; omit it for no target)
 //     { "dist": 1500, "grade": 6 },                                   // SIM step by distance (metres)
 //     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0%
+//     { "dur": 60, "power": 1.10, "untilFail": true }                   // test step (ramp test), see below
 //   ]
+// Test steps ("untilFail": true, ERG only): a run of them is open-ended. Finish the last one and
+// another step is added at the same increment; the test ends when the rider can't hold the target
+// (or holds B), the steps not ridden are dropped and the ride moves on to the step after the run.
 // }
 //
 // Timed messages (shown over the ride chart): any step can carry
@@ -45,6 +49,7 @@ export function flatten(workout, ftp = 200) {
         cad: parseCadence(s.cadence),
         rep,
       };
+      if (s.untilFail) seg.untilFail = true;
       if (s.grade !== undefined) { seg.kind = 'sim'; seg.grade = Number(s.grade) / 100; }
       else if (s.free) { seg.kind = 'sim'; seg.grade = 0; seg.free = true; }
       else if (s.watts !== undefined) { seg.kind = 'erg'; seg.watts = Number(s.watts); seg.from = seg.to = seg.watts / ftp; }
@@ -64,9 +69,14 @@ export function flatten(workout, ftp = 200) {
     }
   };
   walk(workout.steps, null);
+  return retime(out);
+}
+
+/** Sets start/end of every segment from the durations. */
+export function retime(segs) {
   let t = 0;
-  for (const s of out) { s.start = t; t += s.dur; s.end = t; }
-  return out;
+  for (const s of segs) { s.start = t; t += s.dur; s.end = t; }
+  return segs;
 }
 
 /** Second within a step (0..dur) at which a message shows. */

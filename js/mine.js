@@ -89,6 +89,7 @@ export function cleanWorkout(w) {
     if (s.dist != null) o.dist = Math.round(+s.dist); else o.dur = Math.round(+s.dur);
     for (const k of ['power', 'from', 'to', 'watts', 'grade']) if (s[k] != null && s[k] !== '') o[k] = Math.round(+s[k] * 1000) / 1000;
     if (s.free) o.free = true;
+    if (s.untilFail) o.untilFail = true;
     if (s.cadence != null && String(s.cadence).trim() !== '') o.cadence = /^\d+$/.test(String(s.cadence).trim()) ? +s.cadence : String(s.cadence).replace(/\s+/g, '');
     if (s.label?.trim()) o.label = s.label.trim();
     if (s.text?.trim()) o.text = s.text.trim();

@@ -1277,6 +1277,7 @@ function beginSession(opts) {
   s.on('autopause', () => toast('Auto-paused'));
   s.on('autoresume', () => toast('Resumed'));
   s.on('workoutDone', () => toast('Workout complete. Free ride, or hold B to finish'));
+  s.on('testEnd', (e) => { toast(`Test over: ${e.label}, ${e.target} W`); app.controllers.forEach((c) => c.vibrate?.()); });
   rideMsgReset();
   s.on('message', (t) => rideMsg(t));
   // a new step: anything still waiting belongs to the step that just ended, and its first message can replace what's up
@@ -1322,6 +1323,7 @@ async function saveRide(status) {
   const meta = {
     name: s.name, workoutId: s.workout?.id || null, tags: s.workout?.tags || (s.segs ? [] : ['free-slope']),
     ftp: app.settings.ftp, startMs: s.startMs || app.rideId, segs: s.segs, source: app.demo ? 'demo' : 'rodillo',
+    segsChanged: !!s.segsChanged, // open-ended test: the steps ridden differ from the workout file
   };
   const doc = buildRide(s.samples, meta);
   const ride = {
@@ -1456,7 +1458,7 @@ function renderRidePage() {
   const doc = rd.doc, st = doc.summary;
   const w = st.workoutId ? app.library.find((x) => x.id === st.workoutId) : null;
   // the steps as ridden (stored with this device's recording), else the workout as it is in the library now
-  rd.segs = rideSegs(doc, rd.local?.meta?.segs || (w ? flatten(w, rideFtp()) : null));
+  rd.segs = rideSegs(doc, rd.local?.meta?.segs || doc.segs || (w ? flatten(w, rideFtp()) : null));
   const season = powerCurve((app.rows || []).filter((r) => !r.demo).map((r) => r.summary), 90);
   $('#rd').innerHTML = pageHtml(doc, {
     segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
@@ -1805,11 +1807,12 @@ function holdStart(kind, src, btn) {
   el.classList.remove('run', 'skip', 'end');
   el.classList.add(kind);
   el.style.setProperty('--hold-ms', `${h.ms}ms`);
-  $('#hold-msg').textContent = h.msg;
+  const test = kind === 'end' && s.inTest; // in a ramp test, B ends the test and the cool-down follows
+  $('#hold-msg').textContent = test ? 'End the test?' : h.msg;
   const key = $('#hold-key');
   key.textContent = k;
   key.classList.toggle('word', k.length > 1);
-  $('#hold-sub').textContent = h.sub(k);
+  $('#hold-sub').textContent = test ? `Keep holding ${k}: cool-down next` : h.sub(k);
   el.classList.remove('hidden');
   void el.offsetWidth; // restart the fill animation
   el.classList.add('run');
@@ -1830,6 +1833,7 @@ function holdDone(kind) {
   app.controllers.forEach((c) => c.vibrate?.());
   $('#rp-sheet').classList.add('hidden');
   if (kind === 'skip') { if (s.segs) { s.skip(); toast('Skipped'); } renderRide(); }
+  else if (s.inTest) { s.endTest('manual'); renderRide(); }
   else endSession();
 }
 // a key released while the window is in the background never sends keyup
