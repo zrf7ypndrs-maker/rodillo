@@ -461,7 +461,6 @@ table.ints { margin-bottom: 14px; }
 @media (prefers-reduced-motion: no-preference) {
   .hold.run .hold-ring { animation: modal-pop .22s cubic-bezier(.3, 1.6, .5, 1); }
 }
-.hold-btn { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .paused-overlay { position: absolute; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; text-align: center; z-index: 5; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .paused-overlay .big { font-size: 72px; font-weight: 900; font-stretch: 68%; line-height: 1; }
 .paused-overlay .muted { font-size: 17px; margin-top: 6px; }

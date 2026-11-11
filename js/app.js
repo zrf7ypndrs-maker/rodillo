@@ -1431,10 +1431,10 @@ function onRelease(b) {
 
 // ------------------------------------------------------------------ hold to confirm
 // Skip (Y) and End ride (B) only happen if the button is held the whole time; letting go early cancels.
-// Same for the S / Esc keys and the phone sheet buttons. One overlay (#hold) for both.
+// Same for the S / Esc keys. Taps and clicks (desktop End ride, phone sheet) use a confirm screen instead.
 const HOLDS = {
-  skip: { ms: 3000, ctl: 'Y', key: 'S', word: 'Skip', msg: '', sub: (k) => `Keep holding ${k} to skip` },
-  end: { ms: 5000, ctl: 'B', key: 'Esc', word: 'End', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
+  skip: { ms: 3000, ctl: 'Y', key: 'S', msg: '', sub: (k) => `Keep holding ${k} to skip` },
+  end: { ms: 5000, ctl: 'B', key: 'Esc', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
 };
 let hold = null; // { kind, t }
 function holdStart(kind, src) {
@@ -1443,16 +1443,17 @@ function holdStart(kind, src) {
   if (kind === 'skip' && !s.segs) return;
   if (hold) { if (hold.kind === kind) return; holdEnd(); }
   const h = HOLDS[kind];
-  const k = src === 'ctl' ? h.ctl : src === 'key' ? h.key : '';
+  if (src !== 'ctl' && src !== 'key') return;
+  const k = src === 'ctl' ? h.ctl : h.key;
   const el = $('#hold');
   el.classList.remove('run', 'skip', 'end');
   el.classList.add(kind);
   el.style.setProperty('--hold-ms', `${h.ms}ms`);
   $('#hold-msg').textContent = h.msg;
   const key = $('#hold-key');
-  key.textContent = k || h.word;
-  key.classList.toggle('word', !k || k.length > 1);
-  $('#hold-sub').textContent = h.sub(k || 'the button');
+  key.textContent = k;
+  key.classList.toggle('word', k.length > 1);
+  $('#hold-sub').textContent = h.sub(k);
   el.classList.remove('hidden');
   void el.offsetWidth; // restart the fill animation
   el.classList.add('run');
@@ -2054,19 +2055,16 @@ rpTap('rp-gup', () => action('up'));
 rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
 rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
-// press and hold (pointer + touch, since Bluefy doesn't always send pointer events); the sheet closes when the hold completes
-function bindHold(id, kind) {
-  const el = document.getElementById(id);
-  const down = (e) => { e.preventDefault(); holdStart(kind, 'tap'); };
-  const up = () => holdEnd(kind);
-  el.addEventListener('pointerdown', down);
-  el.addEventListener('touchstart', down, { passive: false });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel']) el.addEventListener(ev, up);
-  el.addEventListener('click', (e) => e.preventDefault());
-  el.addEventListener('contextmenu', (e) => e.preventDefault());
-}
-bindHold('rp-skip', 'skip');
-bindHold('rp-end', 'end');
+// taps and clicks get a confirm screen; holds are only for the controller buttons and keys
+rpTap('rp-skip', async () => {
+  $('#rp-sheet').classList.add('hidden');
+  if (await ask('', { title: 'Skip this interval?', ok: 'Skip' }) && app.session?.segs) { app.session.skip(); toast('Skipped'); renderRide(); }
+});
+rpTap('rp-end', async () => {
+  $('#rp-sheet').classList.add('hidden');
+  const short = tooShort();
+  if (await ask(short ? 'Less than 10 seconds recorded. Nothing will be saved.' : '', { title: 'End this ride?', ok: 'End ride', danger: short })) endSession();
+});
 
 // ------------------------------------------------------------------ workout messages
 // Timed messages from the workout (session 'message' events) float over the top of the ride chart.
