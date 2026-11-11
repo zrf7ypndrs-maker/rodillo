@@ -170,9 +170,17 @@
       </div>
     </div>
 
+    <!-- desktop ride: interval list on the left (full height); right: Elapsed | current interval | Next, data cards, chart -->
+    <div class="ride-body" id="r-body">
+    <aside class="segs" id="r-segs">
+      <div class="seg-head"><span class="wname" id="r-name"></span><span class="cnt" id="r-segn"></span></div>
+      <div class="seg-rows" id="r-seg-rows"></div>
+      <div class="seg-foot"><span>Left</span><b id="r-left">0:00</b></div>
+    </aside>
+    <div class="ride-main">
     <div class="ride-top">
-      <div class="rt-side">
-        <div class="ride-name" id="r-name"></div>
+      <div class="rt-card rt-elapsed">
+        <div class="rt-k">Elapsed</div>
         <div class="ride-clock" id="r-elapsed">0:00</div>
         <div class="ride-trip" id="r-trip"></div>
       </div>
@@ -181,17 +189,12 @@
         <div class="int-big" id="r-int-big"></div>
         <div class="int-bar" id="r-int-bar"><i></i></div>
       </div>
-      <div class="rt-side rt-right">
-        <div class="ride-status" id="r-status"></div>
-        <div class="int-next" id="r-int-next"></div>
-      </div>
+      <div class="rt-card rt-next" id="r-next"></div>
     </div>
 
-    <div class="ride-body" id="r-body">
-    <div class="ride-main">
     <div class="tiles">
       <div class="tile power"><div class="t-pct hidden" id="r-pct">100%</div><div class="t-label">Power</div><div class="t-val" id="r-power">0</div><div class="t-sub" id="r-target"></div></div>
-      <div class="tile"><div class="t-label">Heart rate</div><div class="t-val" id="r-hr">--</div><div class="t-sub" id="r-hrzone"></div></div>
+      <div class="tile hr"><div class="t-label">Heart rate</div><div class="t-val" id="r-hr">--</div><div class="t-sub" id="r-hrzone"></div></div>
       <div class="tile cad"><div class="t-label">Cadence</div><div class="t-val" id="r-cad">0</div><div class="t-sub" id="r-cadtarget"></div></div>
       <div class="tile gear"><div class="t-label" id="r-gear-label">Gear</div><div class="t-val" id="r-gear">12</div><div class="t-sub" id="r-ratio"></div></div>
       <div class="tile grade"><div class="t-label">Grade</div><div class="t-val" id="r-grade">0.0<span class="unit">%</span></div><div class="t-sub" id="r-gradesub"></div></div>
@@ -203,11 +206,10 @@
       <div class="r-msg" id="r-msg" aria-live="polite"></div>
     </div>
     </div>
-    <aside class="segs" id="r-segs"></aside>
     </div>
 
     <div class="ride-bottom">
-      <div class="hints" id="r-hints"></div>
+      <div class="rb-left"><div class="ride-status" id="r-status"></div><div class="hints" id="r-hints"></div></div>
       <div class="ride-btns">
         <button class="ghost hidden" id="r-erg">ERG off</button>
         <button class="ghost" id="r-pause">Start</button>

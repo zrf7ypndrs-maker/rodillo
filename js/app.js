@@ -1121,7 +1121,8 @@ function beginSession(opts) {
   $('#r-name').textContent = s.name;
   sizeChart(); sizePhoneChart();
   $('#rp-sheet').classList.add('hidden');
-  app._rpSegI = undefined;
+  app._rpSegI = undefined; app._segI = undefined;
+  if (slide.busy) slideEnd();
   keepAwake();
   renderRide();
 }
@@ -1533,28 +1534,119 @@ function show(name) {
 function renderRideStatus() {
   const el = $('#r-status');
   if (!el) return;
-  const pill = (label, ok) => `<span class="pill ${ok ? '' : 'off'}">${label}</span>`;
+  // quiet dots in the bottom bar; a device that is off turns red
+  const dot = (label, ok) => `<span class="cx ${ok ? '' : 'off'}">${label}</span>`;
   const t = app.trainer?.state === 'connected', h = app.hr?.state === 'connected';
   const c = app.controllers.some((x) => x.state === 'connected');
-  el.innerHTML = pill(app.demo ? 'Demo' : 'Trainer', t || app.demo) + pill('HR', h || app.demo) + pill('Controller', c) +
-    (app.session ? `<span class="pill">${app.session.mode === 'erg' ? 'ERG' : 'SLOPE'}</span>` : '') +
-    (app.session?.maxed ? '<span class="pill off">Max resistance</span>' : '');
+  const html = dot(app.demo ? 'Demo' : 'Trainer', t || app.demo) + dot('HR', h || app.demo) + dot('Controller', c) +
+    (app.session ? `<span>${app.session.mode === 'erg' ? 'ERG' : 'Slope'}</span>` : '') +
+    (app.session?.maxed ? '<span class="off">Max resistance</span>' : '');
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
 const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
 
+/** Remaining workout time ("~" while distance steps make it an estimate), shared by the desktop list and the phone. */
+function workoutLeft(s) {
+  const last = s.segs.at(-1), est = s.segs.some((g) => g.estDur && s.segs.indexOf(g) >= Math.max(0, s.segIndex));
+  return s.seg ? `${est ? '~' : ''}${fmtTime(last.end - s.chartPos)}` : 'Done';
+}
+
+/**
+ * Interval list (desktop, left column). Header (workout name, n/N) and footer (time left) stay put; rows scroll
+ * between them. Scroll rule (Agustín, Nov 10): if every row fits nothing scrolls; otherwise the current row never
+ * goes below the middle of the box, and near the end the list stops and the current row moves down.
+ */
 function renderSegList(s) {
   const body = $('#r-body');
   body.classList.toggle('with-segs', !!s.segs);
   if (!s.segs) return;
   const { rows, cur, doneN } = segRows(s);
-  const el = $('#r-segs');
-  el.innerHTML = `<div class="seg-head"><span>Segments</span><span>${doneN}/${s.segs.length} done</span></div>` + rows.join('');
+  const box = $('#r-seg-rows');
+  const html = rows.join('');
+  if (box.innerHTML !== html) box.innerHTML = html;
+  $('#r-segn').textContent = `${doneN}/${s.segs.length}`;
+  $('#r-left').textContent = workoutLeft(s);
   if (app._segI !== cur) {
+    const first = app._segI === undefined;
     app._segI = cur;
-    el.querySelector('.seg.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const row = box.querySelector('.seg.current');
+    const top = row ? Math.max(0, row.offsetTop - box.clientHeight / 2 + row.offsetHeight / 2) : box.scrollHeight;
+    box.scrollTo({ top, behavior: first || reducedMotion() ? 'auto' : 'smooth' }); // the box only, never the page
   }
+}
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Next card: "4:00 @ 216 W" (+ cadence target); "Finish" on the last interval; hidden when there is no next step. */
+function renderNextCard(s, next, setHTML) {
+  const el = $('#r-next');
+  const none = !s.segs || !s.seg;
+  el.classList.toggle('none', none);
+  if (none) return;
+  el.classList.toggle('finish', !next);
+  if (!next) { el.style.setProperty('--nc', 'var(--rule)'); setHTML(el, '<div class="rt-k">Next</div><div class="amt">Finish</div>'); return; }
+  el.style.setProperty('--nc', next.kind === 'erg' ? zoneHex((next.from + next.to) / 2) : gradeHex(next.grade));
+  const w = (f) => Math.round(f * app.settings.ftp * s.intensity);
+  const tgt = next.kind === 'erg'
+    ? `<span class="num">${next.from === next.to ? w(next.from) : `${w(next.from)}-${w(next.to)}`}</span><span class="u">W</span>`
+    : `<span class="num">${((next.grade + s.gradeOffset) * 100).toFixed(0)}</span><span class="u">%</span>`;
+  setHTML(el, `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${next.cad ? next.cad.label : ''}</div>`);
+}
+
+/**
+ * Interval change (desktop): the Next card grows over the current card, the current card pulses once as it is
+ * uncovered, then a new Next card slides in from the right edge of the screen. The old current card is frozen in a
+ * copy (.rt-ghost) while the real one already shows the new interval underneath.
+ */
+const slide = { busy: false, parts: [] };
+function slideEnd() {
+  slide.parts.forEach((x) => x.remove());
+  slide.parts = [];
+  $('#r-next').style.visibility = '';
+  slide.busy = false;
+}
+function slideNextIn(s) {
+  const card = $('#r-interval'), next = $('#r-next');
+  const i = s.started ? s.segIndex : -1;
+  if (card._ses !== s || card._seg < 0 || i < 0 || i === card._seg) return;
+  if (reducedMotion() || next.classList.contains('none') || !next.offsetWidth) return; // pulseCard handles it
+  if (slide.busy) slideEnd(); // skips in a row: finish the last one at once
+  const host = $('#ride'), h = host.getBoundingClientRect();
+  const at = (el) => { const r = el.getBoundingClientRect(); return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height }; };
+  const a = at(next), b = at(card);
+  const copy = (el, cls, r) => {
+    const c = el.cloneNode(true);
+    c.removeAttribute('id'); c.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+    c.classList.remove('int-fresh', 'int-ending');
+    c.classList.add(cls);
+    Object.assign(c.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+    host.appendChild(c);
+    slide.parts.push(c);
+    return c;
+  };
+  slide.busy = true;
+  card._seg = i; // pulseCard must not pulse now; it happens on landing
+  copy(card, 'rt-ghost', b);
+  const mover = copy(next, 'rt-mover', a);
+  next.style.visibility = 'hidden';
+  const ease = 'cubic-bezier(.3, 1.25, .5, 1)';
+  mover.animate([
+    { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px` },
+    { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` },
+  ], { duration: 380, easing: ease, fill: 'forwards' }).finished.then(() => {
+    if (!slide.busy) return;
+    slide.parts.filter((x) => x !== mover).forEach((x) => x.remove());
+    slide.parts = [mover];
+    mover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' });
+    card.classList.remove('int-fresh'); void card.offsetWidth; card.classList.add('int-fresh');
+    next.style.visibility = '';
+    if (!next.classList.contains('none')) {
+      const n = next.getBoundingClientRect();
+      next.animate([{ transform: `translateX(${innerWidth - n.left}px)` }, { transform: 'none' }], { duration: 480, easing: ease });
+    }
+    setTimeout(() => { if (slide.parts[0] === mover) slideEnd(); }, 170);
+  }).catch(() => {});
 }
 
 /** Segment rows shared by the desktop sidebar and the phone list view. */
@@ -1632,6 +1724,7 @@ for (const id of ['r-interval', 'rp-hero']) {
 function renderRide() {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
+  if (!isPhone()) slideNextIn(s); // before pulseCard: a slide pulses the card when it lands, not now
   pulseCard(s, isPhone() ? $('#rp-hero') : $('#r-interval'));
   if (isPhone()) { renderPhone(s); renderPaused(s); return; }
   const td = s.trainer.data || {};
@@ -1669,7 +1762,7 @@ function renderRide() {
   $('#r-gradesub').textContent = s.mode !== 'sim' ? '' : !s.seg ? 'up/down to change' : s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}%` : '';
   $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
   $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
-  $('#r-trip').innerHTML = s.mode === 'erg' ? `<b>${(s.bike.dist / 1000).toFixed(2)}</b> km \u00b7 ${(s.bike.v * 3.6).toFixed(1)} km/h` : '';
+  $('#r-trip').innerHTML = `<b>${(s.bike.dist / 1000).toFixed(1)}</b> km \u00b7 <b>${(s.bike.v * 3.6).toFixed(1)}</b> km/h`;
 
   // interval card
   $('.tiles').classList.toggle('erg', s.mode === 'erg');
@@ -1705,22 +1798,21 @@ function renderRide() {
     setHTML($('#r-int-big'), big);
     bar.classList.remove('hidden');
     bar.firstElementChild.style.width = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
-    const next = s.segs[s.segIndex + 1];
-    setHTML($('#r-int-next'), next ? `Next<br><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}` : 'Last interval');
+    renderNextCard(s, s.segs[s.segIndex + 1], setHTML);
   } else if (s.segs) {
     card.style.setProperty('--zc', ZC.z3);
     setHTML($('#r-int-label'), 'Workout complete');
     setHTML($('#r-int-text'), 'keep riding or hold B to finish');
     setHTML($('#r-int-big'), '<span class="msg">Done. Nice work.</span>');
     bar.classList.add('hidden');
-    setHTML($('#r-int-next'), '');
+    renderNextCard(s, undefined, setHTML);
   } else {
     card.style.setProperty('--zc', gradeHex(s.grade));
     setHTML($('#r-int-label'), 'Free ride');
     setHTML($('#r-int-text'), 'up/down changes the grade by 1%, shift to hold your cadence');
     setHTML($('#r-int-big'), `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`);
     bar.classList.add('hidden');
-    setHTML($('#r-int-next'), '');
+    renderNextCard(s, undefined, setHTML);
   }
   renderSegList(s);
 
@@ -1867,9 +1959,8 @@ function renderPhone(s) {
   set('rp-elapsed', fmtTime(s.elapsed));
   set('rp-name', esc(s.name));
   if (s.segs) {
-    const last = s.segs.at(-1), est = s.segs.some((g) => g.estDur && s.segs.indexOf(g) >= Math.max(0, s.segIndex));
     set('rp-left-k', 'Left');
-    set('rp-left', seg ? `${est ? '~' : ''}${fmtTime(last.end - s.chartPos)}` : '0:00');
+    set('rp-left', seg ? workoutLeft(s) : '0:00');
   } else {
     set('rp-left-k', 'Distance');
     set('rp-left', fmtDist(s.bike.dist));
