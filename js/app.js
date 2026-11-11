@@ -1805,8 +1805,8 @@ function drawChart() {
 
 // Heart rate on its own scale (at least 80-190 bpm, widened to fit).
 // HR line is drawn as a trailing rolling average (display only: stored samples, FIT, averages and the live number stay raw).
-// Strap jitter of a few bpm made the raw 1 Hz line spiky. Agustín suggested 3 s; 5 s to try first, change here.
-const HR_SMOOTH_S = 5;
+// Strap jitter of a few bpm made the raw 1 Hz line spiky. 3 s (Agustín, Nov 10).
+const HR_SMOOTH_S = 3;
 function smoothHr(samples) {
   const out = new Array(samples.length);
   let sum = 0, win = [];
