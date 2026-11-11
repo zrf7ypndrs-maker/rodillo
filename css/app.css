@@ -644,7 +644,7 @@ table.ints { margin-bottom: 14px; }
 /* while launching, the label's bottom edge (just under the letters) hides anything that falls past it; the wave can rise above */
 .hero-start.launching .hs-label { clip-path: inset(-1em -0.5em 0.06em -0.5em); }
 .hs-label i { display: inline-block; font-style: normal; }
-.launch-cover { position: fixed; inset: 0; z-index: 9999; background: #000; pointer-events: all; will-change: clip-path; }
+.launch-cover { position: fixed; inset: 0; z-index: 9999; pointer-events: all; will-change: clip-path; }
 .hero-free .bike-ico { width: 28px; height: 17px; }
 .hero-prof { height: 120px; margin-top: 24px; }
 .hero-prof .profile { height: 100%; display: block; }

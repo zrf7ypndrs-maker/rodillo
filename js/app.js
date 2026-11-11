@@ -1095,10 +1095,20 @@ async function startWorkout(w, intensity = 1, btn = null) {
   if (await canRide()) go();
 }
 
-/** Start workout launch (asked for by Agustín, Nov 11): the play icon rocks side to side while the label
-   melts down, then the icon sprints off to the right and the button grows into a black screen;
-   the ride screen is set up behind the black and the black fades away. Skipped under reduced motion. */
+/** Start workout / Free ride launch (asked for by Agustín, Nov 11): each button plays its own intro
+   (workoutIntro / freeIntro), the icon sprints off to the right and the button grows over the whole screen
+   in its own color; the ride screen is set up behind it and the cover fades away. Skipped under reduced motion. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** The color a button shows, made solid so it can fill the screen: the light glass buttons on the zone
+   color read as white over it, a transparent one shows the sheet behind it. */
+function solidBg(btn) {
+  const m = getComputedStyle(btn).backgroundColor.match(/[\d.]+/g)?.map(Number) || [0, 0, 0, 1];
+  const [r, g, b, a = 1] = m;
+  if (a >= 1) return `rgb(${r}, ${g}, ${b})`;
+  if (a === 0) return getComputedStyle(document.documentElement).getPropertyValue('--sheet').trim() || '#fff';
+  const mix = (c) => Math.round(c * a + 255 * (1 - a));
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
 async function launchFrom(btn, go, kind = 'workout') {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !btn.animate) return go();
   app.launching = true;
@@ -1120,17 +1130,17 @@ async function launchFrom(btn, go, kind = 'workout') {
     await ico.animate([{ transform: `translateX(0)${pose} scale(1, 1)` }, { transform: `translateX(-9px)${pose} scale(.8, 1.12)`, offset: 0.3 },
       { transform: `translateX(${dx}px)${pose} scale(1.9, .8)` }],
       { duration: 480, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' }).finished;
-    // 3. the button grows into a black screen
+    // 3. the button grows to fill the screen in its own color
     const rect = btn.getBoundingClientRect(), W = innerWidth, H = innerHeight;
     const cover = document.createElement('div');
     cover.className = 'launch-cover';
     document.body.append(cover);
     const rad = Math.min(rect.height / 2, parseFloat(getComputedStyle(btn).borderTopLeftRadius) || 0);
     const from = `inset(${rect.top}px ${W - rect.right}px ${H - rect.bottom}px ${rect.left}px round ${rad}px)`;
-    await cover.animate([{ clipPath: from, background: getComputedStyle(btn).backgroundColor },
-      { clipPath: 'inset(0px 0px 0px 0px round 0px)', background: '#000' }],
+    cover.style.background = solidBg(btn);
+    await cover.animate([{ clipPath: from }, { clipPath: 'inset(0px 0px 0px 0px round 0px)' }],
       { duration: 640, easing: 'cubic-bezier(.75, 0, .25, 1)', fill: 'forwards' }).finished;
-    // 4. ride screen behind the black, then reveal it
+    // 4. ride screen behind the cover, then reveal it
     go();
     btn.getAnimations({ subtree: true }).forEach((a) => a.cancel());
     btn.querySelectorAll('.lz-fx').forEach((x) => x.remove());
