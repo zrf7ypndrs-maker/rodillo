@@ -1,0 +1,153 @@
+{
+  "id": "power-profile",
+  "name": "Power profile: 8 s, 30 s, 1 min, 5 min",
+  "tags": [
+    "sim",
+    "max"
+  ],
+  "description": "All-out efforts to fill in the short end of your power curve: 3 sprints of 8 s, then 30 s, 1 min and 5 min, shortest first, with long easy rolls between. Slope mode on purpose: ERG would cap a sprint. Pick the gear yourself, aiming for 100-120 rpm at the top of each sprint. Ride it fresh, not the day after legs or a hard ride.",
+  "steps": [
+    {
+      "dur": 480,
+      "grade": 1,
+      "label": "Warm-up roll",
+      "text": "Easy, Z2 feel",
+      "messages": [
+        { "text": "Power profile today: 3 sprints, then 30 s, 1 min and 5 min." },
+        { "at": 30, "text": "Every effort is all-out. The rolls between are truly easy." },
+        { "at": 100, "text": "Slope mode: you pick the gear, the effort is all yours." },
+        { "at": 170, "text": "Sprints: aim to top out at 100 to 120 rpm. Shift up if you spin out." },
+        { "at": -40, "text": "Is the FR970 recording? Start it now if not." }
+      ]
+    },
+    {
+      "dur": 120,
+      "grade": 3,
+      "label": "Opener",
+      "text": "About FTP on the power card",
+      "messages": [
+        { "text": "Two minutes at about FTP. Wake the legs up." }
+      ]
+    },
+    {
+      "dur": 120,
+      "grade": 0,
+      "label": "Easy roll"
+    },
+    {
+      "repeat": 2,
+      "steps": [
+        {
+          "dur": 6,
+          "grade": 3,
+          "label": "Practice jump",
+          "text": "80% sprint",
+          "messages": [
+            { "text": "Practice jump {rep} of {of}. About 80%, find your gear." }
+          ]
+        },
+        {
+          "dur": 174,
+          "grade": 0,
+          "label": "Easy roll",
+          "messages": [
+            { "rep": "last", "at": -20, "text": "First sprint in 20 seconds. Roll at 80 rpm in a big gear." }
+          ]
+        }
+      ]
+    },
+    {
+      "repeat": 3,
+      "steps": [
+        {
+          "dur": 8,
+          "grade": 3,
+          "label": "Sprint",
+          "text": "All-out, standing is fine",
+          "messages": [
+            { "text": "Sprint {rep} of {of}. Go! Everything!" }
+          ]
+        },
+        {
+          "dur": 292,
+          "grade": 0,
+          "label": "Easy roll",
+          "text": "Easy gear, let it come back",
+          "messages": [
+            { "rep": [1, 2], "at": 5, "text": "Easy gear. Breathe. Nearly 5 minutes to the next one." },
+            { "rep": "last", "at": 5, "text": "Sprints done. Next: 30 seconds all-out." },
+            { "rep": [1, 2], "at": -20, "text": "Next sprint in 20 seconds. Roll at 80 rpm, big gear." },
+            { "rep": "last", "at": -20, "text": "30 seconds all-out in 20 seconds. Seated start." }
+          ]
+        }
+      ]
+    },
+    {
+      "dur": 30,
+      "grade": 3,
+      "label": "30 s max",
+      "text": "All-out, hold on to the end",
+      "messages": [
+        { "text": "30 seconds. Go hard from the start." },
+        { "at": -12, "text": "Hold on! Don't let the cadence die." }
+      ]
+    },
+    {
+      "dur": 330,
+      "grade": 0,
+      "label": "Easy roll",
+      "text": "Easy gear",
+      "messages": [
+        { "at": 5, "text": "Good. Easy 5 and a half minutes. Next: 1 minute." },
+        { "at": 120, "text": "The 1 minute: hard from the start, but not a sprint." },
+        { "at": -20, "text": "1 minute all-out in 20 seconds." }
+      ]
+    },
+    {
+      "dur": 60,
+      "grade": 4,
+      "label": "1 min max",
+      "text": "Hard, not a sprint. Empty it at the end",
+      "messages": [
+        { "text": "1 minute. Strong, steady, not a sprint." },
+        { "at": 30, "text": "Halfway. Stay on it." },
+        { "at": -15, "text": "15 seconds. Empty the tank!" }
+      ]
+    },
+    {
+      "dur": 480,
+      "grade": 0,
+      "label": "Easy roll",
+      "text": "Easy gear",
+      "messages": [
+        { "at": 5, "text": "Done. 8 easy minutes before the last one." },
+        { "at": 150, "text": "The 5 minutes: first minute a notch under what you think you can hold." },
+        { "at": 240, "text": "Then build. The last minute is everything you have left." },
+        { "at": -20, "text": "5 minutes all-out in 20 seconds. Last effort." }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 5,
+      "label": "5 min max",
+      "text": "Even first minute, then build",
+      "messages": [
+        { "text": "5 minutes. Settle in, a notch under your best." },
+        { "at": 60, "text": "One minute in. Hold it steady." },
+        { "at": 150, "text": "Halfway. If it feels OK, lift it a little." },
+        { "at": 240, "text": "Last minute. Everything now!" },
+        { "at": -15, "text": "15 seconds! Empty it!" }
+      ]
+    },
+    {
+      "dur": 300,
+      "grade": 0,
+      "label": "Cool-down",
+      "text": "Easy spin",
+      "messages": [
+        { "at": 5, "text": "That's the test. Easy spin, then save the ride." },
+        { "at": 60, "text": "Your new bests show on the ride page and in the Training power curve." }
+      ]
+    }
+  ]
+}

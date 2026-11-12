@@ -993,7 +993,7 @@ const whoopDay = (key) => app.whoop?.[key];
 
 function isHard(w) {
   if (!w) return false;
-  if ((w.tags || []).some((t) => ['vo2', 'threshold', 'test'].includes(t))) return true;
+  if ((w.tags || []).some((t) => ['vo2', 'threshold', 'test', 'max'].includes(t))) return true;
   return flatten(w).some((x) => x.kind === 'erg' && x.dur >= 120 && (x.from + x.to) / 2 >= 0.88);
 }
 

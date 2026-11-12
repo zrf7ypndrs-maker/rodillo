@@ -36,7 +36,7 @@ function describe(w) {
   const segs = flatten(w, plan.ftp || 200);
   const ergWork = segs.filter((s) => s.kind === 'erg' && s.dur >= 30).map((s) => (s.from + s.to) / 2);
   const peak = ergWork.length ? Math.max(...ergWork) : null;
-  const hard = (w.tags || []).some((t) => ['vo2', 'threshold', 'test'].includes(t)) || segs.some((s) => s.kind === 'erg' && s.dur >= 120 && (s.from + s.to) / 2 >= 0.88);
+  const hard = (w.tags || []).some((t) => ['vo2', 'threshold', 'test', 'max'].includes(t)) || segs.some((s) => s.kind === 'erg' && s.dur >= 120 && (s.from + s.to) / 2 >= 0.88);
   const sim = segs.every((s) => s.kind === 'sim');
   return `${w.name} [${w.id}${w._coach ? ', coach' : ''}] ${Math.round(totalDuration(w) / 60)} min, ~${estimateTSS(w) ?? '?'} TSS, ${sim ? 'slope mode' : `peak ${Math.round(peak * 100)}% FTP`}${hard ? ', HARD' : ''}`;
 }
