@@ -1088,7 +1088,7 @@ const FORM_BANDS = [[15, 25, 'Very fresh'], [5, 15, 'Fresh'], [-10, 5, 'Balanced
 function svgLoad(series) {
   // phone: the svg shrinks to about half, so text is drawn about twice as big there
   const ph = isPhone(), k = ph ? 1.8 : 1;
-  const W = 640, H = ph ? 370 : 330, top = 150, n = series.length, PR = W - (ph ? 190 : 120); // PR = right edge of the plot, labels to its right
+  const W = 640, H = ph ? 440 : 330, top = 150, n = series.length, PR = W - (ph ? 190 : 120); // PR = right edge of the plot, labels to its right
   if (n < 2) return '<p class="muted">Ride a few times to see fitness and fatigue.</p>';
   const maxL = Math.max(10, ...series.map((d) => Math.max(d.ctl, d.atl))) * 1.1;
   const X = (i) => (i / (n - 1)) * (PR - 30) + 30;
@@ -1109,15 +1109,19 @@ function svgLoad(series) {
   const now = series.at(-1).tsb, cur = FORM_BANDS.find(([l, h]) => now > l && now <= h) || FORM_BANDS.at(-1);
   const bands = FORM_BANDS.map(([l, h, name], j) => `<rect x="30" y="${f(B(h))}" width="${W - 40}" height="${f(B(l) - B(h))}" fill="${INK}" opacity="${j % 2 ? 0.045 : 0.0}"/>`
     + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${l < now && now <= h ? INK : MUTED}" font-size="${11 * k}" font-weight="${l < now && now <= h ? 700 : 400}">${name}</text>`).join('');
+  // legend stacked in the label column, so it can never sit on the lines
+  const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill}" font-size="${11 * k}">${txt}</text>`;
+  const legend = lg(0, FITNESS, '&#9632; Fitness') + lg(1, FATIGUE, '&#9632; Fatigue') + (ph ? '' : lg(2.25, MUTED, 'Form = fitness') + lg(3.25, MUTED, 'minus fatigue'));
   const bw = Math.max(1, (PR - 30) / n - 1);
   const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
-  const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="${H - 4}" fill="${MUTED}" font-size="${12 * k}">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
+  const m1 = series.findIndex((d) => d.date.endsWith('-01')), first = m1 < 0 || m1 >= (ph ? 16 : 10); // drop the first date if it would run into the 1st of the month
+  const ticks = series.map((d, i) => d.date.endsWith('-01') || (i === 0 && first) ? `<text x="${X(i)}" y="${H - 4}" fill="${MUTED}" font-size="${12 * k}">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
     <text x="0" y="${14 * k}" fill="${MUTED}" font-size="${12 * k}">${Math.round(maxL)}</text>
     ${gap}${line('atl', FATIGUE)}${line('ctl', FITNESS)}
     <text x="30" y="${S0 - 8 * k}" fill="${INK}" font-size="${12 * k}" font-weight="650">Form <tspan fill="${MUTED}" font-weight="400">now ${now > 0 ? '+' : ''}${Math.round(now)}, ${cur[2].toLowerCase()}</tspan></text>
     ${bands}<line x1="30" x2="${PR}" y1="${f(Z)}" y2="${f(Z)}" stroke="${RULE}"/>${bars}${ticks}
-    <text x="${W - 10}" y="${14 * k}" text-anchor="end" font-size="${11 * k}"><tspan fill="${FITNESS}">&#9632; Fitness</tspan><tspan dx="10" fill="${FATIGUE}">&#9632; Fatigue</tspan>${ph ? '' : `<tspan dx="10" fill="${MUTED}">Form = fitness minus fatigue</tspan>`}</text></svg>`;
+    ${legend}</svg>`;
 }
 
 function svgWeekly(weeks) {
