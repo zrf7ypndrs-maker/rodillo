@@ -39,6 +39,8 @@
   --bad-bg: #fbe1e3;
   --flash: #fff1c9;
   --overlay: rgba(230, 233, 229, .72);
+  --scrim: rgba(22, 24, 27, .22); /* behind side panels (settings, controls) */
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%235f666c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --shadow: rgba(22, 24, 27, .16);
   --hatch: rgba(22, 24, 27, .035);
   --log: #33383d;
@@ -85,6 +87,8 @@
   --bad-bg: #3a1519;
   --flash: #4a3a0e;
   --overlay: rgba(12, 14, 13, .74);
+  --scrim: rgba(0, 0, 0, .55);
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%2398a09a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --shadow: rgba(0, 0, 0, .55);
   --hatch: rgba(238, 241, 236, .035);
   --log: #c9d1c9;
@@ -347,7 +351,12 @@ table.ints { margin-bottom: 14px; }
 .svgchart { width: 100%; height: auto; display: block; font-family: var(--num); }
 
 /* ---------- panels ---------- */
-.panel { position: fixed; top: 0; right: 0; bottom: 0; width: 470px; max-width: 100vw; background: var(--sheet); border-left: 1px solid var(--rule); padding: 20px; overflow: auto; z-index: 20; box-shadow: -24px 0 48px var(--shadow); }
+.panel { position: fixed; top: 0; right: 0; bottom: 0; width: 470px; max-width: 100vw; background: var(--sheet); border-left: 1px solid var(--rule); padding: 20px; overflow: auto; z-index: 32; box-shadow: -24px 0 48px var(--shadow); }
+/* dim layer behind an open side panel (above the phone nav pill, z 30); a click closes the panel */
+.scrim { position: fixed; inset: 0; z-index: 31; background: var(--scrim); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); }
+@media (prefers-reduced-motion: no-preference) {
+  .scrim:not(.hidden) { animation: modal-fade .2s ease-out; }
+}
 /* in-app replacement for alert()/confirm(): ask() in js/app.js */
 .modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--overlay); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .modal-box { width: 420px; max-width: 100%; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 18px 44px var(--shadow); padding: 20px 20px 16px; }
@@ -364,14 +373,19 @@ table.ints { margin-bottom: 14px; }
 @keyframes modal-pop { from { transform: scale(.94); } }
 .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .panel h4 { margin-top: 8px; }
-.settings-form { display: grid; grid-template-columns: 1fr 120px; gap: 8px 12px; align-items: center; margin-bottom: 22px; font-size: 14px; }
-.settings-form input, .settings-form select { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; width: 100%; }
+.settings-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 14px; align-items: start; margin-bottom: 22px; font-size: 14px; }
+/* one field = label on top, control, optional help; .full spans both columns */
+.settings-form .fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.settings-form .fld.full, .settings-form > .help, .settings-form .dt-fields > .help, .settings-form .bike-fields > .help, .settings-form .gar-edit > .help { grid-column: 1 / -1; }
+.settings-form .fld > label { font-size: 13px; font-weight: 650; color: var(--ink); }
+.settings-form input, .settings-form select { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 0 10px; height: 36px; width: 100%; min-width: 0; }
+.settings-form select { appearance: none; -webkit-appearance: none; padding-right: 30px; background-image: var(--chev); background-repeat: no-repeat; background-position: right 11px center; background-size: 12px 8px; text-overflow: ellipsis; cursor: pointer; }
 .settings-form input:focus, .settings-form select:focus { border-color: var(--ink); outline: none; }
-.settings-form select.wide-select { grid-column: 1 / -1; }
 .settings-form .dt-fields, .settings-form .bike-fields { display: contents; }
-.settings-form input.wide-input { grid-column: 1 / -1; font-variant-numeric: tabular-nums; }
+.settings-form input.mono { font-variant-numeric: tabular-nums; }
 .settings-form .help a { color: inherit; }
-.settings-form .help { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); margin-top: -4px; }
+.settings-form .help { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.settings-form > .help, .settings-form .dt-fields > .help, .settings-form .bike-fields > .help { margin-top: -6px; }
 /* Settings > Garage: one row per bike, the one in use inverted ("now" is ink) */
 .settings-form .garage { grid-column: 1 / -1; display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
 .settings-form .gar-edit { display: contents; }
@@ -669,7 +683,7 @@ table.ints { margin-bottom: 14px; }
   .tiles { grid-template-columns: repeat(3, 1fr); }
 }
 
-.sync-form { grid-template-columns: 110px 1fr; }
+.sync-form { grid-template-columns: 1fr; }
 .sync-actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
 .gh-signin { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13.5px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
 .token-label { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
@@ -1237,7 +1251,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .card { padding: 14px; }
   .ride-table { overflow-x: auto; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }
-  .settings-form { grid-template-columns: 1fr 110px; }
+  .settings-form { grid-template-columns: 1fr; gap: 14px; }
+  .settings-form input, .settings-form select { height: 42px; font-size: 16px; }
   .set-tabs { gap: 15px; }
   /* no keyboard on the phone */
   .keys th:nth-child(3), .keys td:nth-child(3) { display: none; }

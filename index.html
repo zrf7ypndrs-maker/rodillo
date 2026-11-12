@@ -236,6 +236,7 @@
   <section id="ridepage" class="screen"><div class="rd" id="rd"></div></section>
 
   <!-- ================= PANELS ================= -->
+  <div class="scrim hidden" id="scrim"></div>
   <aside id="settings" class="panel hidden">
     <div class="panel-head"><h3>Settings <span class="muted build-id" id="build-id"></span></h3><button class="ghost small" data-close>Close</button></div>
     <div class="tabs set-tabs" id="set-tabs" role="tablist">
@@ -252,8 +253,8 @@
       <div class="pane-intro">Training history sync</div>
       <div class="gh-signin hidden" id="gh-signin"></div>
       <div class="token-label" id="token-label"></div>
-      <label for="set-token">GitHub token</label><input id="set-token" type="password" placeholder="github_pat_..." autocomplete="off">
-      <label for="set-repo">Data repo</label><input id="set-repo" type="text">
+      <div class="fld"><label for="set-token">GitHub token</label><input id="set-token" type="password" placeholder="github_pat_..." autocomplete="off"></div>
+      <div class="fld"><label for="set-repo">Data repo</label><input id="set-repo" type="text"></div>
       <div class="help">Fine-grained token with Contents: Read and write on rodillo-data only. Stored in this browser, never in the app repo.</div>
       <div class="sync-actions"><button class="primary small" id="btn-token">Save &amp; test</button> <span class="muted" id="token-status"></span></div>
       <div class="pane-intro import-intro">Import ride history</div>

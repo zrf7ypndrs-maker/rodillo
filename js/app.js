@@ -3069,10 +3069,12 @@ const SET_TABS = {
   trainer: [],
 };
 const SET_TAB_IDS = ['rider', 'garage', 'ride', 'gearing', 'road', 'trainer', 'sync'];
-const numField = ([k, label, step, mult = 1, help, offset = 0]) =>
-  `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`;
-const nameField = () => `<label for="set-name">Your name</label><input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">
-  <div class="help">The coach uses it in workout messages.</div>`;
+/** One settings field: label on top, control, optional help. Half width unless cls has "full". */
+const fld = (id, label, control, help = '', cls = '') =>
+  `<div class="fld${cls ? ` ${cls}` : ''}"><label for="${id}">${label}</label>${control}${help ? `<div class="help">${help}</div>` : ''}</div>`;
+const numField = ([k, label, step, mult = 1, help, offset = 0, cls = '']) =>
+  fld(`set-${k}`, label, `<input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">`, help, cls);
+const nameField = () => fld('set-name', 'Your name', `<input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">`, 'The coach uses it in workout messages.', 'full');
 // ---- gearing: a known drivetrain, or your own chainrings and cogs
 function dtOptions() {
   const groups = {};
@@ -3139,15 +3141,15 @@ function bikeOptions() {
 }
 const optHtml = (o) => Object.entries(o).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
 function bikeHtml() {
-  return `<label for="set-bike">Bike</label><select id="set-bike" class="wide-select"></select>
-    ${numField(['bikeKg', 'Bike weight (kg)', 0.1])}
+  return `${fld('set-bike', 'Bike', '<select id="set-bike"></select>', '', 'full')}
     <div class="bike-fields">
-      <label for="set-btype">Type</label><select id="set-btype" class="wide-select">${optHtml(BIKE_TYPES)}</select>
-      <label for="set-bmat">Frame</label><select id="set-bmat">${optHtml(MATERIALS)}</select>
-      <label for="set-bfront" class="bike-mtb">Fork travel (mm, 0 = rigid)</label><input id="set-bfront" class="bike-mtb" type="number" step="10" min="0" max="${MAX_TRAVEL}">
-      <label for="set-brear" class="bike-mtb">Rear travel (mm, 0 = hardtail)</label><input id="set-brear" class="bike-mtb" type="number" step="10" min="0" max="${MAX_TRAVEL}">
-      <label for="set-bbuild">Build</label><select id="set-bbuild" class="wide-select">${optHtml(BUILDS)}</select>
+      ${fld('set-btype', 'Type', `<select id="set-btype">${optHtml(BIKE_TYPES)}</select>`)}
+      ${fld('set-bmat', 'Frame', `<select id="set-bmat">${optHtml(MATERIALS)}</select>`)}
+      ${fld('set-bfront', 'Fork travel (mm)', `<input id="set-bfront" type="number" step="10" min="0" max="${MAX_TRAVEL}">`, '0 = rigid', 'bike-mtb')}
+      ${fld('set-brear', 'Rear travel (mm)', `<input id="set-brear" type="number" step="10" min="0" max="${MAX_TRAVEL}">`, '0 = hardtail', 'bike-mtb')}
+      ${fld('set-bbuild', 'Build', `<select id="set-bbuild">${optHtml(BUILDS)}</select>`, '', 'full')}
     </div>
+    ${numField(['bikeKg', 'Bike weight (kg)', 0.1])}
     <div class="help" id="bike-sum"></div>`;
 }
 /** Shows the bike settings. keepWeight: leave the weight field alone (it's being typed in). */
@@ -3198,10 +3200,9 @@ function garageHtml() {
   return `<div class="garage" id="garage" role="radiogroup" aria-label="Bikes"></div>
     <div class="help" id="gar-sum"></div>
     <div class="gar-edit">
-      <label for="set-gname">Name</label><input id="set-gname" class="wide-input" type="text" maxlength="40" autocomplete="off">
-      <div class="help"><a href="#" id="gar-remove">Remove this bike</a></div>
+      ${fld('set-gname', 'Name', '<input id="set-gname" type="text" maxlength="40" autocomplete="off">', '<a href="#" id="gar-remove">Remove this bike</a>', 'full')}
     </div>
-    <label for="set-gadd">Add a bike</label><select id="set-gadd" class="wide-select"></select>`;
+    ${fld('set-gadd', 'Add a bike', '<select id="set-gadd"></select>', '', 'full')}`;
 }
 function fillGarage() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
@@ -3310,24 +3311,23 @@ function renderSettings() {
   const extra = {
     rider: `${bikeHtml()}<div class="help">All settings are saved to your plan, so every device gets them.</div>`,
     garage: garageHtml(),
-    ride: `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
-      <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`,
-    gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${dtOptions()}</select>
+    ride: fld('set-guard', 'ERG low-cadence guard', '<select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>', 'If cadence drops under 40 rpm in ERG, the target eases to 60% until you\'re spinning again.'),
+    gearing: `${fld('set-dt', 'Drivetrain', `<select id="set-dt">${dtOptions()}</select>`, '', 'full')}
       <div class="dt-fields">
-        <label for="set-rings">Chainrings (teeth)</label><input id="set-rings" type="text" inputmode="numeric" autocomplete="off" placeholder="50/34">
-        <label for="set-cogs">Cogs (teeth)</label><input id="set-cogs" class="wide-input" type="text" inputmode="numeric" autocomplete="off" placeholder="11-12-13-14-15-17-19-21-24-27-30-34">
-        <label for="set-wheel">Wheel</label><select id="set-wheel">${WHEELS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>
+        ${fld('set-rings', 'Chainrings (teeth)', '<input id="set-rings" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="50/34">')}
+        ${fld('set-wheel', 'Wheel', `<select id="set-wheel">${WHEELS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>`)}
+        ${fld('set-cogs', 'Cogs (teeth)', '<input id="set-cogs" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="11-12-13-14-15-17-19-21-24-27-30-34">', '', 'full')}
       </div>
       <div class="help" id="dt-sum"></div>
-      <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
+      ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>')}
       <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>`,
-    trainer: `<label for="set-trainer">Trainer</label><select id="set-trainer" class="wide-select">${trainerOptions()}</select>
-      <label for="set-shift">Virtual shifting</label><select id="set-shift" class="wide-select"><option value="auto">In the trainer when it can (like Zwift)</option><option value="app">Always in Rodillo</option></select>
+    trainer: `${fld('set-trainer', 'Trainer', `<select id="set-trainer">${trainerOptions()}</select>`, '', 'full')}
+      ${fld('set-shift', 'Virtual shifting', '<select id="set-shift"><option value="auto">In the trainer when it can (like Zwift)</option><option value="app">Always in Rodillo</option></select>', '', 'full')}
       <div class="help" id="shift-line">${shiftLine()}</div>
-      <label for="set-gmax">Max grade (%)</label><input id="set-gmax" type="number" step="1" min="1" max="40">
-      <label for="set-gmin">Min grade (%)</label><input id="set-gmin" type="number" step="1" min="-30" max="0">
+      ${fld('set-gmax', 'Max grade (%)', '<input id="set-gmax" type="number" step="1" min="1" max="40">')}
+      ${fld('set-gmin', 'Min grade (%)', '<input id="set-gmin" type="number" step="1" min="-30" max="0">')}
       <div class="help">From the trainer's spec. Rodillo never sends a grade outside this range; past the max you'll see Max resistance. Brake trainers can't push you downhill: below 0% they just get as light as they can.</div>
-      ${numField(['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.'])}
+      ${numField(['realDev', 'Real development (m / crank rev)', 0.01, 1, 'What the trainer reports per pedal turn; learned while riding.', 0, 'full'])}
       <div class="help" id="tm-line">Slope correction learned from your trainer: ${((app.settings.gradeTrim || 0) * 100).toFixed(1)}% grade. <a href="#" id="tm-reset">Reset</a></div>`,
   };
   f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
@@ -3561,6 +3561,11 @@ setTheme(ls.get('theme', 'light'));
 $('#btn-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
 $('#btn-log').onclick = () => { setDevPop(false); $('#log-body').textContent = logLines.join('\n'); $('#log').classList.remove('hidden'); };
 $$('[data-close]').forEach((b) => (b.onclick = () => b.closest('.panel').classList.add('hidden')));
+// scrim: shown while any side panel is open; a click closes it (the builder has unsaved work, so only its Close does)
+const syncScrim = () => $('#scrim').classList.toggle('hidden', !$$('.panel').some((p) => !p.classList.contains('hidden')));
+const scrimObs = new MutationObserver(syncScrim);
+$$('.panel').forEach((p) => scrimObs.observe(p, { attributes: true, attributeFilter: ['class'] }));
+$('#scrim').onclick = () => { if (!builderOpen()) $$('.panel').forEach((p) => p.classList.add('hidden')); };
 $('#btn-diag').onclick = async () => {
   for (const d of [app.trainer, app.hr, ...app.controllers]) {
     if (!d?.listServices || d.state !== 'connected') continue;
