@@ -24,10 +24,10 @@
   --rule: #cdd2cc;       /* hairlines */
   --ink: #16181b;        /* text and the only "accent" */
   --muted: #5f666c;
-  --faint: #8d949a;
+  --faint: #8d949a;     /* decoration and disabled only, never text that carries meaning (2.9:1) */
 
-  --good: #15894a;
-  --warn: #a86f00;
+  --good: #127c43;
+  --warn: #946200;
   --bad: #cf2f3b;
   --info: var(--ink);     /* cadence chips and cadence traces: ink, no hue (zone hues mean zones only) */
   --info-line: var(--rule);
@@ -261,7 +261,7 @@ button.danger:hover { border-color: var(--bad); }
 .overview { margin: 0 0 24px; }
 .overview > .stat { position: relative; padding: 9px 16px 10px; }
 .overview .stat .v { font-size: 30px; }
-.overview .stat .v .of { font-size: 18px; color: var(--faint); font-weight: 750; }
+.overview .stat .v .of { font-size: 18px; color: var(--muted); font-weight: 750; }
 .overview .stat .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
 .overview .stat .l b { color: var(--ink); font-weight: 650; }
 .overview .stat .sub { font-size: inherit; margin: 0; }
@@ -550,7 +550,7 @@ table.ints { margin-bottom: 14px; }
 .rd-chart { display: block; width: 100%; overflow: visible; font-family: var(--num); }
 .rd-chart .rd-lane { font-family: "Archivo", system-ui, sans-serif; font-stretch: 100%; font-size: 12px; font-weight: 650; fill: var(--muted); }
 .rd-chart .rd-lane tspan { font-weight: 400; }
-.rd-chart .rd-tick { font-size: 11.5px; font-stretch: 80%; fill: var(--faint); }
+.rd-chart .rd-tick { font-size: 11.5px; font-stretch: 80%; fill: var(--muted); }
 .rd-chart .rd-strip rect { cursor: pointer; }
 .rd-tip { position: absolute; top: 0; left: 0; z-index: 3; padding: 8px 12px 9px; border-radius: 6px; background: var(--ink); color: var(--sheet);
   white-space: nowrap; font-size: 13px; line-height: 1.35; pointer-events: none; opacity: 0; transition: opacity .12s; box-shadow: 0 8px 18px -8px rgba(0,0,0,.45); }
@@ -817,7 +817,7 @@ table.ints { margin-bottom: 14px; }
 .d-meta { font-size: 13px; color: var(--muted); }
 .d-done { font-size: 13px; color: var(--good); font-weight: 650; }
 .d-missed { font-size: 13px; color: var(--muted); }
-.week-head button:disabled { opacity: .35; cursor: default; }
+.week-head button:disabled { cursor: default; color: var(--faint); background: transparent; }
 /* plan source notice (public copy / coach plan failed to load) */
 .plan-src { margin: 0 2px 10px; padding: 9px 14px; border-radius: var(--r); background: var(--sheet); border-left: 4px solid var(--warn); color: var(--muted); font-size: 14px; line-height: 1.45; }
 .plan-src b { color: var(--ink); }
@@ -833,7 +833,8 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .cal-dow { font-size: 13px; color: var(--muted); font-weight: 600; padding: 0 6px 2px; }
 .cal-cell { background: var(--sheet); border-radius: 4px; min-height: 96px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .cal-cell:hover { background: var(--hi); }
-.cal-cell.other { opacity: .38; }
+.cal-cell.other .cal-num, .cal-cell.other .cal-done { color: var(--muted); } /* other month: readable text, faded chips */
+.cal-cell.other .cal-chip { opacity: .38; }
 .cal-cell.today .cal-num { background: var(--ink); color: var(--sheet); border-radius: 3px; padding: 0 5px; align-self: flex-start; }
 .cal-cell.sel { box-shadow: inset 0 0 0 2px var(--ink); }
 .cal-num { font-size: 16px; font-weight: 800; }

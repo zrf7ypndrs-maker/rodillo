@@ -1110,7 +1110,8 @@ function svgLoad(series) {
   const bands = FORM_BANDS.map(([l, h, name], j) => `<rect x="30" y="${f(B(h))}" width="${W - 40}" height="${f(B(l) - B(h))}" fill="${INK}" opacity="${j % 2 ? 0.045 : 0.0}"/>`
     + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${l < now && now <= h ? INK : MUTED}" font-size="${11 * k}" font-weight="${l < now && now <= h ? 700 : 400}">${name}</text>`).join('');
   // legend stacked in the label column, so it can never sit on the lines
-  const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill}" font-size="${11 * k}">${txt}</text>`;
+  // legend words in ink (muted for the note); only the swatch carries the data color (cyan text is 2.8:1 on the sheet)
+  const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill === MUTED ? MUTED : INK}" font-size="${11 * k}">${txt.replace('&#9632;', `<tspan fill="${fill}">&#9632;</tspan>`)}</text>`;
   const legend = lg(0, FITNESS, '&#9632; Fitness') + lg(1, FATIGUE, '&#9632; Fatigue') + (ph ? '' : lg(2.25, MUTED, 'Form = fitness') + lg(3.25, MUTED, 'minus fatigue'));
   const bw = Math.max(1, (PR - 30) / n - 1);
   const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
