@@ -407,26 +407,37 @@ table.ints { margin-bottom: 14px; }
 .settings-form .help a { color: inherit; }
 .settings-form .help { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 .settings-form > .help, .settings-form .dt-fields > .help, .settings-form .bike-fields > .help { margin-top: -6px; }
-/* Settings > Garage: one row per bike, the one in use inverted ("now" is ink) */
-.settings-form .garage { grid-column: 1 / -1; display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
-.settings-form .gar-edit { display: contents; }
-.gar-row { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-areas: "dot name" ". line"; gap: 2px 10px; align-items: center;
-  text-align: left; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--rule); background: transparent; color: var(--ink); font: inherit; cursor: pointer; border-radius: 0; }
-.gar-dot { grid-area: dot; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); box-sizing: border-box; }
-.gar-name { grid-area: name; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
-.gar-line { grid-area: line; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.gar-row.on { background: var(--ink); color: var(--sheet); }
-.gar-row.on .gar-line { color: var(--inv-muted); }
-.gar-row.on .gar-dot { border-color: var(--sheet); background: var(--sheet); box-shadow: inset 0 0 0 2px var(--ink); }
-@media (hover: hover) { .gar-row:not(.on):hover { background: var(--sheet2); } }
-.gar-row:focus-visible, .gar-row.focus { outline: 2px solid var(--ink); outline-offset: -2px; }
-.settings-form .gar-remove { margin-top: 10px; }
-.gar-item { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); }
-.gar-item .gar-row { flex: 1; min-width: 0; border-bottom: 0; }
-.gar-item.on { background: var(--ink); }
-.gar-more { flex: none; background: transparent; border: 0; border-radius: 0; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 0 14px; cursor: pointer; }
-.gar-item.on .gar-more { color: var(--inv-muted); }
-@media (hover: hover) { .gar-more:hover { color: var(--ink); } .gar-item.on .gar-more:hover { color: var(--sheet); } .gar-item:not(.on):hover { background: var(--sheet2); } }
+/* Garage: a centered popup (not a side drawer) with a square tile per bike and a "+" tile (Nov 12, Agustín).
+   It keeps the .panel class so the scrim, Close, Esc / B and the pause screen work as for the other panels. */
+#garage.panel { top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 18px 44px var(--shadow); }
+#garage.panel:not(.hidden) { animation: modal-fade .18s ease-out, gar-pop .24s cubic-bezier(.2, .7, .2, 1); }
+@keyframes gar-pop { from { transform: translate(-50%, -50%) scale(.95); } }
+@media (prefers-reduced-motion: reduce) { #garage.panel:not(.hidden) { animation: none; } }
+.settings-form .gar-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.gar-tile, .gar-add { aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); overflow: hidden; transition: transform .4s cubic-bezier(.3, 1.6, .5, 1), background .2s ease; }
+.gar-pick, .gar-add { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 14px 12px 6px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: center; cursor: pointer; }
+.gar-tile .bike-art, .gar-hero .bike-art { width: 82%; height: auto; flex: none; margin-bottom: 6px; }
+.gar-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; line-height: 1.2; }
+.gar-line { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gar-tile { position: relative; }
+.gar-riding { position: absolute; top: 10px; left: 10px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--sheet); color: var(--ink); }
+.gar-more { flex: none; background: transparent; border: 0; border-radius: 0; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 8px 10px 12px; cursor: pointer; }
+.gar-tile.on { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
+.gar-tile.on .gar-line, .gar-tile.on .gar-more { color: var(--inv-muted); }
+.gar-tile.gone { border-style: dashed; background: transparent; }
+.gar-tile.gone .bike-art { opacity: .35; }
+.gar-add { border: 1.5px dashed var(--faint); background: transparent; padding: 14px 12px; }
+.gar-plus { font-size: 64px; font-weight: 300; line-height: .9; margin-bottom: 8px; }
+.gar-pick:focus-visible, .gar-add:focus-visible, .gar-pick.focus, .gar-add.focus { outline: 2px solid var(--ink); outline-offset: -4px; }
+.gar-tile.on .gar-pick:focus-visible { outline-color: var(--sheet); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .gar-tile:hover, .gar-add:hover { transform: scale(1.03); }
+  .gar-tile:not(.on):hover, .gar-add:hover { background: var(--sheet2); }
+  .gar-more:hover { color: var(--ink); } .gar-tile.on .gar-more:hover { color: var(--sheet); }
+}
+.settings-form .gar-grid + .help { margin-top: 2px; }
+.settings-form .gar-hero { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
+.gar-hero .bike-art { width: min(300px, 70%); }
 .settings-form .gar-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 .settings-form .gar-acts .help { margin: 0; }
 .settings-form .gar-head { grid-column: 1 / -1; margin-bottom: -6px; }
@@ -1336,6 +1347,14 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .card { padding: 14px; }
   .ride-table { overflow-x: auto; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }
+  #garage.panel { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); padding: 14px; }
+  .settings-form .gar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .gar-name { font-size: 13px; } .gar-plus { font-size: 48px; margin-bottom: 4px; }
+  .gar-pick, .gar-add { padding: 10px 8px 4px; gap: 2px; }
+  .gar-tile .bike-art { width: 66%; margin-bottom: 3px; }
+  .gar-line { font-size: 11.5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gar-more { font-size: 12px; padding: 4px 8px 9px; }
+  .gar-riding { top: 7px; left: 7px; font-size: 10.5px; padding: 1px 7px; }
   .settings-form { grid-template-columns: 1fr; gap: 14px; }
   .settings-form input, .settings-form select { height: 42px; font-size: 16px; }
   .set-tabs { gap: 15px; }

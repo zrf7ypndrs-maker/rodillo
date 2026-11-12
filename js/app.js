@@ -6,6 +6,7 @@ import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
+import { bikeArt, bikeKind } from './bikeart.js?v=202611102147';
 import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
@@ -3344,23 +3345,29 @@ function weightText(b) {
   const travel = t.fam === 'mtb' ? `, ${s.front || 'rigid'}${s.front ? ' mm' : ''} / ${s.rear || 'hardtail'}${s.rear ? ' mm' : ''}` : '';
   return `${b.bikeKg.toFixed(1)} kg, estimated: ${MATERIALS[s.material].name.toLowerCase()} ${t.name.toLowerCase()}${travel}, ${BUILDS[s.build].name.split(' (')[0].toLowerCase()} build`;
 }
+const bikeSpecOf = (b) => (b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain]);
+const artFor = (b) => bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)));
 function garListHtml() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
-  const rows = g.length ? g.map((b) => {
+  const tiles = g.map((b) => {
     const on = cur?.id === b.id;
-    return `<div class="gar-item${on ? ' on' : ''}"><button type="button" class="gar-row${on ? ' on' : ''}" data-bike="${esc(b.id)}" role="radio" aria-checked="${on}">
-      <span class="gar-dot"></span><span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></button>
-      <button type="button" class="gar-more" data-details="${esc(b.id)}">See details</button></div>`;
-  }).join('') : '<div class="gar-empty">No bikes yet.</div>';
-  const have = new Set(g.map((b) => b.model).filter(Boolean));
-  const back = Object.entries(BIKE_MODELS).filter(([k]) => !have.has(k));
-  const full = g.length >= MAX_BIKES;
-  return `<div class="garage" role="radiogroup" aria-label="Bikes">${rows}</div>
-    <div class="help">${cur ? `Riding the ${esc(cur.name)}.` : 'Pick the bike you are riding.'} Slope mode uses its gearing, shifting and weight from the next ride; ERG ignores them.</div>
-    <div class="gar-acts">
-      <button type="button" class="small" id="gar-custom"${full ? ' disabled' : ''}>Custom bike</button>
-      ${back.map(([k, m]) => `<button type="button" class="ghost small" data-addmodel="${k}"${full ? ' disabled' : ''}>Add ${esc(m.name)}</button>`).join('')}
+    return `<div class="gar-tile${on ? ' on' : ''}">
+      <button type="button" class="gar-pick" data-bike="${esc(b.id)}" role="radio" aria-checked="${on}" aria-label="Ride the ${esc(b.name)}">
+        ${artFor(b)}<span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span>${on ? '<span class="gar-riding">Riding</span>' : ''}
+      </button>
+      <button type="button" class="gar-more" data-details="${esc(b.id)}">See details</button>
     </div>`;
+  });
+  // built-in bikes that were removed can come back
+  const have = new Set(g.map((b) => b.model).filter(Boolean));
+  const full = g.length >= MAX_BIKES;
+  if (!full) for (const [k, m] of Object.entries(BIKE_MODELS)) if (!have.has(k)) {
+    const b = bikeFromModel(k);
+    tiles.push(`<div class="gar-tile gone"><button type="button" class="gar-pick" data-addmodel="${k}">${artFor(b)}<span class="gar-name">${esc(m.name)}</span><span class="gar-line">Add it back to the garage</span></button></div>`);
+  }
+  if (!full) tiles.push('<button type="button" class="gar-add" id="gar-custom" aria-label="Custom bike"><span class="gar-plus" aria-hidden="true">+</span><span class="gar-name">Custom bike</span><span class="gar-line">Your own gearing and weight</span></button>');
+  return `<div class="gar-grid" role="radiogroup" aria-label="Bikes">${tiles.join('')}</div>
+    <div class="help">${cur ? `Riding the ${esc(cur.name)}.` : 'Pick the bike you are riding.'} Slope mode uses its gearing, shifting and weight from the next ride; ERG ignores them.</div>`;
 }
 function garDetailsHtml(b) {
   const d = b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain];
@@ -3378,6 +3385,7 @@ function garDetailsHtml(b) {
   rows.push(['Shifting', shiftText(b, d)], ['Weight', weightText(b)]);
   if (m?.note) rows.push(['Source', m.note]);
   return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Back</button></div>
+    <div class="gar-hero">${artFor(b)}</div>
     <div class="section gar-title">${esc(b.name)}</div>
     <dl class="gar-dl">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     <div class="gar-acts">
@@ -3388,6 +3396,7 @@ function garDetailsHtml(b) {
 }
 function garCustomHtml() {
   return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Cancel</button></div>
+    <div class="gar-hero" id="gar-art">${artFor(draft)}</div>
     <div class="section gar-title">Custom bike</div>
     ${fld('set-gname', 'Name', `<input id="set-gname" type="text" maxlength="40" autocomplete="off" value="${esc(draft.name)}">`, '', 'full')}
     <div class="section">Gearing</div>
@@ -3455,13 +3464,14 @@ async function removeGarageBike(id) {
       if (draft.bikeSpec && Math.abs(estimateBikeKg(draft.bikeSpec) - draft.bikeKg) > 0.05) { draft.bikeSpec = null; fillBike(true); }
     }
     $('#gar-err') && ($('#gar-err').textContent = '');
+    if ($('#gar-art')) $('#gar-art').innerHTML = artFor(draft); // the drawing follows the gearing and bike type
   };
   // tidy the typed teeth once the field is left (only when they were valid)
   f.onchange = (e) => { if (draft && ['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
   f.onclick = (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.classList.contains('gar-row')) { Object.assign(app.settings, selectBike(app.settings, t.dataset.bike)); saveSettings(); renderGarage({ mode: 'list' }); }
+    if (t.classList.contains('gar-pick') && t.dataset.bike) { Object.assign(app.settings, selectBike(app.settings, t.dataset.bike)); saveSettings(); renderGarage({ mode: 'list' }); }
     else if (t.dataset.details) renderGarage({ mode: 'details', id: t.dataset.details });
     else if (t.id === 'gar-back') { draft = null; renderGarage({ mode: 'list' }); }
     else if (t.id === 'gar-custom') startCustom();
