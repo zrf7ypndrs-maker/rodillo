@@ -147,6 +147,7 @@ export function buildRide(samples, meta) {
     compliance: work.length ? { avg: Math.round(mean(work.map((x) => x.pct))), min: Math.min(...work.map((x) => x.pct)), reps: work.length } : null,
     slopeSec: samples.filter((s) => s.grade).length,
     ...(meta.bike ? { bike: meta.bike } : {}),
+    ...(meta.gearing ? { gearing: meta.gearing } : {}),
   };
   // steps as ridden when they differ from the workout file (open-ended ramp test), so other devices draw them right
   const segs = meta.segsChanged && meta.segs

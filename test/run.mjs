@@ -34,19 +34,28 @@ test('FTMS indoor bike data', () => {
 
 test('settings changed mid-ride (pause screen): new bike applies, gear kept close, FTP and trim stay', () => {
   const trainer = new SimTrainer();
-  const s = new Session({ trainer, settings: { ftp: 200, drivetrain: 'mtb-1x12-sram-32', bikeKg: 13.1, gradeTrim: 0.03 } });
-  const ratio = s.gb.ratio;
-  s.applySettings({ ftp: 250, drivetrain: 'road-2x12-shimano-52-36-1134', bikeKg: 8.1, gradeTrim: 0 });
+  const s = new Session({ trainer, settings: { ftp: 200, drivetrain: 'mtb-1x12-sram-32', bikeKg: 13.1, wheelCirc: 2.32, gradeTrim: 0.03 } });
+  const dev = s.gb.ratio * s.s.wheelCirc;
+  s.applySettings({ ftp: 250, drivetrain: 'road-2x12-shimano-52-36-1134', bikeKg: 8.1, wheelCirc: 2.105, gradeTrim: 0 });
   assert.equal(s.s.bikeKg, 8.1);
   assert.equal(s.bike.p.bikeKg, 8.1); // physics reads the same settings object
   assert.equal(s.gb.id, 'road-2x12-shimano-52-36-1134');
-  assert.equal(s.s.wheelCirc, s.gb.wheel);
-  assert.ok(Math.abs(s.gb.ratio - ratio) < 0.25, `ratio ${ratio} -> ${s.gb.ratio}`);
+  assert.equal(s.s.wheelCirc, 2.105); // the bike's wheel, not the gearing's
+  assert.ok(Math.abs(s.gb.ratio * 2.105 - dev) < 0.5, `development ${dev} -> ${s.gb.ratio * 2.105}`);
   assert.equal(s.s.ftp, 200);
   assert.equal(s.s.gradeTrim, 0.03);
   const gb = s.gb;
   s.applySettings({ bikeKg: 9 }); // same drivetrain: the gear doesn't move
   assert.equal(s.gb, gb);
+  // gearing switched mid-ride (Nov 12): Zwift 24 rides on a road wheel whatever the bike, and the new gear is
+  // the one with the closest development
+  const before = s.gb.ratio * s.s.wheelCirc;
+  s.applySettings({ drivetrain: 'zwift-24', wheelCirc: 2.32 });
+  assert.equal(s.s.wheelCirc, 2.105);
+  assert.ok(Math.abs(s.gb.ratio * 2.105 - before) < 0.3, `zwift ${before} -> ${s.gb.ratio * 2.105}`);
+  s.applySettings({ drivetrain: 'mtb-1x12-sram-t-32' }); // back to a real 1x: the MTB wheel again
+  assert.equal(s.s.wheelCirc, 2.32);
+  assert.ok(Math.abs(s.gb.ratio * 2.32 - before) < 0.6, `mtb ${before} -> ${s.gb.ratio * 2.32}`);
 });
 
 test('FTMS commands', () => {
@@ -361,59 +370,95 @@ import { BIKE_PRESETS, BIKE_TYPES, presetSpec, cleanSpec, estimateBikeKg, bikePr
   console.log('ok - bike weight presets and estimate');
 }
 
-import { BIKE_MODELS, DEFAULT_GARAGE, garageOf, currentBike, selectBike, storeSetup, cleanBike, newBikeId, bikeLine, bikeFromModel, bikeFromSettings } from '../js/engine/garage.js';
+import { BIKE_MODELS, DEFAULT_GARAGE, garageOf, currentBike, selectBike, cleanBike, newBikeId, bikeLine, bikeFromModel, BUILTIN_GEARINGS, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, presetStyle, gearingLine, gearingName, cleanGearing, migrateGarage } from '../js/engine/garage.js';
 import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
 {
-  // built-in bikes: real drivetrains and maker's weights
-  for (const [k, m] of Object.entries(BIKE_MODELS)) { assert.ok(DTS[m.drivetrain], k); assert.ok(m.bikeKg > 6 && m.bikeKg < 20, k); }
+  // built-in bikes: real drivetrains (their stock gearing), maker's weights, tire sizes
+  for (const [k, m] of Object.entries(BIKE_MODELS)) { assert.ok(DTS[m.drivetrain], k); assert.ok(m.bikeKg > 6 && m.bikeKg < 20, k); assert.ok(m.wheel > 2 && m.wheel < 2.4, k); }
   const lux = DTS['mtb-1x12-sram-t-32'], aero = DTS['road-2x12-shimano-52-36-1134'];
   assert.deepEqual(lux.rings, [32]); assert.deepEqual(lux.cogs, [10, 12, 14, 16, 18, 21, 24, 28, 32, 38, 44, 52]); assert.equal(lux.wheel, 2.32);
   assert.deepEqual(aero.rings, [36, 52]); assert.equal(aero.cogs.at(-1), 34);
+  // a bike is weight and wheel (Nov 12)
   assert.equal(DEFAULT_GARAGE.length, 2);
-  assert.equal(bikeLine(DEFAULT_GARAGE[0]), '1x12, 32 + 10-52 \u00b7 13.1 kg');
-  assert.equal(bikeLine(DEFAULT_GARAGE[1]), '2x12, 52/36 + 11-34 \u00b7 8.1 kg');
+  assert.equal(bikeLine(DEFAULT_GARAGE[0]), '13.1 kg · 29 x 2.4');
+  assert.equal(bikeLine(DEFAULT_GARAGE[1]), '8.1 kg · 700 x 25c');
+  assert.ok(!('drivetrain' in DEFAULT_GARAGE[0]));
   // no garage in settings = the built-in one; an emptied garage stays empty; junk and duplicates are dropped
   assert.equal(garageOf({}).length, 2);
   assert.equal(garageOf({ garage: [] }).length, 0);
-  assert.equal(garageOf({ garage: [DEFAULT_GARAGE[0], DEFAULT_GARAGE[0], { id: 'x', drivetrain: 'nope' }, null] }).length, 1);
-  assert.equal(cleanBike({ id: 'c', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18], wheel: 2.2 }, bikeKg: 11.04 }).bikeKg, 11);
-  assert.equal(cleanBike({ id: 'c', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10] } }), null);
-  // picking a bike sets gearing and weight; '' or an unknown id puts no bike in use
-  let st = { drivetrain: 'road-2x12-shimano-50-34', bikeKg: 9, bikeSpec: { type: 'road' }, garage: null, bike: '' };
+  assert.equal(garageOf({ garage: [DEFAULT_GARAGE[0], DEFAULT_GARAGE[0], { name: 'no id' }, null] }).length, 1);
+  assert.equal(cleanBike({ id: 'c', bikeKg: 11.04, wheel: 2.2 }).bikeKg, 11);
+  assert.equal(cleanBike({ id: 'c', wheel: 9 }).wheel, 2.105); // nonsense wheel: road
+  // older bikes (with gearing) take their wheel from it
+  assert.equal(cleanBike({ id: 'c', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18], wheel: 2.2 } }).wheel, 2.2);
+  assert.equal(cleanBike({ id: 'c', drivetrain: 'mtb-1x12-shimano-32' }).wheel, 2.32);
+  // picking a bike sets weight and wheel, never the gearing; '' or an unknown id puts no bike in use
+  let st = { drivetrain: 'zwift-24', shiftStyle: 'sram', bikeKg: 9, bikeSpec: { type: 'road' }, wheelCirc: 2.105, garage: null, bike: '' };
   assert.equal(currentBike(st), null);
   st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
-  assert.equal(st.drivetrain, 'mtb-1x12-sram-t-32'); assert.equal(st.bikeKg, 13.1); assert.equal(st.bikeSpec, null);
+  assert.equal(st.bikeKg, 13.1); assert.equal(st.bikeSpec, null); assert.equal(st.wheelCirc, 2.32);
+  assert.equal(st.drivetrain, 'zwift-24'); assert.equal(st.shiftStyle, 'sram');
   assert.equal(currentBike(st).name, 'Canyon Lux Trail CF 7');
   assert.deepEqual(selectBike(st, 'nope'), { bike: '' });
-  // edits while a bike is in use save to that bike only
-  st.bikeKg = 13.4; st.drivetrain = 'mtb-1x12-sram-t-34'; st.shiftStyle = 'right';
-  st.garage = storeSetup(st);
-  assert.equal(st.garage[0].bikeKg, 13.4); assert.equal(st.garage[0].drivetrain, 'mtb-1x12-sram-t-34');
-  assert.equal(st.garage[1].bikeKg, 8.1);
-  st = { ...st, ...selectBike(st, 'canyon-aeroad-cf-slx-7-di2') };
-  assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1); assert.equal(st.shiftStyle, 'shimano');
-  st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
-  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'right');
-  // 1x bikes shift on one side; older 2x styles on a 1x read as the right side, a side on a 2x as SRAM
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'mtb' }).shiftStyle, 'right');
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'sram' }).shiftStyle, 'right');
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'left' }).shiftStyle, 'left');
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[1], shiftStyle: 'left' }).shiftStyle, 'sram');
-  // bikes saved before shifting was per bike get their model's style (or SRAM)
-  assert.equal(cleanBike({ id: 'a', model: 'canyon-aeroad-cf-slx-7-di2', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'shimano');
-  assert.equal(cleanBike({ id: 'b', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'sram');
-  // a custom bike starts from the current setup
-  const cb = bikeFromSettings({ drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 40, 44], wheel: 2.2 }, shiftStyle: 'shimano', bikeKg: 9.6 }, 'bike', 'Gravel');
-  assert.equal(cb.drivetrain, 'custom'); assert.equal(cb.shiftStyle, 'right'); assert.equal(bikeLine(cb), '1x12, 40 + 10-44 \u00b7 9.6 kg');
-  assert.deepEqual(storeSetup({ ...st, bike: '' }), garageOf(st));
   // ids
   assert.equal(newBikeId(DEFAULT_GARAGE), 'bike');
   assert.equal(newBikeId([{ id: 'bike' }, { id: 'bike-2' }]), 'bike-3');
   assert.equal(bikeFromModel('nope'), null);
-  // a ride on the Lux Trail shifts on its 1x12 (start near 2.2: 32x14)
-  const gb = new GB(selectBike({}, 'canyon-lux-trail-cf-7').drivetrain);
-  assert.equal(gb.label, '32x14'); assert.equal(gb.isDouble, false); assert.equal(gb.nRear, 12);
   console.log('ok - bike garage');
+}
+{
+  // gearings: the two Canyons' stock drivetrains and Zwift's virtual 24, then the rider's own
+  assert.deepEqual(BUILTIN_GEARINGS.map((g) => g.id), ['canyon-lux-trail-cf-7', 'canyon-aeroad-cf-slx-7-di2', 'zwift-24']);
+  assert.equal(gearingLine(BUILTIN_GEARINGS[0]), '1x12, 32 + 10-52');
+  assert.equal(gearingLine(BUILTIN_GEARINGS[1]), '2x12, 52/36 + 11-34');
+  assert.equal(gearingLine(BUILTIN_GEARINGS[2]), '24 virtual gears');
+  let st = { drivetrain: 'road-2x12-shimano-50-34', shiftStyle: 'sram', gearings: null };
+  assert.equal(gearingsOf(st).length, 3);
+  assert.equal(currentGearing(st), null);
+  assert.equal(gearingName(st), 'Shimano 12s, 50/34 + 11-34'); // a loose preset goes by its own name
+  // picking one sets teeth and shifting
+  st = { ...st, ...selectGearing(st, 'canyon-lux-trail-cf-7') };
+  assert.equal(st.drivetrain, 'mtb-1x12-sram-t-32'); assert.equal(st.shiftStyle, 'right');
+  assert.equal(currentGearing(st).id, 'canyon-lux-trail-cf-7'); assert.equal(gearingName(st), 'Lux Trail CF 7');
+  st = { ...st, ...selectGearing(st, 'canyon-aeroad-cf-slx-7-di2') };
+  assert.equal(st.shiftStyle, 'shimano');
+  assert.deepEqual(selectGearing(st, 'nope'), {});
+  // presets from the full list: the brand's style on a 2x, the current side on a 1x
+  assert.equal(presetStyle('road-2x12-sram-48-35', 'shimano'), 'sram');
+  assert.equal(presetStyle('gravel-2x12-grx-48-31', 'sram'), 'shimano');
+  assert.equal(presetStyle('mtb-1x12-shimano-32', 'left'), 'left');
+  assert.equal(presetStyle('mtb-1x12-shimano-32', 'shimano'), 'right');
+  assert.deepEqual(selectPreset(st, 'road-2x11-shimano-52-36'), { drivetrain: 'road-2x11-shimano-52-36', customDrivetrain: null, shiftStyle: 'shimano' });
+  // your own gearing: custom teeth, its own shifting, matched by teeth; a 2x style on a 1x reads as the right side
+  const mine = { id: 'gearing', name: 'Gravel 1x', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 40, 44] }, shiftStyle: 'shimano' };
+  assert.equal(cleanGearing(mine).shiftStyle, 'right');
+  assert.equal(cleanGearing({ ...mine, customDrivetrain: { rings: [40], cogs: [10] } }), null);
+  st = { ...st, gearings: [mine, mine, { ...mine, id: 'zwift-24' }] }; // duplicates and built-in ids are dropped
+  assert.equal(myGearings(st).length, 1);
+  st = { ...st, ...selectGearing(st, 'gearing') };
+  assert.equal(st.drivetrain, 'custom'); assert.equal(currentGearing(st).id, 'gearing'); assert.equal(gearingLine(st), '1x12, 40 + 10-44');
+  assert.equal(new GB(st.customDrivetrain).label, '40x18'); // rides like any drivetrain
+  console.log('ok - gearings');
+}
+{
+  // bikes saved before the split (Nov 12): custom bikes' gearings become the rider's own, bikes keep weight and wheel
+  const old = {
+    drivetrain: 'custom', customDrivetrain: { rings: [38], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 50], wheel: 2.2 }, shiftStyle: 'left', bike: 'bike',
+    garage: [
+      { id: 'canyon-lux-trail-cf-7', name: 'Canyon Lux Trail CF 7', model: 'canyon-lux-trail-cf-7', drivetrain: 'mtb-1x12-sram-t-32', customDrivetrain: null, shiftStyle: 'right', bikeKg: 13.1, bikeSpec: null },
+      { id: 'bike', name: 'Gravel', drivetrain: 'custom', customDrivetrain: { rings: [38], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 50], wheel: 2.2 }, shiftStyle: 'left', bikeKg: 9.6, bikeSpec: null },
+      { id: 'bike-2', name: 'Zwifty', drivetrain: 'zwift-24', shiftStyle: 'sram', bikeKg: 8, bikeSpec: null },
+    ],
+  };
+  const m = migrateGarage(old);
+  assert.equal(m.gearings.length, 1);
+  assert.deepEqual(m.gearings[0], { id: 'g-bike', name: 'Gravel', drivetrain: 'custom', customDrivetrain: { rings: [38], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 50], wheel: 2.2 }, shiftStyle: 'left' });
+  assert.deepEqual(m.garage.map((b) => [b.id, b.wheel, 'drivetrain' in b]), [['canyon-lux-trail-cf-7', 2.32, false], ['bike', 2.2, false], ['bike-2', 2.105, false]]);
+  const after = { ...old, ...m };
+  assert.equal(currentGearing(after).id, 'g-bike'); // the gearing in use doesn't change
+  assert.equal(migrateGarage(after), null); // once is enough
+  assert.equal(migrateGarage({ garage: null }), null);
+  console.log('ok - garage moved to the bike / gearing split');
 }
 import { cassette, simpleSpec, wheelFor, GEAR_COUNTS, COG_MINS, COG_MAXES } from '../js/engine/drivetrain.js';
 {
@@ -536,8 +581,8 @@ import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../
   // broken custom spec or unknown id falls back to the default drivetrain
   assert.equal(resolveDrivetrain({ drivetrain: 'custom', customDrivetrain: { rings: [], cogs: [] } }), 'road-2x12-shimano-50-34');
   assert.equal(resolveDrivetrain({ drivetrain: 'nope' }), 'road-2x12-shimano-50-34');
-  const s = new Session({ trainer: new SimTrainer(), hr: null, settings: { drivetrain: 'custom', customDrivetrain: mine } });
-  assert.equal(s.gb.id, 'custom'); assert.equal(s.s.wheelCirc, 2.32);
+  const s = new Session({ trainer: new SimTrainer(), hr: null, settings: { drivetrain: 'custom', customDrivetrain: mine, wheelCirc: 2.2 } });
+  assert.equal(s.gb.id, 'custom'); assert.equal(s.s.wheelCirc, 2.2); // the wheel is the bike's (Nov 12)
   console.log('ok - custom chainrings and cogs');
 }
 {

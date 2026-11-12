@@ -199,9 +199,17 @@ export class Gearbox {
   toggleFront() { return this.isDouble ? this.shiftFront(this.front === 0 ? 1 : -1) : false; }
 }
 
-/** Every gear of a drivetrain as { label, dev } (development in metres per crank turn), easiest first. */
-export function gearList(id) {
-  const gb = new Gearbox(id), w = gb.wheel;
+/** The wheel a ride uses (m): the bike's, except Zwift's virtual gears, which feel the same on every bike. */
+export function rideWheel(d, wheelCirc) {
+  if (d?.seq) return ROAD;
+  const w = Number(wheelCirc);
+  return w >= 1.5 && w <= 2.6 ? w : d?.wheel || ROAD;
+}
+
+/** Every gear of a drivetrain as { label, dev } (development in metres per crank turn), easiest first.
+ *  wheelCirc: the bike's wheel (the drivetrain's own when not given). */
+export function gearList(id, wheelCirc) {
+  const gb = new Gearbox(id), w = rideWheel(gb.d, wheelCirc);
   const out = gb.seq ? gb.d.seq.map((r, i) => ({ label: String(i + 1), dev: r * w }))
     : gb.d.rings.flatMap((ring) => gb.d.cogs.map((cog) => ({ label: `${ring}\u00d7${cog}`, dev: (ring / cog) * w })));
   return out.sort((a, b) => a.dev - b.dev);

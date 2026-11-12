@@ -3,7 +3,7 @@
 
 import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
 import { flatten, retime, segTarget, fillMessage } from './workout.js?v=202611102147';
-import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain } from './drivetrain.js?v=202611102147';
+import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain, rideWheel } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
 import { ZP_WHEEL } from '../ble/zwifthub.js?v=202611102147';
 
@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
   bikeSpec: null,        // { type, material, front, rear, build } (engine/bikes.js) when bikeKg is estimated; null = typed
   cda: 0.32,
   crr: 0.004,
-  wheelCirc: 2.105,
+  wheelCirc: 2.105,       // the bike's wheel (m), set by the bike in use (engine/garage.js); Zwift 24 ignores it
   realDev: 5.1,          // metres per crank rev the trainer sees (learned)
   trainerMassKg: 75,     // mass the trainer assumes in sim mode (feedforward)
   maxSendGrade: 0.25,    // grade range sent to the trainer; Settings > Trainer sets it from the model's spec
@@ -25,14 +25,15 @@ export const DEFAULT_SETTINGS = {
   trainerModel: '',      // key in engine/trainers.js, 'custom', or '' = not chosen yet (picked from the name on first connect)
   gradeScale: 1.0,       // 1.0 = full realism (Zwift default is 0.5)
   drivetrain: DEFAULT_DRIVETRAIN, // preset id in engine/drivetrain.js, or 'custom'
-  customDrivetrain: null,         // { rings, cogs, wheel } when drivetrain is 'custom'
-  shiftStyle: 'sram',     // 'sram' | 'shimano'
+  customDrivetrain: null,         // { rings, cogs, wheel } when drivetrain is 'custom' (its wheel is not used)
+  shiftStyle: 'sram',     // 'sram' | 'shimano' (2x), 'right' | 'left' (1x: the shifter's side)
+  gearings: null,         // the rider's own gearings (engine/garage.js); built-ins aren't stored
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
   riderName: '',         // the coach uses it in messages ({name})
   trainerShifting: 'auto', // 'auto' = in the trainer when it speaks the Zwift protocol, else in Rodillo; 'app' = always Rodillo
   garage: null,          // saved bikes (engine/garage.js); null = the built-in garage, not edited yet
-  bike: '',              // id of the garage bike in use ('' = none: drivetrain and weight as set)
+  bike: '',              // id of the garage bike in use ('' = none: weight and wheel as set)
   climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
 };
 
@@ -52,7 +53,8 @@ export class Session extends Emitter {
     this.hr = hr;
     this.s = { ...DEFAULT_SETTINGS, ...settings };
     this.gb = new Gearbox(resolveDrivetrain(this.s));
-    this.s.wheelCirc = this.gb.wheel;
+    this.bikeWheel = this.s.wheelCirc; // the bike's; this.s.wheelCirc is what the ride uses (Zwift 24: road)
+    this.s.wheelCirc = rideWheel(this.gb.d, this.bikeWheel);
     this.workout = workout;
     this.segs = workout ? flatten(workout, this.s.ftp) : null;
     this.name = name || workout?.name || 'Free ride';
@@ -102,14 +104,17 @@ export class Session extends Emitter {
   }
   toggleErg() { this.ergOff = !this.ergOff; this.emit('change'); }
   /** Settings changed mid-ride (pause screen > Settings / Garage): weights, gearing and trainer limits apply at
-   *  once. A new drivetrain starts in the gear closest to the current ratio. FTP and the learned grade trim /
+   *  once (gearing can change mid-ride). A new drivetrain starts in the gear closest to the current development. FTP and the learned grade trim /
    *  development stay as the ride started (the workout's watts were set from that FTP). */
   applySettings(next) {
     const keep = { ftp: this.s.ftp, gradeTrim: this.s.gradeTrim, realDev: this.s.realDev };
-    const before = JSON.stringify(resolveDrivetrain(this.s));
+    const before = JSON.stringify(resolveDrivetrain(this.s)), dev = this.gb.ratio * this.s.wheelCirc;
     Object.assign(this.s, next, keep);
+    this.bikeWheel = next.wheelCirc ?? this.bikeWheel;
     if (JSON.stringify(resolveDrivetrain(this.s)) !== before) {
-      const ratio = this.gb.ratio, gb = new Gearbox(resolveDrivetrain(this.s));
+      // land on the gear with the closest development (ratio x wheel), so the pedals feel about the same
+      const gb = new Gearbox(resolveDrivetrain(this.s));
+      const ratio = dev / rideWheel(gb.d, this.bikeWheel);
       let best = null;
       for (let f = 0; f < (gb.isDouble ? gb.d.rings.length : 1); f++) {
         if (gb.isDouble) gb.front = f;
@@ -120,7 +125,7 @@ export class Session extends Emitter {
       gb.front = best.f; gb.rear = best.r;
       this.gb = gb;
     }
-    this.s.wheelCirc = this.gb.wheel;
+    this.s.wheelCirc = rideWheel(this.gb.d, this.bikeWheel);
     this.emit('change');
   }
   skip() {
