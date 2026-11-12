@@ -92,7 +92,7 @@ ok('.FIT from a synced ride document');
 
 // ---- end of ride: effort scored against the plan, done bar
 {
-  const w5 = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4.json', import.meta.url)));
+  const w5 = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4-110.json', import.meta.url)));
   const sg = flatten(w5, ftp), T0 = Date.parse('2026-11-12T18:00:00');
   // rider drops effort to 95% on reps 4 and 5 and holds the lowered target exactly
   const sm = [];
@@ -107,7 +107,7 @@ ok('.FIT from a synced ride document');
   const reps = d.intervals.filter((x) => x.work && x.rep);
   assert.deepEqual(reps.map((x) => x.pct), [100, 100, 100, 95, 95]);
   assert.deepEqual(reps.map((x) => x.effort), [undefined, undefined, undefined, 95, 95]);
-  assert.equal(reps[3].target, 224); // the planned watts, not the 213 W sent
+  assert.equal(reps[3].target, 220); // the planned watts, not the 209 W sent
   assert.equal(d.summary.compliance.reps, 5); // the opener doesn't count
   assert.ok(Array.isArray(d.streams.plan));
   assert.deepEqual(doneHeadline(d), { h: 'Done. 5 of 5 reps on target.', note: 'Effort lowered to 95% on 2 reps.' });
@@ -124,10 +124,10 @@ ok('.FIT from a synced ride document');
   // vs last time: same workout, before this ride, demo rides skipped
   const st = d.summary;
   const rows = [
-    { summary: { id: '2026-11-11T1800', workoutId: 'vo2-5x4', compliance: { avg: 90 }, avgHr: 170, ftp: 200 }, demo: true },
-    { summary: { id: '2026-11-04T1800', workoutId: 'vo2-5x4', compliance: { avg: 96 }, avgHr: 156, ftp: 200 } },
-    { summary: { id: '2026-10-28T1800', workoutId: 'vo2-5x4', compliance: { avg: 92 }, avgHr: 160, ftp: 200 } },
-    { summary: { id: '2026-11-13T1800', workoutId: 'vo2-5x4', compliance: { avg: 99 }, avgHr: 150, ftp: 200 } },
+    { summary: { id: '2026-11-11T1800', workoutId: 'vo2-5x4-110', compliance: { avg: 90 }, avgHr: 170, ftp: 200 }, demo: true },
+    { summary: { id: '2026-11-04T1800', workoutId: 'vo2-5x4-110', compliance: { avg: 96 }, avgHr: 156, ftp: 200 } },
+    { summary: { id: '2026-10-28T1800', workoutId: 'vo2-5x4-110', compliance: { avg: 92 }, avgHr: 160, ftp: 200 } },
+    { summary: { id: '2026-11-13T1800', workoutId: 'vo2-5x4-110', compliance: { avg: 99 }, avgHr: 150, ftp: 200 } },
     { summary: { id: '2026-11-05T1800', workoutId: 'z2-60', ftp: 200 } },
   ];
   const prev = lastSameWorkout(st, rows);

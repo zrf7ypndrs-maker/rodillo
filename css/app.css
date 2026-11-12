@@ -262,6 +262,27 @@ button.danger:hover { border-color: var(--bad); }
   button[data-start]:hover:active, button[data-startday]:hover:active { transform: scale(1.03); transition-duration: .12s; }
 }
 @media (prefers-reduced-motion: reduce) { .wo, .wo-more, .wo-more-in { transition: none; } }
+/* library groups (UX roadmap item 10): a muted label over each group's sheet */
+.workout-list:has(> .wo-sec) { background: none; border-radius: 0; }
+.wo-sec + .wo-sec { margin-top: 22px; }
+.wo-gh { font-size: 13.5px; font-weight: 650; color: var(--muted); margin: 0 0 8px 2px; letter-spacing: 0; }
+.wo-sheet { background: var(--sheet); border-radius: var(--r); }
+.wo-sheet .wo:first-child { border-top: none; border-radius: var(--r) var(--r) 0 0; }
+.wo-sheet .wo:last-child { border-radius: 0 0 var(--r) var(--r); }
+.wo-sheet .wo:only-child { border-radius: var(--r); }
+/* open row: description left, facts under the profile + meta columns */
+.wo-info { display: grid; grid-template-columns: minmax(0, 1fr) calc(max(200px, 30%) + 152px); column-gap: 22px; align-items: start; }
+.wo-info.nofacts { grid-template-columns: minmax(0, 1fr); }
+.wo-facts { display: grid; gap: 10px; padding-top: 8px; font-size: 13.5px; }
+.wo-facts .f { display: grid; grid-template-columns: 96px 1fr; align-items: baseline; column-gap: 12px; }
+.wo-facts .fl { color: var(--muted); }
+.wo-facts .fv { font-weight: 700; }
+.wo-facts .zbar { row-gap: 6px; align-items: center; }
+.wo-facts .zb { display: flex; height: 10px; border-radius: 3px; overflow: hidden; gap: 1px; }
+.wo-facts .zb i { display: block; }
+.wo-facts .zl { grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px 12px; font-weight: 600; font-size: 12.5px; }
+.wo-facts .zl i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.wo-prof { margin-top: 8px; }
 .profile { width: 100%; height: 54px; display: block; }
 .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--rule); color: var(--muted); margin-right: 4px; line-height: 1.5; }
 .tag.sim { color: var(--info); border-color: var(--info-line); }
@@ -1198,6 +1219,10 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .wo .profile { height: 24px; }
   .wo-more { margin-top: -1px; } /* phone row gap is 1px */
   .wo-prof { height: 80px; margin-top: 12px; }
+  .wo-sec + .wo-sec { margin-top: 18px; }
+  .wo-info { grid-template-columns: minmax(0, 1fr); }
+  .wo-facts { padding-top: 10px; gap: 8px; }
+  .wo-facts .f { grid-template-columns: 88px 1fr; }
   /* today hero: text, chart, recovery line, then the buttons across the bottom */
   #today { margin-bottom: 14px; }
   .hero { display: flex; flex-direction: column; padding: 16px 16px 14px; border-radius: 8px;

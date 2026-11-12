@@ -157,7 +157,7 @@ test('Virtual gearbox: trainer power matches virtual bike physics', () => {
 });
 
 test('ERG workout, skip, lap, FIT export decodes', () => {
-  const wo = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4.json', import.meta.url)));
+  const wo = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4-110.json', import.meta.url)));
   const segs = flatten(wo);
   assert.ok(segs.length > 5);
   const trainer = new SimTrainer();

@@ -58,7 +58,8 @@ function rampStops(from, to) {
 let rampN = 0;
 /** Fill an interval card / phone hero; the darkest grade (12%+) needs light text. */
 const setZc = (el, c) => { el.style.setProperty('--zc', c); el.style.setProperty('--on-zone', c === GRADE[5] ? 'var(--on-zone-inv)' : ''); };
-const gradeHex = (g) => GRADE[g < 0 ? 0 : g < 0.03 ? 1 : g < 0.06 ? 2 : g < 0.09 ? 3 : g < 0.12 ? 4 : 5];
+const gradeBand = (g) => (g < 0 ? 0 : g < 0.03 ? 1 : g < 0.06 ? 2 : g < 0.09 ? 3 : g < 0.12 ? 4 : 5); // index into GRADE: down, 0-3, 3-6, 6-9, 9-12, 12%+
+const gradeHex = (g) => GRADE[gradeBand(g)];
 
 // ------------------------------------------------------------------ state
 const app = {
@@ -546,13 +547,16 @@ const isSlopeOnly = (w) => flatten(w).every((x) => x.kind === 'sim');
 // Not shown as chips: 'sim' has its own chip; weekday tags are leftovers from old plans (the calendar says when).
 const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
 function workoutCard(w, i) {
+  const facts = woFacts(w);
   return `
     <div class="wo" data-i="${i}" tabindex="0">
       <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
       ${profileSvg(w)}
       <div class="wo-more"><div class="wo-more-in">
-        <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-        <div class="wo-desc">${esc(w.description)}</div>
+        <div class="wo-info${facts ? '' : ' nofacts'}"><div class="wo-text">
+          <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t) && !GROUP_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+          <div class="wo-desc">${esc(w.description)}</div>
+        </div>${facts}</div>
         <div class="wo-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
         ${gradeRangeHtml(w, i)}
         ${detailRow(w, i)}
@@ -561,11 +565,77 @@ function workoutCard(w, i) {
     </div>`;
 }
 
+
+// ------------------------------------------------------------------ library groups (UX roadmap item 10, Nov 12)
+// ERG and Slope lists are split by purpose, each group its own sheet. ERG easiest first (TSS), slope by duration.
+// Mine stays one flat list. The group comes from the tags; untagged workouts (imported .zwo) go by their hardest step.
+const GROUPS = { erg: ['VO2max', 'Threshold', 'Endurance', 'Tests'], slope: ['Climb intervals', 'Real climbs', 'Endurance', 'Tests'] };
+const GROUP_TAGS = new Set(['vo2', 'threshold', 'z2', 'test', 'real climb', 'climb', 'endurance']); // the group label says these
+function groupOf(w, kind) {
+  const t = w.tags || [];
+  if (t.includes('test') || t.includes('max')) return 'Tests';
+  const segs = flatten(w);
+  if (kind === 'slope') {
+    if (t.includes('real climb')) return 'Real climbs';
+    if (t.includes('climb') || t.includes('strength')) return 'Climb intervals';
+    if (t.includes('endurance')) return 'Endurance';
+    if (isTrack(segs) && segs.length > 20) return 'Real climbs'; // untagged: a long distance profile is a real road
+    return Math.max(...segs.map((x) => x.grade ?? 0)) >= 0.05 ? 'Climb intervals' : 'Endurance';
+  }
+  if (t.includes('vo2')) return 'VO2max';
+  if (t.includes('threshold') || t.includes('sweetspot')) return 'Threshold';
+  if (t.includes('z2') || t.includes('endurance') || t.includes('easy')) return 'Endurance';
+  const top = Math.max(0, ...segs.filter((x) => x.kind === 'erg' && x.dur >= 60).map((x) => Math.max(x.from, x.to)));
+  return top > 1.05 ? 'VO2max' : top > 0.88 ? 'Threshold' : 'Endurance';
+}
+function groupedHtml(items, kind) {
+  const key = kind === 'slope' ? (x) => totalDuration(x.w) : (x) => estimateTSS(x.w);
+  return GROUPS[kind].map((g) => {
+    const rows = items.filter((x) => groupOf(x.w, kind) === g).sort((a, b) => key(a) - key(b));
+    return rows.length ? `<section class="wo-sec"><h3 class="wo-gh">${g}</h3><div class="wo-sheet">${rows.map((x) => workoutCard(x.w, x.i)).join('')}</div></section>` : '';
+  }).join('');
+}
+
+/** Open row, right of the description: main set, next date in the plan, time in zones (ERG) or by grade (slope). */
+function woFacts(w) {
+  const out = [];
+  const main = workSummary(w);
+  if (main) out.push(`<div class="f"><span class="fl">Main set</span><span class="fv">${main}</span></div>`);
+  const today = dkey(new Date());
+  const next = Object.keys(app.plan?.days || {}).sort().find((k) => k >= today && app.plan.days[k] === w.id);
+  if (next) {
+    const when = next === today ? 'Today' : new Date(next + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    out.push(`<div class="f"><span class="fl">In the plan</span><span class="fv">${when}</span></div>`);
+  }
+  const segs = flatten(w, app.settings.ftp);
+  const slope = segs.every((x) => x.kind === 'sim');
+  if ((slope || !isTrack(segs)) && !segs.some((x) => x.untilFail)) {
+    const t = {};
+    for (const x of segs) {
+      const parts = slope ? 1 : 10; // ramps: split so a ramp counts in every zone it crosses
+      for (let k = 0; k < parts; k++) {
+        const z = slope ? gradeBand(x.grade) : zoneOf(x.from + (x.to - x.from) * (k + 0.5) / parts);
+        t[z] = (t[z] || 0) + x.dur / parts;
+      }
+    }
+    const keys = Object.keys(t).map(Number).sort((a, b) => a - b);
+    const col = (k) => (slope ? GRADE[k] : ZC[ZONES[k].color]);
+    const lab = (k) => (slope ? GRADE_LABEL[k] : `Z${k + 1}`);
+    const bar = keys.map((k) => `<i style="flex:${t[k]};background:${col(k)}"></i>`).join('');
+    const leg = keys.filter((k) => t[k] >= 60).sort((a, b) => b - a).slice(0, 4)
+      .map((k) => `<span><i style="background:${col(k)}"></i>${lab(k)} ${Math.round(t[k] / 60)} min</span>`).join('');
+    out.push(`<div class="f zbar"><span class="fl">${slope ? 'Time by grade' : 'Time in zones'}</span><div class="zb">${bar}</div><div class="zl">${leg}</div></div>`);
+  }
+  return out.length ? `<div class="wo-facts">${out.join('')}</div>` : '';
+}
+const GRADE_LABEL = ['Down', '0-3%', '3-6%', '6-9%', '9-12%', '12%+'];
+
 function renderLibrary() {
   const erg = [], slope = [], mine = [];
-  app.library.forEach((w, i) => (w._source === 'mine' ? mine : isSlopeOnly(w) ? slope : erg).push(workoutCard(w, i)));
-  $('#workout-list').innerHTML = erg.join('') || '<p class="muted empty-list">No ERG workouts yet.</p>';
-  $('#slope-list').innerHTML = slope.join('') || '<p class="muted empty-list">No slope sessions yet.</p>';
+  app.library.forEach((w, i) => (w._source === 'mine' ? mine : isSlopeOnly(w) ? slope : erg).push({ w, i }));
+  mine.forEach((x, k) => (mine[k] = workoutCard(x.w, x.i)));
+  $('#workout-list').innerHTML = groupedHtml(erg, 'erg') || '<p class="muted empty-list">No ERG workouts yet.</p>';
+  $('#slope-list').innerHTML = groupedHtml(slope, 'slope') || '<p class="muted empty-list">No slope sessions yet.</p>';
   $('#mine-list').innerHTML = mine.join('') || '<p class="muted empty-list mine-empty">Nothing here yet. Build one with New workout, or open any workout and use Edit a copy.</p>';
   $('#kind-btn-mine').classList.toggle('hidden', !signedIn());
   setWoKind(app.woKind);

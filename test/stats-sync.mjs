@@ -23,7 +23,7 @@ assert.equal(decoupling(pw.slice(0, 1200), hr.slice(0, 1200)), null);
 ok('aerobic decoupling');
 
 // ---- intervals + compliance from a VO2 workout where the rider fades on the last rep
-const wo = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4.json', import.meta.url)));
+const wo = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4-110.json', import.meta.url)));
 const segs = flatten(wo);
 const ftp = 200, t0 = Date.parse('2026-11-10T18:30:00');
 const samples = [];
