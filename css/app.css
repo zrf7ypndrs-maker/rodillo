@@ -59,8 +59,6 @@
   --dim: rgba(247, 249, 246, .72); /* ride page: everything outside the selected interval */
   /* today's card: the zone color fades into this, and this is its lift shadow */
   --today-end: #ffffff; --today-shadow: rgba(22, 24, 27, .28);
-  /* frame paint in the Garage drawings (the real bikes' colors, Agustín Nov 12): the same in both themes */
-  --paint-grove: #5f7b47; --paint-white: #ffffff;
 
   /* zones (kept in sync with ZC in js/app.js) */
   --z1: #a3a9ae; --z2: #2d7ff9; --z3: #1fa855; --z4: #f4be1a; --z5: #f47b20; --z6: #e23b44;
@@ -75,7 +73,6 @@
 /* Dark: same system, lights off. "Now" stays inverted, so today and the
    current interval become light cards. Zone colors are unchanged. */
 :root[data-theme="dark"] {
-  --paint-grove: #5f7b47; --paint-white: #ffffff; /* frame paint: same as light */
   --paper: #0c0e0d;
   --sheet: #181b19;
   --sheet2: #1f2320;
@@ -394,7 +391,6 @@ table.ints { margin-bottom: 14px; }
 .bk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; max-height: 52vh; overflow-y: auto; padding: 4px; margin: -4px; }
 .bk-grid .bk-tile { aspect-ratio: auto; padding: 0; font: inherit; text-align: center; cursor: pointer; }
 .bk-tile .gar-pick { padding: 26px 10px 14px; }
-.bk-grid .bk-tile .bike-art { width: 70%; }
 .bk-grid .bk-tile .bike-photo { width: 82%; }
 .bk-tile .gar-line { white-space: normal; overflow: visible; }
 .bk-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -430,7 +426,6 @@ table.ints { margin-bottom: 14px; }
 .settings-form .gar-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .gar-tile, .gar-add { aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); overflow: hidden; transition: transform .4s cubic-bezier(.3, 1.6, .5, 1), background .2s ease; }
 .gar-pick, .gar-add { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 14px 12px 6px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: center; cursor: pointer; }
-.gar-tile .bike-art, .gar-hero .bike-art { width: 82%; height: auto; flex: none; margin-bottom: 6px; }
 .gar-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; line-height: 1.2; }
 .gar-line { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .gar-tile { position: relative; }
@@ -439,7 +434,6 @@ table.ints { margin-bottom: 14px; }
 .gar-tile.on { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
 .gar-tile.on .gar-line, .gar-tile.on .gar-more { color: var(--inv-muted); }
 .gar-tile.gone { border-style: dashed; background: transparent; }
-.gar-tile.gone .bike-art { opacity: .35; }
 .gar-add { border: 1.5px dashed var(--faint); background: transparent; padding: 14px 12px; }
 .gar-plus { font-size: 64px; font-weight: 300; line-height: .9; margin-bottom: 8px; }
 .gar-pick:focus-visible, .gar-add:focus-visible, .gar-pick.focus, .gar-add.focus { outline: 2px solid var(--ink); outline-offset: -4px; }
@@ -451,7 +445,6 @@ table.ints { margin-bottom: 14px; }
 }
 .settings-form .gar-grid + .help { margin-top: 2px; }
 .settings-form .gar-hero { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
-.gar-hero .bike-art { width: min(300px, 70%); }
 .gar-tile .bike-photo { width: 94%; height: auto; flex: none; margin-bottom: 8px; }
 .gar-hero .bike-photo { width: min(460px, 86%); height: auto; }
 .gar-tile.gone .bike-photo { opacity: .35; }
@@ -1368,7 +1361,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .settings-form .gar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .gar-name { font-size: 13px; } .gar-plus { font-size: 48px; margin-bottom: 4px; }
   .gar-pick, .gar-add { padding: 10px 8px 4px; gap: 2px; }
-  .gar-tile .bike-art { width: 66%; margin-bottom: 3px; }
   .gar-tile .bike-photo { width: 76%; margin-bottom: 3px; }
   .gar-name { line-height: 1.15; }
   .gar-line { font-size: 11.5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

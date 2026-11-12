@@ -6,7 +6,6 @@ import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
-import { bikeArt, bikeKind } from './bikeart.js?v=202611102147';
 import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
@@ -3390,7 +3389,6 @@ function weightText(b) {
   const travel = t.fam === 'mtb' ? `, ${s.front || 'rigid'}${s.front ? ' mm' : ''} / ${s.rear || 'hardtail'}${s.rear ? ' mm' : ''}` : '';
   return `${b.bikeKg.toFixed(1)} kg, estimated: ${MATERIALS[s.material].name.toLowerCase()} ${t.name.toLowerCase()}${travel}, ${BUILDS[s.build].name.split(' (')[0].toLowerCase()} build`;
 }
-const bikeSpecOf = (b) => (b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain]);
 // Built-in bikes show Agustín's photos (cutouts, rodillo-data garage/<model>.webp). They live in the private repo
 // so Canyon's photos stay off the public site: loaded with the sign-in, cached on the device, drawings meanwhile.
 const garPhotos = ls.get('garagePhotos', {});
@@ -3416,7 +3414,7 @@ async function loadBikePhoto(model) {
 }
 const artFor = (b) => {
   const ph = bikePhoto(b.model);
-  return ph ? `<img class="bike-photo" src="${ph}" alt="">` : bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)), 'bike-art', BIKE_MODELS[b.model]?.paint);
+  return ph ? `<img class="bike-photo" src="${ph}" alt="">` : ''; // no photo: name and gearing only, centered
 };
 function garListHtml() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
@@ -3456,7 +3454,7 @@ function garDetailsHtml(b) {
   rows.push(['Shifting', shiftText(b, d)], ['Weight', weightText(b)]);
   if (m?.note) rows.push(['Source', m.note]);
   return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Back</button></div>
-    <div class="gar-hero">${artFor(b)}</div>
+    ${artFor(b) ? `<div class="gar-hero">${artFor(b)}</div>` : ''}
     <div class="section gar-title">${esc(b.name)}</div>
     <dl class="gar-dl">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     <div class="gar-acts">
@@ -3467,7 +3465,6 @@ function garDetailsHtml(b) {
 }
 function garCustomHtml() {
   return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Cancel</button></div>
-    <div class="gar-hero" id="gar-art">${artFor(draft)}</div>
     <div class="section gar-title">Custom bike</div>
     ${fld('set-gname', 'Name', `<input id="set-gname" type="text" maxlength="40" autocomplete="off" value="${esc(draft.name)}">`, '', 'full')}
     <div class="section">Gearing</div>
@@ -3535,7 +3532,6 @@ async function removeGarageBike(id) {
       if (draft.bikeSpec && Math.abs(estimateBikeKg(draft.bikeSpec) - draft.bikeKg) > 0.05) { draft.bikeSpec = null; fillBike(true); }
     }
     $('#gar-err') && ($('#gar-err').textContent = '');
-    if ($('#gar-art')) $('#gar-art').innerHTML = artFor(draft); // the drawing follows the gearing and bike type
   };
   // tidy the typed teeth once the field is left (only when they were valid)
   f.onchange = (e) => { if (draft && ['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
