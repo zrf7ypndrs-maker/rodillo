@@ -1,7 +1,6 @@
 // Bike garage (Settings > Garage): saved bikes, each with its own gearing and weight.
 // Picking a bike copies its setup into the settings the ride uses (drivetrain, customDrivetrain, bikeKg, bikeSpec),
-// so the engine needs nothing new. The Garage panel edits the bike in use (gearing, shifting style, weight) and
-// every edit saves back to it.
+// so the engine needs nothing new. Saved bikes are read-only in the Garage panel; "Custom bike" builds a new one.
 //
 // settings.garage = [bike], settings.bike = id of the bike in use ('' = none, the loose settings as before).
 // bike = { id, name, model?, drivetrain, customDrivetrain, shiftStyle, bikeKg, bikeSpec }
@@ -15,17 +14,25 @@ export const BIKE_MODELS = {
   'canyon-lux-trail-cf-7': {
     name: 'Canyon Lux Trail CF 7',
     // 2027: SRAM Eagle 90 Transmission, 32T + XS-1275 10-52, Maxxis 29 x 2.4, 12.8 kg (M) + Shimano XT M8100 pedals 0.34 kg
-    drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'sram', bikeKg: 13.1,
+    drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'right', bikeKg: 13.1,
+    note: "Canyon's spec page (2027): 12.8 kg claimed for size M, plus Shimano XT M8100 pedals",
   },
   'canyon-aeroad-cf-slx-7-di2': {
     name: 'Canyon Aeroad CF SLX 7 Di2',
     // Shimano 105 Di2 12s, 52/36 + 11-34, 700 x 26-28c, 7.84 kg (M) + road pedals ~0.25 kg
     drivetrain: 'road-2x12-shimano-52-36-1134', shiftStyle: 'shimano', bikeKg: 8.1,
+    note: "Canyon's spec page: 7.84 kg claimed for size M, plus road pedals",
   },
 };
 
 export const MAX_BIKES = 12;
-export const SHIFT_STYLES = ['sram', 'shimano']; // only changes 2x; a 1x shifts on the right hood with either
+// 2x: 'sram' | 'shimano' (which buttons shift the front). 1x: 'right' | 'left' (the hood the shifter is on).
+export const SHIFT_STYLES = ['sram', 'shimano', 'right', 'left'];
+/** The style that applies to a drivetrain: a 2x style on a 1x reads as 'right', a 1x side on a 2x as 'sram'. */
+export function shiftStyleFor(style, oneX) {
+  if (oneX) return style === 'left' ? 'left' : 'right';
+  return style === 'shimano' ? 'shimano' : 'sram';
+}
 const r1 = (x) => Math.round(x * 10) / 10;
 
 /** A garage bike from a known model. */
@@ -36,6 +43,8 @@ export function bikeFromModel(model, id = model) {
 }
 
 export const DEFAULT_GARAGE = Object.keys(BIKE_MODELS).map((m) => bikeFromModel(m));
+
+const oneX = (id, custom) => { const d = id === CUSTOM ? custom : DRIVETRAINS[id]; return !!d && !d.seq && d.rings.length === 1; };
 
 /** A bike with known keys and a setup the ride can use; null if it can't be repaired. */
 export function cleanBike(b) {
@@ -50,7 +59,7 @@ export function cleanBike(b) {
     ...(BIKE_MODELS[b.model] ? { model: b.model } : {}),
     drivetrain,
     customDrivetrain: custom,
-    shiftStyle: SHIFT_STYLES.includes(b.shiftStyle) ? b.shiftStyle : BIKE_MODELS[b.model]?.shiftStyle || 'sram',
+    shiftStyle: shiftStyleFor(SHIFT_STYLES.includes(b.shiftStyle) ? b.shiftStyle : BIKE_MODELS[b.model]?.shiftStyle, oneX(drivetrain, custom)),
     bikeKg: kg > 0 && kg < 40 ? r1(kg) : BIKE_MODELS[b.model]?.bikeKg ?? 9,
     bikeSpec: b.bikeSpec ? cleanSpec(b.bikeSpec) : null,
   };

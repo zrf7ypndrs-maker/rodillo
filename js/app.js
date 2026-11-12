@@ -4,9 +4,9 @@ import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
 import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
-import { DRIVETRAINS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
+import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
-import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, storeSetup, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
+import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
@@ -1946,16 +1946,17 @@ const isLeft = (b) => b.endsWith('L');
  *  Shimano: right shift-up = harder, right shift-down = easier (rear);
  *           left shift-up = big ring, left shift-down = small ring (2x);
  *           paddles: right harder / left easier. On 1x the left buttons also shift the rear.
- *  1x (either style): everything on the right, like a 1x bike: right shift-up and right paddle = harder,
- *           right shift-down = easier. The left side doesn't shift. Styles only differ on 2x.
+ *  1x:      the shifter's side only ('right' or 'left', per bike): that side's shift-up and paddle = harder,
+ *           its shift-down = easier. The other side doesn't shift. SRAM / Shimano only apply to 2x.
  */
 function shiftFor(b) {
   const s = app.session;
   const style = app.settings.shiftStyle || 'sram';
   const double = s?.gb.isDouble;
   if (!double && !s?.gb.seq) {
-    if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
-    if (b === 'shiftDnR') return ['rear', -1];
+    const side = style === 'left' ? 'L' : 'R';
+    if (b === `shiftUp${side}` || b === `paddle${side}`) return ['rear', +1];
+    if (b === `shiftDn${side}`) return ['rear', -1];
     return null;
   }
   if (style === 'shimano') {
@@ -1979,7 +1980,7 @@ function onShiftButton(b) {
     holdTimers[b] = setTimeout(rep, 450);
     return;
   }
-  const sramFront = (app.settings.shiftStyle || 'sram') === 'sram' && s.gb.isDouble;
+  const sramFront = shiftStyleFor(app.settings.shiftStyle, false) === 'sram' && s.gb.isDouble;
   if (!sramFront) { const sh = shiftFor(b); if (sh) doShift(...sh); return; }
   if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
     clearTimeout(pendingShift.t); pendingShift = null;
@@ -3107,8 +3108,7 @@ const nameField = () => fld('set-name', 'Your name', `<input id="set-name" type=
 // ---- gearing: a known drivetrain, or your own chainrings and cogs
 // The menu is "a x b" gears, chainring teeth, smallest and largest cog (the cogs between come from cassette()).
 /** The chainrings/cogs in use: the preset's, or the custom ones. */
-function dtSpec() {
-  const st = app.settings;
+function dtSpec(st = app.settings) {
   if (st.drivetrain === CUSTOM) { const r = checkSpec(st.customDrivetrain || {}); if (r.spec) return r.spec; }
   return DRIVETRAINS[st.drivetrain] || DRIVETRAINS[DEFAULT_SETTINGS.drivetrain];
 }
@@ -3127,17 +3127,28 @@ function gearingHtml() {
       ${fld('set-cmax', 'Largest cog', '<select id="set-cmax"></select>')}
     </div>
     <div class="help" id="dt-sum"></div>
-    ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>')}
+    ${fld('set-style', 'Shifting style', '<select id="set-style"></select>')}
     <div class="help" id="style-help"></div>`;
 }
+/** 1x: which hood the shifter is on. 2x: SRAM or Shimano. Keeps draft.shiftStyle valid for the gearing. */
+function fillStyle(d) {
+  const one = !d.seq && d.rings.length === 1, el = $('#set-style');
+  draft.shiftStyle = shiftStyleFor(draft.shiftStyle, one);
+  $('label[for="set-style"]').textContent = one ? 'Shifter side' : 'Shifting style';
+  el.innerHTML = one ? '<option value="right">Right</option><option value="left">Left</option>' : '<option value="sram">SRAM</option><option value="shimano">Shimano</option>';
+  el.value = draft.shiftStyle;
+  el.closest('.fld').classList.toggle('hidden', !!d.seq);
+  $('#style-help').textContent = styleHelp(d);
+}
 function styleHelp(d) {
-  if (d.seq || d.rings.length === 1) return '1x: everything on the right, with SRAM or Shimano. Right shift-up or paddle = harder, right shift-down = easier; the left side doesn\'t shift.';
-  return app.settings.shiftStyle === 'shimano'
+  if (d.seq) return '';
+  if (d.rings.length === 1) { const s = draft.shiftStyle === 'left' ? 'left' : 'right', o = s === 'left' ? 'right' : 'left'; return `1x: ${s} shift-up or paddle = harder, ${s} shift-down = easier. The ${o} side doesn't shift.`; }
+  return draft.shiftStyle === 'shimano'
     ? 'Shimano 2x: right buttons = rear harder / easier, left buttons = big / small ring.'
     : 'SRAM 2x: right = harder, left = easier, both together = front shift.';
 }
 function fillDrivetrain() {
-  const d = dtSpec(), two = !d.seq && d.rings.length > 1;
+  const d = dtSpec(draft), two = !d.seq && d.rings.length > 1;
   $('#set-gears').value = d.seq ? 'zwift' : `${d.rings.length}x${d.cogs.length}`;
   $('.dt-fields').classList.toggle('hidden', !!d.seq);
   $$('.dt-2x').forEach((el) => el.classList.toggle('hidden', !two));
@@ -3151,14 +3162,13 @@ function fillDrivetrain() {
     $('#set-cmin').value = d.cogs[0];
     $('#set-cmax').value = d.cogs.at(-1);
   }
-  $('#set-style').value = app.settings.shiftStyle || 'sram';
   $('#dt-sum').textContent = dtSummary(d);
-  $('#style-help').textContent = styleHelp(d);
+  fillStyle(d);
 }
 /** Reads the gearing fields. Saves only a valid set; returns false (and says why) otherwise. */
 function editDrivetrain(el) {
   const count = $('#set-gears').value;
-  if (count === 'zwift') { app.settings.drivetrain = 'zwift-24'; fillDrivetrain(); return true; }
+  if (count === 'zwift') { draft.drivetrain = 'zwift-24'; draft.customDrivetrain = null; fillDrivetrain(); return true; }
   const two = count.startsWith('2');
   let r1 = Number($('#set-ring1').value) || 0, r2 = Number($('#set-ring2').value) || 0;
   if (el?.id === 'set-gears') {
@@ -3176,16 +3186,16 @@ function editDrivetrain(el) {
   const r = simpleSpec({ count, rings: two ? [r1, r2] : [r1], min: $('#set-cmin').value, max: $('#set-cmax').value });
   if (r.error) { $('#dt-sum').textContent = `Not saved yet. ${r.error}`; return false; }
   const id = presetFor(r.spec);
-  if (id) app.settings.drivetrain = id;
-  else { app.settings.drivetrain = CUSTOM; app.settings.customDrivetrain = r.spec; }
+  if (id) draft.drivetrain = id;
+  else { draft.drivetrain = CUSTOM; draft.customDrivetrain = r.spec; }
   $('#dt-sum').textContent = dtSummary(r.spec);
-  $('#style-help').textContent = styleHelp(r.spec);
+  fillStyle(r.spec);
   return true;
 }
 
 // ---- bike: a preset or your own spec estimates the weight; or type the weight
 function bikeOptions() {
-  const build = app.settings.bikeSpec?.build || 'mid', groups = {};
+  const build = draft.bikeSpec?.build || 'mid', groups = {};
   for (const [k, p] of Object.entries(BIKE_PRESETS)) (groups[p.group] ||= []).push(`<option value="${k}">${esc(p.name)} \u00b7 ${estimateBikeKg(presetSpec(k, build)).toFixed(1)} kg</option>`);
   return Object.entries(groups).map(([g, o]) => `<optgroup label="${esc(g)}">${o.join('')}</optgroup>`).join('') +
     `<option value="${BIKE_CUSTOM}">Your own spec (type, frame, travel, build)</option><option value="${BIKE_EXACT}">Exact weight (type it)</option>`;
@@ -3205,11 +3215,11 @@ function bikeHtml() {
 }
 /** Shows the bike settings. keepWeight: leave the weight field alone (it's being typed in). */
 function fillBike(keepWeight = false) {
-  const spec = app.settings.bikeSpec ? cleanSpec(app.settings.bikeSpec) : null;
+  const spec = draft.bikeSpec ? cleanSpec(draft.bikeSpec) : null;
   $('#set-bike').innerHTML = bikeOptions();
   $('#set-bike').value = spec ? bikePresetFor(spec) || BIKE_CUSTOM : BIKE_EXACT;
   $('.bike-fields').classList.toggle('hidden', !spec);
-  if (!keepWeight) $('#set-bikeKg').value = +app.settings.bikeKg.toFixed(1);
+  if (!keepWeight) $('#set-bikeKg').value = +draft.bikeKg.toFixed(1);
   if (spec) {
     $('#set-btype').value = spec.type;
     $('#set-bmat').value = spec.material;
@@ -3223,12 +3233,12 @@ function fillBike(keepWeight = false) {
     : 'Typed weight (with pedals is closest to real). Or pick an estimate above.';
 }
 function setBikeSpec(spec) {
-  app.settings.bikeSpec = spec && cleanSpec(spec);
-  if (spec) app.settings.bikeKg = estimateBikeKg(spec);
+  draft.bikeSpec = spec && cleanSpec(spec);
+  if (spec) draft.bikeKg = estimateBikeKg(spec);
 }
 function pickBike(id) {
-  const cur = app.settings.bikeSpec;
-  if (id === BIKE_EXACT) app.settings.bikeSpec = null;
+  const cur = draft.bikeSpec;
+  if (id === BIKE_EXACT) draft.bikeSpec = null;
   else if (id === BIKE_CUSTOM) setBikeSpec(cur || presetSpec('road-carbon'));
   else setBikeSpec(presetSpec(id, cur?.build));
   fillBike();
@@ -3246,106 +3256,154 @@ function editBike(el) {
   return true;
 }
 
-// ---- garage (own panel, top-bar bike): saved bikes, each with its own gearing and weight (engine/garage.js)
-function garageHtml() {
-  return `<div class="garage" id="garage-list" role="radiogroup" aria-label="Bikes"></div>
-    <div class="help" id="gar-sum"></div>
-    <div class="gar-edit">
-      <div class="section" id="gar-title">This bike</div>
-      ${fld('set-gname', 'Name', '<input id="set-gname" type="text" maxlength="40" autocomplete="off">', '', 'full')}
-      <div class="section">Gearing</div>
-      ${gearingHtml()}
-      <div class="section">Weight</div>
-      ${bikeHtml()}
-      <div class="help gar-remove"><a href="#" id="gar-remove">Remove this bike</a></div>
-    </div>
-    <div class="section">Add a bike</div>
-    ${fld('set-gadd', 'Start from', '<select id="set-gadd"></select>', 'Custom bike: starts as a copy of the bike in use; then set its name, gearing and weight.', 'full')}`;
+// ---- garage (own panel, top-bar bike): saved bikes, each with its own gearing, shifting and weight (engine/garage.js)
+// Three views: the list (tap a bike to ride it), a bike's details (read-only), and "Custom bike" (the only place
+// gearing and weight are edited; it saves as a new bike). The editors above work on `draft`, never on settings.
+let draft = null;
+let garView = { mode: 'list' };
+const wheelName = (w) => WHEELS.reduce((a, b) => (Math.abs(b[0] - w) < Math.abs(a[0] - w) ? b : a))[1];
+const ratio = (r, c) => `${r}×${c} (${(r / c).toFixed(2)})`;
+function shiftText(b, d) {
+  if (d.seq) return 'Zwift virtual gears';
+  if (d.rings.length === 1) { const s = b.shiftStyle === 'left' ? 'left' : 'right'; return `1x, shifter on the ${s}: ${s} shift-up or paddle harder, ${s} shift-down easier`; }
+  return b.shiftStyle === 'shimano' ? 'Shimano 2x: right buttons rear, left buttons big / small ring' : 'SRAM 2x: right harder, left easier, both together = front shift';
 }
-function fillGarage() {
+function weightText(b) {
+  if (!b.bikeSpec) return `${b.bikeKg.toFixed(1)} kg`;
+  const s = cleanSpec(b.bikeSpec), t = BIKE_TYPES[s.type];
+  const travel = t.fam === 'mtb' ? `, ${s.front || 'rigid'}${s.front ? ' mm' : ''} / ${s.rear || 'hardtail'}${s.rear ? ' mm' : ''}` : '';
+  return `${b.bikeKg.toFixed(1)} kg, estimated: ${MATERIALS[s.material].name.toLowerCase()} ${t.name.toLowerCase()}${travel}, ${BUILDS[s.build].name.split(' (')[0].toLowerCase()} build`;
+}
+function garListHtml() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
-  $('#garage-list').innerHTML = g.length ? g.map((b) => {
+  const rows = g.length ? g.map((b) => {
     const on = cur?.id === b.id;
-    return `<button type="button" class="gar-row${on ? ' on' : ''}" data-bike="${esc(b.id)}" role="radio" aria-checked="${on}">
-      <span class="gar-dot"></span><span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></button>`;
-  }).join('') : '<div class="gar-empty">No bikes yet. Add one below.</div>';
-  $('#gar-sum').innerHTML = cur
-    ? `Riding this one. Slope mode uses its gearing, shifting and weight from the next ride; ERG ignores them. Changes below save to it.`
-    : 'Pick the bike you are riding: its gearing, shifting and weight switch at once.';
-  $('.gar-edit').classList.toggle('hidden', !cur);
-  if (cur && document.activeElement?.id !== 'set-gname') $('#set-gname').value = cur.name;
-  if (cur) $('#gar-title').textContent = cur.name;
+    return `<div class="gar-item${on ? ' on' : ''}"><button type="button" class="gar-row${on ? ' on' : ''}" data-bike="${esc(b.id)}" role="radio" aria-checked="${on}">
+      <span class="gar-dot"></span><span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></button>
+      <button type="button" class="gar-more" data-details="${esc(b.id)}">See details</button></div>`;
+  }).join('') : '<div class="gar-empty">No bikes yet.</div>';
   const have = new Set(g.map((b) => b.model).filter(Boolean));
-  const models = Object.entries(BIKE_MODELS).filter(([k]) => !have.has(k));
-  $('#set-gadd').innerHTML = `<option value="" selected disabled>Pick one</option>` +
-    models.map(([k, m]) => `<option value="m:${k}">${esc(m.name)}</option>`).join('') +
-    `<option value="new">Custom bike</option>`;
-  $('#set-gadd').disabled = g.length >= MAX_BIKES;
+  const back = Object.entries(BIKE_MODELS).filter(([k]) => !have.has(k));
+  const full = g.length >= MAX_BIKES;
+  return `<div class="garage" role="radiogroup" aria-label="Bikes">${rows}</div>
+    <div class="help">${cur ? `Riding the ${esc(cur.name)}.` : 'Pick the bike you are riding.'} Slope mode uses its gearing, shifting and weight from the next ride; ERG ignores them.</div>
+    <div class="gar-acts">
+      <button type="button" class="small" id="gar-custom"${full ? ' disabled' : ''}>Custom bike</button>
+      ${back.map(([k, m]) => `<button type="button" class="ghost small" data-addmodel="${k}"${full ? ' disabled' : ''}>Add ${esc(m.name)}</button>`).join('')}
+    </div>`;
 }
-/** Puts a garage bike in use and shows its gearing and weight everywhere in Settings. */
-function pickGarageBike(id) {
-  Object.assign(app.settings, selectBike(app.settings, id));
-  fillGarage();
-  if (currentBike(app.settings)) { fillDrivetrain(); fillBike(); }
+function garDetailsHtml(b) {
+  const d = b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain];
+  const on = app.settings.bike === b.id, m = BIKE_MODELS[b.model];
+  const rows = d.seq
+    ? [['Gears', 'Zwift virtual, 24 gears'], ['Ratios', `${d.seq[0].toFixed(2)} to ${d.seq.at(-1).toFixed(2)}`]]
+    : [
+      ['Gears', `${d.rings.length}x${d.cogs.length}`],
+      [d.rings.length > 1 ? 'Chainrings' : 'Chainring', `${[...d.rings].reverse().join('/')} teeth`],
+      ['Cogs', d.cogs.join('-')],
+      ['Easiest gear', ratio(d.rings[0], d.cogs.at(-1))],
+      ['Hardest gear', ratio(d.rings.at(-1), d.cogs[0])],
+      ['Wheel', wheelName(d.wheel)],
+    ];
+  rows.push(['Shifting', shiftText(b, d)], ['Weight', weightText(b)]);
+  if (m?.note) rows.push(['Source', m.note]);
+  return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Back</button></div>
+    <div class="section gar-title">${esc(b.name)}</div>
+    <dl class="gar-dl">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <div class="gar-acts">
+      ${on ? '<span class="muted">Riding this one</span>' : `<button type="button" class="primary small" data-ride="${esc(b.id)}">Ride this bike</button>`}
+      <button type="button" class="small" data-copy="${esc(b.id)}">Custom bike from this one</button>
+      <button type="button" class="ghost small" data-remove="${esc(b.id)}">Remove</button>
+    </div>`;
 }
-function renderGarage() {
+function garCustomHtml() {
+  return `<div class="gar-head"><button type="button" class="ghost small" id="gar-back">Cancel</button></div>
+    <div class="section gar-title">Custom bike</div>
+    ${fld('set-gname', 'Name', `<input id="set-gname" type="text" maxlength="40" autocomplete="off" value="${esc(draft.name)}">`, '', 'full')}
+    <div class="section">Gearing</div>
+    ${gearingHtml()}
+    <div class="section">Weight</div>
+    ${bikeHtml()}
+    <div class="gar-acts"><button type="button" class="primary" id="gar-save">Save as new bike</button><span class="help" id="gar-err"></span></div>`;
+}
+function renderGarage(view = garView) {
+  garView = view;
   const f = $('#garage-form');
-  f.innerHTML = garageHtml();
-  pickGarageBike(app.settings.bike);
-  f.oninput = (e) => {
-    const el = e.target;
-    if (el.id === 'set-gadd') { if (!el.value) return; addGarageBike(el.value); }
-    else if (el.id === 'set-gname') {
-      const name = el.value.trim();
-      if (!name) return;
-      app.settings.garage = garageOf(app.settings).map((b) => (b.id === app.settings.bike ? { ...b, name } : b));
-    }
-    else if (['set-gears', 'set-ring1', 'set-ring2', 'set-cmin', 'set-cmax'].includes(el.id)) { if (!editDrivetrain(el)) return; }
-    else if (el.id === 'set-style') { app.settings.shiftStyle = el.value; $('#style-help').textContent = styleHelp(dtSpec()); }
-    else if (el.id === 'set-bike') pickBike(el.value);
-    else if (['set-btype', 'set-bmat', 'set-bfront', 'set-brear', 'set-bbuild'].includes(el.id)) { if (!editBike(el)) return; }
-    else if (el.id === 'set-bikeKg') {
-      if (el.value === '' || !(Number(el.value) > 0)) return;
-      app.settings.bikeKg = Number(el.value);
-      // a typed weight that isn't the estimate replaces it
-      if (app.settings.bikeSpec && Math.abs(estimateBikeKg(app.settings.bikeSpec) - app.settings.bikeKg) > 0.05) { app.settings.bikeSpec = null; fillBike(true); }
-    } else return;
-    keepBikeSetup();
-    fillGarage();
-    saveSettings();
-  };
-  // tidy the typed teeth once the field is left (only when they were valid)
-  f.onchange = (e) => { if (['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
-  f.onclick = (e) => {
-    const row = e.target.closest('.gar-row');
-    if (row) { pickGarageBike(row.dataset.bike); saveSettings(); return; }
-    if (e.target.id === 'gar-remove') { e.preventDefault(); removeGarageBike(); }
-  };
+  const b = view.id && garageOf(app.settings).find((x) => x.id === view.id);
+  if (view.mode === 'details' && b) f.innerHTML = garDetailsHtml(b);
+  else if (view.mode === 'custom' && draft) { f.innerHTML = garCustomHtml(); fillDrivetrain(); fillBike(); }
+  else { garView = { mode: 'list' }; f.innerHTML = garListHtml(); }
+  $('#garage').scrollTop = 0;
 }
-function addGarageBike(v) {
+/** Opens "Custom bike", starting from a bike (or the one in use). */
+function startCustom(from) {
   const g = garageOf(app.settings);
-  if (g.length >= MAX_BIKES) return;
-  const b = v.startsWith('m:') ? bikeFromModel(v.slice(2), newBikeId(g, v.slice(2)))
-    : bikeFromSettings(app.settings, newBikeId(g), g.some((x) => x.name === 'My bike') ? `My bike ${g.length + 1}` : 'My bike');
+  const src = from || currentBike(app.settings) || { ...app.settings, name: '' };
+  const base = 'My bike';
+  draft = { name: g.some((x) => x.name === base) ? `${base} ${g.length + 1}` : base,
+    drivetrain: src.drivetrain, customDrivetrain: src.customDrivetrain || null, shiftStyle: src.shiftStyle || 'sram', bikeKg: src.bikeKg, bikeSpec: src.bikeSpec || null };
+  renderGarage({ mode: 'custom' });
+  $('#set-gname').focus(); $('#set-gname').select();
+}
+function saveCustom() {
+  const name = $('#set-gname').value.trim();
+  if (!name) { $('#gar-err').textContent = 'Give it a name.'; $('#set-gname').focus(); return; }
+  if ($('#set-gears').value !== 'zwift' && !editDrivetrain()) { $('#gar-err').textContent = 'Fix the gearing first.'; return; }
+  const g = garageOf(app.settings);
+  const b = bikeFromSettings(draft, newBikeId(g), name);
   if (!b) return;
   app.settings.garage = [...g, b];
-  pickGarageBike(b.id);
-  if (v === 'new') { $('#set-gname').scrollIntoView({ block: 'center' }); $('#set-gname').focus(); $('#set-gname').select(); }
-}
-async function removeGarageBike() {
-  const cur = currentBike(app.settings);
-  if (!cur) return;
-  if (!await ask(`Remove ${cur.name} from the garage? The gearing and weight stay as they are now.`, { title: 'Remove bike', ok: 'Remove', danger: true })) return;
-  app.settings.garage = garageOf(app.settings).filter((b) => b.id !== cur.id);
-  app.settings.bike = '';
-  fillGarage();
+  Object.assign(app.settings, selectBike(app.settings, b.id));
+  draft = null;
   saveSettings();
+  renderGarage({ mode: 'list' });
+  toast(`${name} saved and in use`);
 }
-/** While a bike is in use, gearing and weight edits save to it. */
-function keepBikeSetup() {
-  if (!currentBike(app.settings)) return;
-  const g = storeSetup(app.settings);
-  if (JSON.stringify(g) !== JSON.stringify(garageOf(app.settings))) app.settings.garage = g;
+async function removeGarageBike(id) {
+  const b = garageOf(app.settings).find((x) => x.id === id);
+  if (!b) return;
+  if (!await ask(`Remove ${b.name} from the garage?`, { title: 'Remove bike', ok: 'Remove', danger: true })) return;
+  app.settings.garage = garageOf(app.settings).filter((x) => x.id !== id);
+  if (app.settings.bike === id) app.settings.bike = ''; // gearing and weight stay as they are until another bike is picked
+  saveSettings();
+  renderGarage({ mode: 'list' });
+}
+{
+  const f = $('#garage-form');
+  f.oninput = (e) => {
+    const el = e.target;
+    if (!draft) return;
+    if (el.id === 'set-gname') draft.name = el.value;
+    else if (['set-gears', 'set-ring1', 'set-ring2', 'set-cmin', 'set-cmax'].includes(el.id)) editDrivetrain(el);
+    else if (el.id === 'set-style') { draft.shiftStyle = el.value; $('#style-help').textContent = styleHelp(dtSpec(draft)); }
+    else if (el.id === 'set-bike') pickBike(el.value);
+    else if (['set-btype', 'set-bmat', 'set-bfront', 'set-brear', 'set-bbuild'].includes(el.id)) editBike(el);
+    else if (el.id === 'set-bikeKg') {
+      if (el.value === '' || !(Number(el.value) > 0)) return;
+      draft.bikeKg = Number(el.value);
+      // a typed weight that isn't the estimate replaces it
+      if (draft.bikeSpec && Math.abs(estimateBikeKg(draft.bikeSpec) - draft.bikeKg) > 0.05) { draft.bikeSpec = null; fillBike(true); }
+    }
+    $('#gar-err') && ($('#gar-err').textContent = '');
+  };
+  // tidy the typed teeth once the field is left (only when they were valid)
+  f.onchange = (e) => { if (draft && ['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
+  f.onclick = (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.classList.contains('gar-row')) { Object.assign(app.settings, selectBike(app.settings, t.dataset.bike)); saveSettings(); renderGarage({ mode: 'list' }); }
+    else if (t.dataset.details) renderGarage({ mode: 'details', id: t.dataset.details });
+    else if (t.id === 'gar-back') { draft = null; renderGarage({ mode: 'list' }); }
+    else if (t.id === 'gar-custom') startCustom();
+    else if (t.dataset.copy) startCustom(garageOf(app.settings).find((x) => x.id === t.dataset.copy));
+    else if (t.id === 'gar-save') saveCustom();
+    else if (t.dataset.ride) { Object.assign(app.settings, selectBike(app.settings, t.dataset.ride)); saveSettings(); renderGarage({ mode: 'list' }); }
+    else if (t.dataset.remove) removeGarageBike(t.dataset.remove);
+    else if (t.dataset.addmodel) {
+      const g = garageOf(app.settings), b = bikeFromModel(t.dataset.addmodel, newBikeId(g, t.dataset.addmodel));
+      if (b) { app.settings.garage = [...g, b]; saveSettings(); renderGarage({ mode: 'list' }); }
+    }
+  };
 }
 
 // ---- trainer: the grade range it can simulate
@@ -3448,10 +3506,10 @@ function setSetTab(id, animate = false) {
 // ------------------------------------------------------------------ controls (own panel, top-bar gamepad)
 function renderControls() {
   const d = dtSpec(), one = !d.seq && d.rings.length === 1;
-  const style = one ? '1x' : app.settings.shiftStyle === 'shimano' ? 'shimano' : 'sram';
-  const rear = { sram: 'Left side / right side', shimano: 'Right shift-down / shift-up', '1x': 'Right shift-down / right shift-up or paddle' }[style];
-  const front = { sram: 'Left + right together', shimano: 'Left shift-up / shift-down', '1x': 'None (1x)' }[style];
-  const name = { sram: 'SRAM 2x', shimano: 'Shimano 2x', '1x': '1x, all on the right' }[style];
+  const style = shiftStyleFor(app.settings.shiftStyle, one);
+  const rear = { sram: 'Left side / right side', shimano: 'Right shift-down / shift-up', right: 'Right shift-down / right shift-up or paddle', left: 'Left shift-down / left shift-up or paddle' }[style];
+  const front = { sram: 'Left + right together', shimano: 'Left shift-up / shift-down', right: 'None (1x)', left: 'None (1x)' }[style];
+  const name = { sram: 'SRAM 2x', shimano: 'Shimano 2x', right: '1x, shifter on the right', left: '1x, shifter on the left' }[style];
   const rows = [
     ['Riding'],
     ['Start / pause', 'A', 'Space'],
@@ -3518,10 +3576,12 @@ document.addEventListener('click', (e) => {
 });
 $$('#set-tabs button').forEach((b) => (b.onclick = () => setSetTab(b.dataset.stab, true)));
 if (inkObserver) inkObserver.observe($('#set-tabs'));
+$('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => {
   setDevPop(false);
   $$('.panel').forEach((p) => p.classList.add('hidden'));
-  renderGarage();
+  draft = null;
+  renderGarage({ mode: 'list' });
   $('#garage').classList.remove('hidden');
 };
 $('#btn-controls').onclick = () => {

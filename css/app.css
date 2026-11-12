@@ -400,6 +400,20 @@ table.ints { margin-bottom: 14px; }
 @media (hover: hover) { .gar-row:not(.on):hover { background: var(--sheet2); } }
 .gar-row:focus-visible, .gar-row.focus { outline: 2px solid var(--ink); outline-offset: -2px; }
 .settings-form .gar-remove { margin-top: 10px; }
+.gar-item { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); }
+.gar-item .gar-row { flex: 1; min-width: 0; border-bottom: 0; }
+.gar-item.on { background: var(--ink); }
+.gar-more { flex: none; background: transparent; border: 0; border-radius: 0; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 0 14px; cursor: pointer; }
+.gar-item.on .gar-more { color: var(--inv-muted); }
+@media (hover: hover) { .gar-more:hover { color: var(--ink); } .gar-item.on .gar-more:hover { color: var(--sheet); } .gar-item:not(.on):hover { background: var(--sheet2); } }
+.settings-form .gar-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.settings-form .gar-acts .help { margin: 0; }
+.settings-form .gar-head { grid-column: 1 / -1; margin-bottom: -6px; }
+.settings-form .section.gar-title { margin-top: 0; font-size: 18px; }
+.settings-form .gar-dl { grid-column: 1 / -1; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 0; margin: 0; border-top: 1px solid var(--rule); }
+.gar-dl dt, .gar-dl dd { margin: 0; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.gar-dl dt { color: var(--muted); }
+.gar-dl dd { color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gar-empty { padding: 12px; color: var(--muted); border-bottom: 1px solid var(--rule); }
 .settings-form .section { grid-column: 1 / -1; font-size: 15px; color: var(--ink); margin-top: 14px; font-weight: 700; padding-top: 12px; border-top: 1px solid var(--rule); }
 /* settings: one tab per section (same sliding underline as the home tabs); scrolls sideways if it doesn't fit */
@@ -771,6 +785,12 @@ table.ints { margin-bottom: 14px; }
 .hs-label i { display: inline-block; font-style: normal; }
 .launch-cover { position: fixed; inset: 0; z-index: 9999; pointer-events: all; will-change: clip-path; }
 .hero-free .bike-ico { width: 28px; height: 17px; }
+/* top-bar Garage button: the Free ride bicycle; it pedals on hover like the Free ride button */
+.icon-btn .bike-ico { width: 28px; height: 17px; transition: transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  #btn-garage:hover .bike-ico { transform: translateY(-1px) rotate(-12deg); }
+  #btn-garage:hover .bike-ico .crank { animation-play-state: running; }
+}
 .hero-prof { height: 120px; margin-top: 24px; }
 .hero-prof .profile { height: 100%; display: block; }
 /* Hover readout on today's profile: the interval under the pointer stays full color, the rest fades,
