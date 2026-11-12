@@ -54,7 +54,7 @@ const app = {
   demo: false,
   library: [], plan: null,
   session: null, rideId: null,
-  screen: 'home', tab: 'workouts', focus: 0, woKind: ls.get('woKind', 'erg'),
+  screen: 'home', tab: 'today', focus: 0, woKind: ls.get('woKind', 'erg'),
 };
 
 // ------------------------------------------------------------------ logging
@@ -742,38 +742,6 @@ function heroDoneBody(w, r, date) {
     ${same ? `<div class="hero-prof prof-hover">${profileSvg(w, 1000, 100)}</div>` : ''}`;
 }
 
-/** The next planned ride after today (skipping strength and rest days), shown under a done hero. */
-function upNextHtml() {
-  const start = new Date(); start.setHours(12, 0, 0, 0);
-  const tomorrow = dayInfo(dkey(addDays(start, 1)));
-  let next = null;
-  for (let i = 1; i <= 13 && !next; i++) { const d = dayInfo(dkey(addDays(start, i))); if (d.workout) next = d; }
-  if (!next) return '';
-  const w = next.workout;
-  const dow = (k, opts) => new Date(k + 'T12:00').toLocaleDateString([], opts);
-  const when = next.key === tomorrow.key ? `Tomorrow, ${dow(next.key, { month: 'short', day: 'numeric' })}` : dow(next.key, { weekday: 'short', month: 'short', day: 'numeric' });
-  const between = next.key !== tomorrow.key && (tomorrow.kind === 'strength' || tomorrow.kind === 'rest')
-    ? `<span>${dow(tomorrow.key, { weekday: 'short' })} is ${tomorrow.kind}</span>` : '';
-  const work = workSummary(w);
-  return `<section class="up-next" data-day="${next.key}" style="--c:${workoutColor(w)}" aria-label="Up next">
-    <div class="un-text">
-      <div class="un-top"><b>Up next</b><span>${when}</span>${between}</div>
-      <h3 class="un-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</h3>
-      <div class="un-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}${next.optional ? ' &middot; optional' : ''}</div>
-    </div>
-    <div class="un-prof prof-hover">${profileSvg(w, 1000, 100)}</div>
-  </section>`;
-}
-
-function bindUpNext(root) {
-  const card = root.querySelector('.up-next');
-  if (!card) return;
-  const info = dayInfo(card.dataset.day);
-  bindProfileHover(card.querySelector('.un-prof'), info.workout);
-  // The card opens that day in Calendar; the chart keeps its own tap readout.
-  card.onclick = (e) => { if (e.target.closest('.un-prof')) return; app.calMonth = card.dataset.day.slice(0, 7); app.calSel = card.dataset.day; setTab('calendar'); };
-}
-
 /** Today: a full-width card in the color of the day's main effort, with Start up front and Free ride as the second choice. */
 function renderHero() {
   const el = $('#today');
@@ -789,12 +757,11 @@ function renderHero() {
   // A free ride alone leaves today's workout open.
   const doneRide = w && (today.ridden.find((r) => r.workoutId === w.id) || today.ridden.find((r) => r.workoutId));
   if (doneRide) {
-    // Done: a quiet sheet card with the ride's real numbers, then the next planned ride.
-    el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date)}</section>${upNextHtml()}`;
+    // Done: a quiet sheet card with the ride's real numbers (Next days below shows what's next).
+    el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date)}</section>`;
     $('#btn-free').onclick = (e) => startFree(e.currentTarget);
     $('#hero-see').onclick = () => openRide(doneRide.id);
     if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w);
-    bindUpNext(el);
     return;
   }
   if (w) {
@@ -1608,7 +1575,7 @@ function downloadFit(ride) {
 // ------------------------------------------------------------------ ride page (one completed ride, js/ridepage.js)
 // Opened from the done hero's "See ride", a Training row or a ridden Calendar day. Back / Esc / controller B returns.
 const rd = { id: null, doc: null, local: null, segs: [], sel: null, t: null, geo: null, from: null, scrollY: 0 };
-const RD_BACK = { training: 'Training', calendar: 'Calendar' };
+const RD_BACK = { today: 'Today', workouts: 'Workouts', training: 'Training', calendar: 'Calendar' };
 const BACK_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 const canHover = matchMedia('(hover: hover)');
 
@@ -1653,8 +1620,8 @@ function closeRide() {
   const wasDone = !!rd.done;
   rd.id = null; rd.done = null;
   show('home');
+  if (wasDone) { setTab('today'); refreshPlanViews(); return; } // end of ride: back to Today with the done hero
   window.scrollTo(0, rd.scrollY);
-  if (wasDone) { if (app.tab === 'training') renderTraining(); refreshPlanViews(); }
 }
 
 // ------------------------------------------------------------------ end of ride: the ride page with a "done" bar
@@ -1882,9 +1849,8 @@ function action(a, src = 'tap') {
     case 'up': case 'easier': app.focus = Math.max(0, app.focus - 1); applyFocus(); break;
     case 'down': case 'harder': app.focus = Math.min(items.length - 1, app.focus + 1); applyFocus(); break;
     case 'left': case 'right': {
-      const tabs = ['workouts', 'calendar', 'training'];
-      const i = (tabs.indexOf(app.tab) + (a === 'right' ? 1 : -1) + tabs.length) % tabs.length;
-      setTab(tabs[i]);
+      const i = (TABS.indexOf(app.tab) + (a === 'right' ? 1 : -1) + TABS.length) % TABS.length;
+      setTab(TABS[i]);
       break;
     }
     case 'select': {
@@ -2069,8 +2035,9 @@ document.addEventListener('keyup', (e) => {
 
 function focusables() {
   const list = [];
+  if (app.tab === 'today') list.push(...$$('#today .hero-btns button'));
   if (app.tab === 'workouts') {
-    list.push(...$$('#today .hero-btns button'), ...$$('#wo-kind button:not(.hidden)'), ...(app.woKind === 'mine' ? [$('#btn-new-wo'), ...$$('#mine-list .wo')] : $$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo')));
+    list.push(...$$('#wo-kind button:not(.hidden)'), ...(app.woKind === 'mine' ? [$('#btn-new-wo'), ...$$('#mine-list .wo')] : $$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo')));
   }
   return list;
 }
@@ -3454,14 +3421,20 @@ $('#btn-diag').onclick = async () => {
   }
   if (app.trainer?.data) logMsg('trainer', `last data ${JSON.stringify(app.trainer.data)}`);
 };
-const TABS = ['workouts', 'calendar', 'training'];
+// Four screens behind one nav (UX roadmap item 4, Nov 12): Today (hero, overview, Next days) and the three sections.
+// #home[data-tab] decides what shows; css hides the rest.
+const TABS = ['today', 'workouts', 'calendar', 'training'];
 function setTab(t) {
   const prev = app.tab;
   app.tab = t; app.focus = 0;
+  $('#home').dataset.tab = t;
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
   $$('.tab').forEach((x) => x.classList.toggle('active', x.id === `tab-${t}`));
   placeInk($('#tabs'), $('#tabs button.active'));
-  if (prev && prev !== t) slideIn($(`#tab-${t}`), TABS.indexOf(t) > TABS.indexOf(prev) ? 1 : -1);
+  if (prev && prev !== t) {
+    window.scrollTo(0, 0);
+    slideIn(t === 'today' ? $('#today') : $(`#tab-${t}`), TABS.indexOf(t) > TABS.indexOf(prev) ? 1 : -1);
+  }
   if (t === 'training') { renderTraining(); refreshRemoteIndex(); }
   if (t === 'calendar') { renderCalendar(); refreshPlanViews(); }
   applyFocus();

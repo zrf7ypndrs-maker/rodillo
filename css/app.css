@@ -192,6 +192,14 @@ button.danger:hover { border-color: var(--bad); }
 .tab { display: none; }
 .tab.active { display: block; }
 
+/* main nav (UX roadmap item 4): Today / Workouts / Calendar / Training are separate screens.
+   Desktop: text tabs in the top bar, sliding underline. Phone: floating pill at the bottom (below). */
+#home[data-tab="today"] .tab-body { display: none; }
+#home:not([data-tab="today"]) :is(#today, #overview, #week) { display: none !important; }
+.topbar .topnav { border-bottom: none; margin: 0 auto 0 48px; gap: 28px; }
+.topbar .topnav button { padding: 8px 0 10px; }
+.topnav svg { display: none; }
+
 /* workout library: a stage list, not a card grid */
 .workout-list { display: block; background: var(--sheet); border-radius: var(--r); }
 .workout-list:empty { display: none; }
@@ -744,8 +752,7 @@ table.ints { margin-bottom: 14px; }
 .hero.nowo .hero-btns { align-self: center; }
 
 /* Done today: the dome steps back to a sheet with a faint tint of the day's zone color.
-   The headline is the result, the numbers are the ride's own, and the next planned ride
-   gets its own card underneath (.up-next). */
+   The headline is the result, the numbers are the ride's own; Next days below shows what's next. */
 .hero.done { color: var(--ink); padding: 22px 28px 20px;
   background: radial-gradient(60% 160% at 0% 0%, color-mix(in oklab, var(--c), var(--sheet) 78%) 0%, var(--sheet) 70%);
   box-shadow: 0 6px 16px -8px var(--shadow), 0 1px 2px var(--shadow); }
@@ -771,17 +778,6 @@ table.ints { margin-bottom: 14px; }
 .hs .l b { color: var(--ink); font-weight: 650; }
 .hero.done .hero-prof { height: 36px; margin-top: 16px; }
 
-.up-next { margin-top: 14px; padding: 16px 24px 18px; border-radius: 8px; border-top: 4px solid var(--c); background: var(--sheet);
-  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px; cursor: pointer; }
-.un-text { flex: 1 1 320px; min-width: 0; }
-.un-top { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; font-weight: 650; color: var(--muted); }
-.un-top b { color: var(--ink); font-weight: 750; }
-.un-top span::before { content: "\00b7"; margin-right: 8px; }
-.un-name { margin: 4px 0 0; font-size: 24px; line-height: 1.1; font-weight: 800; letter-spacing: -0.015em; }
-.un-name .tag { font-size: 12px; vertical-align: 4px; letter-spacing: 0; }
-.un-meta { margin-top: 4px; font-family: var(--num); font-stretch: 68%; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; color: var(--muted); }
-.un-prof { flex: 1 1 440px; height: 64px; cursor: auto; }
-.un-prof .profile { height: 100%; display: block; }
 #ride-table tr.flash td { animation: flash 2.4s ease-out; }
 @media (prefers-reduced-motion: reduce) { #ride-table tr.flash td { animation: none; background: var(--flash); } }
 
@@ -1153,12 +1149,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .hero.done .hero-prof { display: none; }
   .hero.done .hero-btns { flex: none; }
   .hero.done .hero-btns button { flex: 1 1 0; height: 48px; padding: 0 12px; }
-  .up-next { margin-top: 12px; padding: 12px 16px 14px; gap: 10px; }
-  .un-text, .un-prof { flex: 1 1 100%; }
-  .un-top { font-size: 13.5px; }
-  .un-name { font-size: 20px; }
-  .un-meta { font-size: 15.5px; }
-  .un-prof { height: 48px; }
   /* overview: one row of four, value over a short label */
   .overview { margin-bottom: 18px; }
   .overview.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1366,4 +1356,21 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .brep-body { margin-left: 2px; padding-left: 6px; }
   .b-foot { margin: auto -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
   .b-foot button { padding: 9px 14px; }
+}
+
+/* phone: the main nav floats at the bottom as a translucent pill, always visible on the home screens.
+   The sliding ink (::after) becomes a filled pill behind the active section. */
+@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  #home { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .topbar .topnav { position: fixed; z-index: 30; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    margin: 0; gap: 0; padding: 5px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
+    background: color-mix(in srgb, var(--sheet) 70%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+    box-shadow: 0 10px 30px var(--shadow); }
+  .topnav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px;
+    padding: 7px 10px 6px; font-size: 11.5px; font-weight: 650; color: var(--muted); border-radius: 999px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .topnav button.active { color: var(--sheet); }
+  .topnav svg { display: block; width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; }
+  .topnav button:hover { color: var(--muted); }
+  .topnav button.active:hover { color: var(--sheet); }
 }
