@@ -2129,7 +2129,8 @@ function renderSegList(s) {
     const first = app._segI === undefined;
     app._segI = cur;
     const row = box.querySelector('.seg.current');
-    const top = row ? Math.max(0, row.offsetTop - box.clientHeight / 2 + row.offsetHeight / 2) : box.scrollHeight;
+    const rowTop = row ? row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop : 0; // offsetTop depends on the layout's offsetParent
+    const top = row ? Math.max(0, rowTop - box.clientHeight / 2 + row.offsetHeight / 2) : box.scrollHeight;
     box.scrollTo({ top, behavior: first || reducedMotion() ? 'auto' : 'smooth' }); // the box only, never the page
   }
 }
