@@ -199,18 +199,28 @@ function renderDevices() {
   // status dots on the top-bar link button
   const dotState = (d) => (app.demo && d ? 'on' : d?.state === 'connected' ? 'on' : d?.state === 'connecting' ? 'wait' : '');
   const states = { trainer: dotState(app.trainer), hr: dotState(app.hr), controller: anyCtl ? 'on' : app.controllers.some((c) => c.state === 'connecting') ? 'wait' : '' };
-  $$('#btn-devices .ldots i').forEach((i) => { i.className = states[i.dataset.k]; });
+  $$('.ldots i').forEach((i) => { i.className = states[i.dataset.k]; }); // top bar + pause screen
   const n = Object.values(states).filter((v) => v === 'on').length;
   $('#btn-devices').title = `Bluetooth connections (${n} of 3 connected)`;
   renderRideStatus();
 }
 
 // connections popover
-function setDevPop(open) {
-  $('#devpop').classList.toggle('hidden', !open);
-  $('#btn-devices').setAttribute('aria-expanded', String(open));
+// One popover, two homes: the home top bar, or the pause screen of a ride (where = 'ride').
+function setDevPop(open, where) {
+  const pop = $('#devpop');
+  if (open) {
+    const host = where === 'ride' ? $('#r-paused') : $('#home .topbar');
+    if (pop.parentElement !== host) host.appendChild(pop);
+    pop.classList.toggle('on-ride', where === 'ride');
+  }
+  pop.classList.toggle('hidden', !open);
+  const onRide = open && where === 'ride';
+  $('#btn-devices').setAttribute('aria-expanded', String(open && !onRide));
+  $('#pz-devices').setAttribute('aria-expanded', String(onRide));
 }
-const devPopOpen = () => !$('#devpop').classList.contains('hidden');
+// open = shown on screen (a popover left open on a pause screen that has since gone away doesn't count)
+const devPopOpen = () => !$('#devpop').classList.contains('hidden') && !!$('#devpop').offsetParent;
 
 // ------------------------------------------------------------------ library
 async function loadLibrary() {
@@ -305,6 +315,8 @@ let flushTimer;
 function saveSettings(source = 'settings') {
   reconcileSettings(source);
   refreshGradeRanges();
+  // changed from the pause screen: bike, gearing and weights apply to the ride in progress
+  if (app.session && !app.session.finished) { app.session.applySettings(app.settings); if (app.screen === 'ride') renderRide(); }
   clearTimeout(flushTimer);
   flushTimer = setTimeout(() => flushSettings(), 1500);
 }
@@ -1875,6 +1887,12 @@ function action(a, src = 'tap') {
   if (builderOpen()) { if (a === 'back') closeBuilder(); return; } // the builder is keyboard/touch only
   if (app.screen === 'ridepage') return rideAction(a);
   const s = app.session;
+  // a panel or the connections popover opened from the pause screen: B / Esc closes it, it doesn't end the ride
+  if (app.screen === 'ride' && a === 'back' && (devPopOpen() || $$('.panel').some((p) => !p.classList.contains('hidden')))) {
+    $$('.panel').forEach((p) => p.classList.add('hidden'));
+    setDevPop(false);
+    return;
+  }
   if (app.screen === 'ride' && s) {
     switch (a) {
       case 'easier': if (s.mode === 'erg') return action('down'); s.shift(-1); break;
@@ -2109,6 +2127,7 @@ document.addEventListener('keydown', () => { app.usedNav = true; }, true);
 // ------------------------------------------------------------------ ride rendering
 function show(name) {
   app.screen = name;
+  if ($('#devpop').classList.contains('on-ride')) setDevPop(false); // don't carry a pause-screen popover into the next screen
   $$('.screen').forEach((s) => s.classList.toggle('active', s.id === name));
   if (name === 'home') { renderDevices(); applyFocus(); }
 }
@@ -2273,6 +2292,7 @@ function gearViz(gb) {
 
 function renderPaused(s) {
   $('#r-paused').classList.toggle('hidden', !s.paused);
+  if (!s.paused && $('#devpop').classList.contains('on-ride') && !$('#devpop').classList.contains('hidden')) setDevPop(false); // riding again: it went with the pause screen
   if (s.paused) {
     $('#r-paused-title').textContent = !s.started ? 'Ready' : 'Paused';
     $('#r-paused-sub').textContent = !s.started ? 'Start pedaling to begin' : s.autoPaused ? 'Start pedaling to resume' : isPhone() ? 'Tap Resume or press A' : 'Press A or Space to resume';
@@ -3448,7 +3468,12 @@ $('#btn-demo').onclick = enterDemo;
 $('#btn-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!devPopOpen()); };
 $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
-document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #modal')) setDevPop(false); });
+document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #pz-devices, #modal')) setDevPop(false); });
+// pause screen of a ride: the same panels as the home top bar
+$('#pz-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!(devPopOpen() && $('#devpop').classList.contains('on-ride')), 'ride'); };
+$('#pz-garage').onclick = () => $('#btn-garage').click();
+$('#pz-controls').onclick = () => $('#btn-controls').click();
+$('#pz-settings').onclick = () => $('#btn-settings').click();
 setWoKind(app.woKind);
 initBuilder({
   esc, ask, placeInk, profileSvg, woMeta, zoneHex, gradeHex, plannedOn, signedIn,
@@ -3585,6 +3610,8 @@ function setTheme(t) {
   const label = app.theme === 'dark' ? 'Light mode' : 'Dark mode';
   $('#btn-theme').title = `Switch to ${label.toLowerCase()}`;
   $('#btn-theme').setAttribute('aria-label', label);
+  $('#r-theme').title = `Switch to ${label.toLowerCase()}`;
+  $('#r-theme').setAttribute('aria-label', label);
   $('#rp-theme').textContent = label;
   readTokens();
   if (app.tab === 'training') renderTraining();
@@ -3592,7 +3619,7 @@ function setTheme(t) {
   if (app.screen === 'ridepage') drawRideChart();
 }
 setTheme(ls.get('theme', 'light'));
-$('#btn-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
+$('#btn-theme').onclick = $('#r-theme').onclick = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
 $('#btn-log').onclick = () => { setDevPop(false); $('#log-body').textContent = logLines.join('\n'); $('#log').classList.remove('hidden'); };
 $$('[data-close]').forEach((b) => (b.onclick = () => b.closest('.panel').classList.add('hidden')));
 // scrim: shown while any side panel is open; a click closes it (the builder has unsaved work, so only its Close does)

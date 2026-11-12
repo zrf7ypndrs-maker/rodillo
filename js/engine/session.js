@@ -101,6 +101,28 @@ export class Session extends Emitter {
     this.emit('change');
   }
   toggleErg() { this.ergOff = !this.ergOff; this.emit('change'); }
+  /** Settings changed mid-ride (pause screen > Settings / Garage): weights, gearing and trainer limits apply at
+   *  once. A new drivetrain starts in the gear closest to the current ratio. FTP and the learned grade trim /
+   *  development stay as the ride started (the workout's watts were set from that FTP). */
+  applySettings(next) {
+    const keep = { ftp: this.s.ftp, gradeTrim: this.s.gradeTrim, realDev: this.s.realDev };
+    const before = JSON.stringify(resolveDrivetrain(this.s));
+    Object.assign(this.s, next, keep);
+    if (JSON.stringify(resolveDrivetrain(this.s)) !== before) {
+      const ratio = this.gb.ratio, gb = new Gearbox(resolveDrivetrain(this.s));
+      let best = null;
+      for (let f = 0; f < (gb.isDouble ? gb.d.rings.length : 1); f++) {
+        if (gb.isDouble) gb.front = f;
+        gb.setClosest(ratio);
+        const d = Math.abs(gb.ratio - ratio);
+        if (!best || d < best.d) best = { d, f: gb.front, r: gb.rear };
+      }
+      gb.front = best.f; gb.rear = best.r;
+      this.gb = gb;
+    }
+    this.s.wheelCirc = this.gb.wheel;
+    this.emit('change');
+  }
   skip() {
     if (!this.seg) return;
     this._extendTest();

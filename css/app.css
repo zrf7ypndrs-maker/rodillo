@@ -147,7 +147,7 @@ button.danger:hover { border-color: var(--bad); }
 .top-actions button { border-color: transparent; }
 .top-actions button:hover { border-color: var(--rule); }
 /* theme toggle: just the half-filled circle, no label */
-#btn-theme::before { content: ""; width: 16px; height: 16px; margin: 2px; border-radius: 50%; border: 2px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+#btn-theme::before, .theme-btn::before { content: ""; width: 16px; height: 16px; margin: 2px; border-radius: 50%; border: 2px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 
 /* connections: a link button in the top bar (one status dot per sensor) opens a popover with one row per sensor */
 .topbar { position: relative; }
@@ -505,7 +505,7 @@ table.ints { margin-bottom: 14px; }
    interval list and chart start on one line. .ride-main dissolves so its children sit in this grid. */
 .ride-body.with-segs { grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "top top" "tiles tiles" "segs chart"; }
 .ride-body.with-segs .ride-main { display: contents; }
-.ride-body.with-segs .ride-top { grid-area: top; width: min(100%, 1146px); justify-self: center; }
+.ride-body.with-segs .ride-top { grid-area: top; width: min(100% - 96px, 1146px); justify-self: center; } /* 48 px each side keeps it clear of the theme switch */
 .ride-body.with-segs .tiles { grid-area: tiles; }
 .ride-body.with-segs .chart-box { grid-area: chart; }
 .ride-body.with-segs #r-segs { grid-area: segs; }
@@ -561,6 +561,24 @@ table.ints { margin-bottom: 14px; }
 .paused-overlay { position: absolute; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; text-align: center; z-index: 5; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .paused-overlay .big { font-size: 72px; font-weight: 900; font-stretch: 68%; line-height: 1; }
 .paused-overlay .muted { font-size: 17px; margin-top: 6px; }
+/* pause screen actions: connections, garage, controls, settings (same panels as the home top bar) */
+.pz-acts { display: flex; justify-content: center; gap: 10px; margin-top: 28px; }
+.pz-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 108px; padding: 14px 12px 11px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); color: var(--ink); font-size: 14px; font-weight: 650; }
+.pz-ico svg { display: block; width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pz-btn .ldots { margin-top: -1px; }
+.pz-btn .ldots i { width: 6px; height: 6px; }
+.pz-btn[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
+@media (hover: hover) {
+  .pz-btn { transition: transform .4s cubic-bezier(.3, 1.6, .5, 1), border-color .2s; }
+  .pz-btn:hover { transform: scale(1.05); border-color: var(--ink); }
+  .pz-btn:hover:active { transform: scale(1.01); }
+}
+@media (prefers-reduced-motion: reduce) { .pz-btn, .pz-btn:hover { transition: none; transform: none; } }
+/* the connections popover, opened from the pause screen: centered over it */
+.paused-overlay > .devpop.on-ride { top: 50%; left: 50%; right: auto; transform: translate(-50%, -50%); width: min(400px, calc(100% - 24px)); max-height: calc(100% - 32px); overflow: auto; overscroll-behavior: contain; text-align: left; }
+/* light / dark switch in the top right corner of the ride screen; above the pause overlay like the bottom bar */
+#r-theme { position: absolute; top: 14px; right: 16px; z-index: 6; border-color: transparent; }
+#r-theme:hover { border-color: var(--rule); }
 
 /* ---------- ride page (one completed ride; js/ridepage.js) ---------- */
 #ridepage { max-width: 1180px; margin: 0 auto; padding: 22px 28px 64px; }
@@ -1277,6 +1295,10 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .toast { font-size: 24px; padding: 12px 22px; top: auto; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%); }
   .paused-overlay { bottom: calc(76px + env(safe-area-inset-bottom)); }
   .paused-overlay .big { font-size: 56px; }
+  .pz { width: 100%; padding: 0 12px; }
+  .pz-acts { gap: 8px; margin-top: 20px; }
+  .pz-btn { flex: 1 1 0; min-width: 0; max-width: 96px; padding: 12px 4px 9px; font-size: 12.5px; }
+  .pz-ico svg { width: 24px; height: 24px; }
 
   .rp {
     display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0;

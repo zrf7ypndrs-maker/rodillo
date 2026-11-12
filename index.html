@@ -227,9 +227,20 @@
       <div class="hold-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="hold-track" cx="60" cy="60" r="54"/><circle class="hold-fill" id="hold-fill" cx="60" cy="60" r="54" pathLength="100"/></svg><span class="hold-key" id="hold-key"></span></div>
       <div class="hold-sub" id="hold-sub"></div>
     </div>
+    <!-- paused / ready: connections, garage, controls and settings without leaving the ride (Lucide icons, ISC) -->
     <div class="paused-overlay hidden" id="r-paused">
-      <div><div class="big" id="r-paused-title">Paused</div><div class="muted" id="r-paused-sub">Start pedaling to resume</div></div>
+      <div class="pz">
+        <div class="big" id="r-paused-title">Paused</div><div class="muted" id="r-paused-sub">Start pedaling to resume</div>
+        <div class="pz-acts">
+          <button class="pz-btn" id="pz-devices" aria-haspopup="dialog" aria-expanded="false"><span class="pz-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1"/></svg></span><span class="pz-l">Connections</span><span class="ldots"><i data-k="trainer"></i><i data-k="hr"></i><i data-k="controller"></i></span></button>
+          <button class="pz-btn" id="pz-garage"><span class="pz-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span><span class="pz-l">Garage</span></button>
+          <button class="pz-btn" id="pz-controls"><span class="pz-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg></span><span class="pz-l">Controls</span></button>
+          <button class="pz-btn" id="pz-settings"><span class="pz-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="pz-l">Settings</span></button>
+        </div>
+      </div>
     </div>
+    <!-- light / dark switch, top right corner of the desktop ride screen (the phone has it in the sheet) -->
+    <button class="ghost icon-btn theme-btn" id="r-theme" aria-label="Dark mode" title="Switch to dark mode"></button>
   </section>
 
   <!-- ================= SUMMARY ================= -->

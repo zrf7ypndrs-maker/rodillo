@@ -32,6 +32,23 @@ test('FTMS indoor bike data', () => {
   assert.equal(r2.speedKmh, undefined); assert.equal(r2.cadence, 90); assert.equal(r2.power, 250); assert.equal(r2.hr, 140);
 });
 
+test('settings changed mid-ride (pause screen): new bike applies, gear kept close, FTP and trim stay', () => {
+  const trainer = new SimTrainer();
+  const s = new Session({ trainer, settings: { ftp: 200, drivetrain: 'mtb-1x12-sram-32', bikeKg: 13.1, gradeTrim: 0.03 } });
+  const ratio = s.gb.ratio;
+  s.applySettings({ ftp: 250, drivetrain: 'road-2x12-shimano-52-36-1134', bikeKg: 8.1, gradeTrim: 0 });
+  assert.equal(s.s.bikeKg, 8.1);
+  assert.equal(s.bike.p.bikeKg, 8.1); // physics reads the same settings object
+  assert.equal(s.gb.id, 'road-2x12-shimano-52-36-1134');
+  assert.equal(s.s.wheelCirc, s.gb.wheel);
+  assert.ok(Math.abs(s.gb.ratio - ratio) < 0.25, `ratio ${ratio} -> ${s.gb.ratio}`);
+  assert.equal(s.s.ftp, 200);
+  assert.equal(s.s.gradeTrim, 0.03);
+  const gb = s.gb;
+  s.applySettings({ bikeKg: 9 }); // same drivetrain: the gear doesn't move
+  assert.equal(s.gb, gb);
+});
+
 test('FTMS commands', () => {
   assert.deepEqual([...cmd.setTargetPower(215)], [0x05, 0xd7, 0x00]);
   assert.deepEqual([...cmd.setSim(0.05)], [0x11, 0, 0, 0xf4, 0x01, 0, 0]);
