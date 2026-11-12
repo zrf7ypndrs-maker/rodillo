@@ -32,6 +32,10 @@ export const DEFAULT_SETTINGS = {
 // The trim carried from one ride to the next stays small: it only has to cancel the trainer's own drag. A large
 // value is a wound-up correction from a ride that sat at the trainer's limit, not something to start with.
 const TRIM_CARRY = 0.06;
+// Time constant of the trim (s). It only has to follow slow things (the trainer's drag, a mass mismatch). At 4 s it
+// rang against the KICKR CORE's few seconds of brake ramp + power reporting lag: 180-270 W swings at a steady 20%
+// and 55 rpm (Nov 11, Agustín; reproduced in test with a 4 s lag). 20 s stays steady past 8 s of lag.
+const TRIM_TAU = 20;
 const clampTrim = (t) => Math.max(-TRIM_CARRY, Math.min(TRIM_CARRY, Number(t) || 0));
 
 export class Session extends Emitter {
@@ -293,7 +297,7 @@ export class Session extends Emitter {
           const raw = ff + this.gOff;
           const stuck = (raw >= this.s.maxSendGrade && err > 0) || (raw <= this.s.minSendGrade && err < 0);
           if (!stuck) {
-            this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / 4);
+            this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / TRIM_TAU);
             this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
           }
         }

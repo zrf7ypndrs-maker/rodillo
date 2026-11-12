@@ -310,7 +310,7 @@ test('steep grade at the trainer ceiling: no wound-up trim, no freewheel while g
   assert.ok(s.maxed && s.gOff <= 0.06, `at the ceiling the trim doesn't climb (${s.gOff})`);
   s.gb.rear = 0; t.p = 200; t.c = 44;
   go(10);
-  assert.ok(!s.maxed && s.lastSentGrade < 0.1, `32x52 at 20% sends ${s.lastSentGrade}`);
+  assert.ok(!s.maxed && s.lastSentGrade < 0.13, `32x52 at 20% sends ${s.lastSentGrade}`); // feedforward ~6.5% + at most the 6% carried trim
   // grinding: cadence reading drops to 0 for 2 s while pushing 200 W uphill -> stays engaged, keeps resistance
   t.c = 0; go(2);
   assert.ok(s.bike.engaged && s.lastSentGrade > 0.03, `still engaged, sends ${s.lastSentGrade}`);
@@ -318,6 +318,30 @@ test('steep grade at the trainer ceiling: no wound-up trim, no freewheel while g
   t.p = 0; go(3);
   assert.equal(s.lastSentGrade, -0.10);
   assert.ok(s.learned().gradeTrim <= 0.06);
+});
+
+test('slope trim stays steady when the trainer answers late', () => {
+  // Nov 11: 20% at 55 rpm in 32x52 swung 180-270 W. A trainer whose force ramps over 3 s and whose power reading
+  // arrives 4 s late made the old 4 s trim ring; the 20 s trim holds the power steady.
+  const G = 9.80665;
+  class Laggy extends SimTrainer {
+    constructor() { super(); this.cad = 55; this.f = 0; this.hist = []; }
+    step() {
+      const v = (this.cad / 60) * 5.1, want = 75 * G * (this.grade + 0.004) + 4;
+      this.f += ((want - this.f) * 0.25) / 3;
+      this.hist.push(Math.max(0, this.f * v));
+      const p = this.hist.length > 16 ? this.hist[this.hist.length - 17] : 0;
+      this.data = { power: Math.round(p), cadence: this.cad, speedKmh: v * 3.6 };
+    }
+  }
+  const t = new Laggy();
+  const s = new Session({ trainer: t, hr: null, settings: { drivetrain: 'mtb-1x12-sram-32', riderKg: 77, bikeKg: 12, maxSendGrade: 0.16, minSendGrade: -0.10 } });
+  s.gradeOffset = 0.2; s.start(); s.gb.rear = 0;
+  const P = [];
+  for (let x = 0; x < 240; x += 0.25) { t.step(); s.tick(0.25); if (x > 60 && x % 1 === 0) P.push(t.data.power); }
+  const lo = Math.min(...P), hi = Math.max(...P);
+  assert.ok(hi - lo < 20, `power swings ${lo}-${hi} W`);
+  assert.ok(lo > 200 && hi < 260, `about the road's ~230 W (${lo}-${hi})`);
 });
 
 console.log(`\n${passed} tests passed`);
