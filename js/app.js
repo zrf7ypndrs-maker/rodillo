@@ -3391,7 +3391,33 @@ function weightText(b) {
   return `${b.bikeKg.toFixed(1)} kg, estimated: ${MATERIALS[s.material].name.toLowerCase()} ${t.name.toLowerCase()}${travel}, ${BUILDS[s.build].name.split(' (')[0].toLowerCase()} build`;
 }
 const bikeSpecOf = (b) => (b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain]);
-const artFor = (b) => bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)), 'bike-art', BIKE_MODELS[b.model]?.paint);
+// Built-in bikes show Agustín's photos (cutouts, rodillo-data garage/<model>.webp). They live in the private repo
+// so Canyon's photos stay off the public site: loaded with the sign-in, cached on the device, drawings meanwhile.
+const garPhotos = ls.get('garagePhotos', {});
+const photoLoading = new Set();
+function bikePhoto(model) {
+  if (!BIKE_MODELS[model]?.photo) return null;
+  if (garPhotos[model]) return garPhotos[model];
+  loadBikePhoto(model);
+  return null;
+}
+async function loadBikePhoto(model) {
+  const gh = syncClient();
+  if (!gh || photoLoading.has(model)) return;
+  photoLoading.add(model);
+  try {
+    const r = await gh.api(`/contents/garage/${model}.webp?ref=${gh.branch}`);
+    if (!r?.content) return;
+    garPhotos[model] = `data:image/webp;base64,${r.content.replace(/\s/g, '')}`;
+    try { ls.set('garagePhotos', garPhotos); } catch { /* storage full: keep it for this visit */ }
+    if (!$('#garage').classList.contains('hidden') && garView.mode !== 'custom') renderGarage(garView);
+  } catch (e) { logMsg('app', `bike photo ${model}: ${e.message}`); }
+  finally { photoLoading.delete(model); }
+}
+const artFor = (b) => {
+  const ph = bikePhoto(b.model);
+  return ph ? `<img class="bike-photo" src="${ph}" alt="">` : bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)), 'bike-art', BIKE_MODELS[b.model]?.paint);
+};
 function garListHtml() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
   const tiles = g.map((b) => {

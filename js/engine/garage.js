@@ -15,13 +15,13 @@ export const BIKE_MODELS = {
     name: 'Canyon Lux Trail CF 7',
     // 2027: SRAM Eagle 90 Transmission, 32T + XS-1275 10-52, Maxxis 29 x 2.4, 12.8 kg (M) + Shimano XT M8100 pedals 0.34 kg
     drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'right', bikeKg: 13.1,
-    note: "Canyon's spec page (2027): 12.8 kg claimed for size M, plus Shimano XT M8100 pedals", art: 'mtb-fs', paint: 'var(--paint-grove)', // his frame is in Canyon's Grove (a green)
+    note: "Canyon's spec page (2027): 12.8 kg claimed for size M, plus Shimano XT M8100 pedals", photo: true, art: 'mtb-fs', paint: 'var(--paint-grove)', // his frame is in Canyon's Grove (a green)
   },
   'canyon-aeroad-cf-slx-7-di2': {
     name: 'Canyon Aeroad CF SLX 7 Di2',
     // Shimano 105 Di2 12s, 52/36 + 11-34, 700 x 26-28c, 7.84 kg (M) + road pedals ~0.25 kg
     drivetrain: 'road-2x12-shimano-52-36-1134', shiftStyle: 'shimano', bikeKg: 8.1,
-    note: "Canyon's spec page: 7.84 kg claimed for size M, plus road pedals", art: 'aero', paint: 'var(--paint-white)',
+    note: "Canyon's spec page: 7.84 kg claimed for size M, plus road pedals", photo: true, art: 'aero', paint: 'var(--paint-white)',
   },
 };
 

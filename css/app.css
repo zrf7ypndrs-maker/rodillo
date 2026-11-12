@@ -451,6 +451,9 @@ table.ints { margin-bottom: 14px; }
 .settings-form .gar-grid + .help { margin-top: 2px; }
 .settings-form .gar-hero { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
 .gar-hero .bike-art { width: min(300px, 70%); }
+.gar-tile .bike-photo { width: 94%; height: auto; flex: none; margin-bottom: 8px; }
+.gar-hero .bike-photo { width: min(460px, 86%); height: auto; }
+.gar-tile.gone .bike-photo { opacity: .35; }
 .settings-form .gar-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 .settings-form .gar-acts .help { margin: 0; }
 .settings-form .gar-head { grid-column: 1 / -1; margin-bottom: -6px; }
@@ -1365,6 +1368,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .gar-name { font-size: 13px; } .gar-plus { font-size: 48px; margin-bottom: 4px; }
   .gar-pick, .gar-add { padding: 10px 8px 4px; gap: 2px; }
   .gar-tile .bike-art { width: 66%; margin-bottom: 3px; }
+  .gar-tile .bike-photo { width: 76%; margin-bottom: 3px; }
+  .gar-name { line-height: 1.15; }
   .gar-line { font-size: 11.5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gar-more { font-size: 12px; padding: 4px 8px 9px; }
   .gar-riding { top: 7px; left: 7px; font-size: 10.5px; padding: 1px 7px; }
