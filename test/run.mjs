@@ -670,7 +670,7 @@ import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../
   console.log(`ok - cadence targets (${ints[0].cadInRange}% in range)`);
 }
 {
-  const w = JSON.parse(fs.readFileSync(new URL('../workouts/test-100w-85rpm.json', import.meta.url)));
+  const w = { steps: [{ dur: 900, watts: 100, cadence: 85 }] };
   const trainer = new SimTrainer(); const hr = new SimHr(trainer);
   const s = new Session({ trainer, hr, settings: { ftp: 263 }, workout: w });
   s.start(); trainer.ergCadence = 85; ride(s, trainer, hr, 20);
