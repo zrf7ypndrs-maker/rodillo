@@ -1102,12 +1102,33 @@ function svgWeekly(weeks) {
   const W = 560, H = 200, n = weeks.length;
   const max = Math.max(100, ...weeks.map((w) => w.tss));
   const bw = (W - 20) / n;
-  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">${weeks.map((w, i) => {
-    const h = (w.tss / max) * 120, x = 10 + i * bw;
-    return `<rect x="${x + 6}" y="${165 - h}" width="${bw - 12}" height="${h}" rx="2" fill="${i === n - 1 ? INK : FAINT}"/>
+  const hrOnly = weeks.some((w) => w.otherTss > 0);
+  const fmtDay = (d) => new Date(d + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+  // Each bar is the week's TSS stacked by power zone, Z1 at the bottom; HR-only TSS (no power) sits on top, hatched.
+  const bars = weeks.map((w, i) => {
+    const h = (w.tss / max) * 120, x = 10 + i * bw, bx = x + 6, bwid = bw - 12;
+    const parts = (w.zoneTss || []).map((t, z) => ({ t, fill: ZC[ZONES[z].color], z }))
+      .concat(w.otherTss ? [{ t: w.otherTss, fill: 'url(#wk-hr)' }] : []);
+    const known = parts.reduce((a, p) => a + p.t, 0);
+    let y = 165, segs = '';
+    if (known > 0) for (const p of parts) {
+      const sh = (p.t / known) * h;
+      if (sh < 0.3) continue;
+      y -= sh;
+      segs += `<rect x="${bx}" y="${y}" width="${bwid}" height="${sh + 0.4}" fill="${p.fill}"/>`;
+    } else if (h) segs = `<rect x="${bx}" y="${165 - h}" width="${bwid}" height="${h}" fill="${FAINT}"/>`;
+    const byZone = (w.zoneTss || []).map((t, z) => [t, z]).filter(([t]) => t >= 1)
+      .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
+    const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours}h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
+    const cur = i === n - 1;
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${165 - h}" width="${bwid}" height="${h}" rx="2"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
       ${w.tss ? `<text x="${x + bw / 2}" y="${158 - h}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text><text x="${x + bw / 2}" y="${144 - h}" text-anchor="middle" fill="${MUTED}" font-size="11">${w.hours}h</text>` : ''}
-      ${i % 2 === n % 2 ? '' : `<text x="${x + bw / 2}" y="190" text-anchor="middle" fill="${MUTED}" font-size="11">${new Date(w.start + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>`}`;
-  }).join('')}</svg>`;
+      ${i % 2 === n % 2 ? '' : `<text x="${x + bw / 2}" y="190" text-anchor="middle" fill="${cur ? INK : MUTED}" font-size="11"${cur ? ' font-weight="700"' : ''}>${cur ? 'This week' : fmtDay(w.start)}</text>`}`;
+  }).join('');
+  const legend = ZONES.slice(0, 6).map((z) => `<tspan fill="${ZC[z.color]}">&#9632;</tspan><tspan fill="${MUTED}"> Z${z.z}  </tspan>`).join('')
+    + (hrOnly ? `<tspan fill="${FAINT}">&#9636;</tspan><tspan fill="${MUTED}"> HR only</tspan>` : '');
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs><pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
+    <text x="${W - 10}" y="12" text-anchor="end" font-size="11" xml:space="preserve">${legend}</text>${bars}</svg>`;
 }
 
 function svgCurve(c90, cAll) {

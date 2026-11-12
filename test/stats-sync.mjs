@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
+import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, tssByZone, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
 import { GitHubSync } from '../js/sync.js';
 import { flatten } from '../js/engine/workout.js';
 import fs from 'node:fs';
@@ -65,6 +65,20 @@ assert.equal(powerCurve(fake)[1200], 210);
 const est = ftpEstimate(fake, Date.parse('2026-11-09T12:00:00'));
 assert.equal(est.from20min, 200); assert.equal(est.fromRamp, 210);
 ok(`load series (CTL ${last.ctl}, ATL ${last.atl}, TSB ${last.tsb}), weekly, curve, FTP estimate`);
+
+// ---- weekly TSS by zone
+{
+  const split = tssByZone({ tss: 80, zones: [600, 1800, 0, 1200, 0, 0, 0] });
+  assert.ok(Math.abs(split.reduce((a, b) => a + b, 0) - 80) < 1e-9, 'parts add up to the ride TSS');
+  assert.ok(split[3] > split[1], 'threshold minutes weigh more than endurance minutes');
+  assert.equal(tssByZone({ tss: 50, np: null, tssFrom: 'hr' }), null, 'HR-only ride has no split');
+  const d = '2026-11-03T18:00:00';
+  const w = weekly([{ id: rideIdFor(Date.parse(d)), start: new Date(d).toISOString(), durSec: 3600, tss: 80, zones: [600, 1800, 0, 1200, 0, 0, 0] },
+    { id: rideIdFor(Date.parse(d) + 864e5), start: new Date(Date.parse(d) + 864e5).toISOString(), durSec: 3600, tss: 50, tssFrom: 'hr' }], 1, new Date('2026-11-05T12:00:00'))[0];
+  assert.equal(w.tss, 130); assert.equal(w.otherTss, 50);
+  assert.ok(Math.abs(w.zoneTss.reduce((a, b) => a + b, 0) - 80) < 0.5, JSON.stringify(w));
+  ok('weekly TSS split by zone (HR-only rides kept apart)');
+}
 
 // ---- GitHub sync against an in-memory contents API
 function mockGitHub() {

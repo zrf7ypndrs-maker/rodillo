@@ -183,7 +183,23 @@ export function loadSeries(rides, until = new Date(), days = 120) {
   return out.slice(-days);
 }
 
-/** Monday-start weekly totals for the last n weeks. */
+// Typical intensity (fraction of FTP) inside each zone, used to weight time in zone into TSS.
+const ZONE_MID_IF = [0.45, 0.655, 0.83, 0.98, 1.13, 1.355, 1.75];
+
+/**
+ * A ride's TSS split by power zone (Z1..Z7), or null when the ride has no power zones
+ * (HR-scored imports). TSS grows with time x IF squared, so each zone's seconds are
+ * weighted by its typical IF squared, then scaled so the parts add up to the ride's TSS.
+ */
+export function tssByZone(r) {
+  const z = r?.zones;
+  if (!r?.tss || !Array.isArray(z)) return null;
+  const w = ZONES.map((_, i) => (z[i] || 0) * ZONE_MID_IF[i] ** 2);
+  const sum = w.reduce((a, b) => a + b, 0);
+  return sum > 0 ? w.map((x) => (x / sum) * r.tss) : null;
+}
+
+/** Monday-start weekly totals for the last n weeks; zoneTss splits the TSS by power zone, otherTss is TSS without power. */
 export function weekly(rides, n = 12, now = new Date()) {
   const monday = new Date(now);
   monday.setHours(0, 0, 0, 0);
@@ -193,7 +209,13 @@ export function weekly(rides, n = 12, now = new Date()) {
     const start = new Date(monday); start.setDate(start.getDate() - 7 * i);
     const end = new Date(start); end.setDate(end.getDate() + 7);
     const rs = rides.filter((r) => { const t = Date.parse(r.start); return t >= start && t < end; });
-    weeks.push({ start: dayKey(start), rides: rs.length, hours: r1(rs.reduce((a, r) => a + r.durSec, 0) / 3600), tss: rs.reduce((a, r) => a + (r.tss || 0), 0) });
+    const zoneTss = new Array(ZONES.length).fill(0);
+    let otherTss = 0;
+    for (const r of rs) {
+      const z = tssByZone(r);
+      if (z) z.forEach((t, i) => { zoneTss[i] += t; }); else otherTss += r.tss || 0;
+    }
+    weeks.push({ start: dayKey(start), rides: rs.length, hours: r1(rs.reduce((a, r) => a + r.durSec, 0) / 3600), tss: rs.reduce((a, r) => a + (r.tss || 0), 0), zoneTss: zoneTss.map(r1), otherTss: r1(otherTss) });
   }
   return weeks;
 }
