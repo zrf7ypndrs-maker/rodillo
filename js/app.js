@@ -1099,36 +1099,39 @@ function svgLoad(series) {
 }
 
 function svgWeekly(weeks) {
-  const W = 560, H = 200, n = weeks.length;
+  // Real pixel sizes on the phone (viewBox = about the card width there), so text isn't shrunk.
+  const phone = isPhone();
+  const W = phone ? 340 : 560, n = weeks.length;
+  const top = 24, barMax = phone ? 110 : 120, base = top + barMax, H = base + 40;
   const max = Math.max(100, ...weeks.map((w) => w.tss));
-  const bw = (W - 20) / n;
-  const hrOnly = weeks.some((w) => w.otherTss > 0);
+  const bw = (W - 8) / n;
   const fmtDay = (d) => new Date(d + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
   // Each bar is the week's TSS stacked by power zone, Z1 at the bottom; HR-only TSS (no power) sits on top, hatched.
   const bars = weeks.map((w, i) => {
-    const h = (w.tss / max) * 120, x = 10 + i * bw, bx = x + 6, bwid = bw - 12;
-    const parts = (w.zoneTss || []).map((t, z) => ({ t, fill: ZC[ZONES[z].color], z }))
+    const h = (w.tss / max) * barMax, x = 4 + i * bw, cx = x + bw / 2, bwid = Math.min(bw - 8, 34), bx = cx - bwid / 2;
+    const parts = (w.zoneTss || []).map((t, z) => ({ t, fill: ZC[ZONES[z].color] }))
       .concat(w.otherTss ? [{ t: w.otherTss, fill: 'url(#wk-hr)' }] : []);
     const known = parts.reduce((a, p) => a + p.t, 0);
-    let y = 165, segs = '';
+    let y = base, segs = '';
     if (known > 0) for (const p of parts) {
       const sh = (p.t / known) * h;
       if (sh < 0.3) continue;
       y -= sh;
       segs += `<rect x="${bx}" y="${y}" width="${bwid}" height="${sh + 0.4}" fill="${p.fill}"/>`;
-    } else if (h) segs = `<rect x="${bx}" y="${165 - h}" width="${bwid}" height="${h}" fill="${FAINT}"/>`;
+    } else if (h) segs = `<rect x="${bx}" y="${base - h}" width="${bwid}" height="${h}" fill="${FAINT}"/>`;
     const byZone = (w.zoneTss || []).map((t, z) => [t, z]).filter(([t]) => t >= 1)
       .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
-    const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours}h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
-    const cur = i === n - 1;
-    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${165 - h}" width="${bwid}" height="${h}" rx="2"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
-      ${w.tss ? `<text x="${x + bw / 2}" y="${158 - h}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text><text x="${x + bw / 2}" y="${144 - h}" text-anchor="middle" fill="${MUTED}" font-size="11">${w.hours}h</text>` : ''}
-      ${i % 2 === n % 2 ? '' : `<text x="${x + bw / 2}" y="190" text-anchor="middle" fill="${cur ? INK : MUTED}" font-size="11"${cur ? ' font-weight="700"' : ''}>${cur ? 'This week' : fmtDay(w.start)}</text>`}`;
+    const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours} h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
+    const cur = i === n - 1, lab = cur ? INK : MUTED, wt = cur ? ' font-weight="700"' : '';
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h}" rx="2"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
+      ${w.tss ? `<text x="${cx}" y="${base - h - 6}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text>` : ''}
+      <text x="${cx}" y="${base + 17}" text-anchor="middle" fill="${lab}" font-size="12"${wt}>${fmtDay(w.start)}</text>
+      <text x="${cx}" y="${base + 33}" text-anchor="middle" fill="${MUTED}" font-size="12"${wt}>${w.rides ? `${w.hours} h` : '-'}</text>`;
   }).join('');
-  const legend = ZONES.slice(0, 6).map((z) => `<tspan fill="${ZC[z.color]}">&#9632;</tspan><tspan fill="${MUTED}"> Z${z.z}  </tspan>`).join('')
-    + (hrOnly ? `<tspan fill="${FAINT}">&#9636;</tspan><tspan fill="${MUTED}"> HR only</tspan>` : '');
+  const hrOnly = weeks.some((w) => w.otherTss > 0);
+  const legend = `<div class="wk-legend"><span class="wk-key">Number on bar = training stress (TSS). Below: week starting, hours ridden.</span>${ZONES.slice(0, 6).map((z) => `<span><i style="background:var(--${z.color})"></i>Z${z.z}</span>`).join('')}${hrOnly ? '<span><i class="hr"></i>HR only (no power)</span>' : ''}</div>`;
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs><pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
-    <text x="${W - 10}" y="12" text-anchor="end" font-size="11" xml:space="preserve">${legend}</text>${bars}</svg>`;
+    <line x1="4" x2="${W - 4}" y1="${base}" y2="${base}" stroke="${RULE}"/>${bars}</svg>${legend}`;
 }
 
 function svgCurve(c90, cAll) {
@@ -1187,7 +1190,7 @@ async function renderTraining() {
   const real = rows.filter((r) => !r.demo).map((r) => r.summary);
   const series = loadSeries(real, new Date(), 90);
   const today = series.at(-1) || { ctl: 0, atl: 0, tsb: 0 };
-  const wk = weekly(real, 12);
+  const wk = weekly(real, isPhone() ? 8 : 12);
   const thisWeek = wk.at(-1);
   const est = ftpEstimate(real);
   const card = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;

@@ -316,6 +316,12 @@ table.ints { margin-bottom: 14px; }
 .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .tgrid .wide { grid-column: 1 / -1; }
 .tgrid h3, .card h3 { font-size: 16px; }
+.tgrid h3 .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
+/* weekly load legend (svgWeekly in js/app.js) */
+.wk-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.wk-legend .wk-key { flex-basis: 100%; }
+.wk-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.wk-legend i.hr { background: repeating-linear-gradient(45deg, var(--faint) 0 2px, var(--underlay) 2px 5px); }
 /* time in zones (Coggan Z1-Z7, js/zones.js) */
 .zcols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; }
 .zcols h4 .muted, #s-extra h4 .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
