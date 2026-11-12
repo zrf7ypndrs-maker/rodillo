@@ -395,6 +395,7 @@ table.ints { margin-bottom: 14px; }
 .bk-grid .bk-tile { aspect-ratio: auto; padding: 0; font: inherit; text-align: center; cursor: pointer; }
 .bk-tile .gar-pick { padding: 26px 10px 14px; }
 .bk-grid .bk-tile .bike-art { width: 70%; }
+.bk-grid .bk-tile .bike-photo { width: 82%; }
 .bk-tile .gar-line { white-space: normal; overflow: visible; }
 .bk-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .modal-btns button:disabled { opacity: .4; cursor: default; }
