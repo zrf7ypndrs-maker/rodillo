@@ -631,7 +631,7 @@ function renderOverview() {
   const w = whoopDay(dkey(new Date()));
   const rec = w?.recovery != null
     ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', `${w.hrv ? `HRV ${Math.round(w.hrv)}` : ''}${w.sleepHours ? `<span class="wide-only">${w.hrv ? ' &middot; ' : ''}${w.sleepHours} h sleep</span>` : ''}`)
-    : tile('-', 'Recovery', app.whoop ? 'not scored yet' : 'WHOOP off');
+    : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP');
   const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
     `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
   const tsb = Math.round(t.tsb);
@@ -716,12 +716,14 @@ function heroRecovery(today) {
   const d = whoopDay(today.key);
   const decided = coachDecision(today.key);
   const z = d?.recovery != null ? recZone(d.recovery) : '';
-  const rec = z ? `<span class="rdot ${z}"></span><span><b class="rz ${z}">Recovery ${d.recovery}%.</b> ` : '<span>';
+  // The number lives in the overview tile; this line is only the call (dot = zone).
+  const rec = z ? `<span class="rdot ${z}"></span><span>` : '<span>';
   if (decided) return `<div class="hero-rec">${rec}${decided.replace(/^<p class="coach-call">|<\/p>$/g, '')}</span></div>`;
   if (!z) return '';
   const adv = today.workout && !today.done ? recoveryAdvice(today) : '';
   // recoveryAdvice() returns a block; pull its sentence and buttons into the hero line.
   const p = adv.match(/<p>(.*?)<\/p>/)?.[1] || '';
+  if (!p) return '';
   const btns = adv.match(/<div class="row-btns">(.*?)<\/div>/s)?.[1] || '';
   return `<div class="hero-rec">${rec}${p}</span>${btns ? `<span class="row-btns">${btns}</span>` : ''}</div>`;
 }
@@ -762,7 +764,7 @@ function heroDoneBody(w, r, date) {
         ${sub ? `<p class="hero-desc">${sub}</p>` : ''}
       </div>
       <div class="hero-btns">
-        <button class="ghost hero-see" id="hero-see">${SEE_ICO}See ride</button>
+        <button class="primary hero-see" id="hero-see">${SEE_ICO}See ride</button>
         <button class="ghost hero-free" id="btn-free"><span class="hs-label">Free ride</span>${BIKE_ICO}</button>
       </div>
     </div>
@@ -795,7 +797,7 @@ function renderHero() {
   if (w) {
     const work = workSummary(w);
     const status = today.done
-      ? `<div class="hero-done">&#10003; ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : '';
+      ? `<div class="hero-done"><span class="ck">&#10003;</span> ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : '';
     const start = `<button class="primary hero-start" id="hero-start">${PLAY_ICO}<span class="hs-label">Start workout</span></button>`;
     body = `<div class="hero-main">
         <div class="hero-text">
@@ -818,7 +820,7 @@ function renderHero() {
           <div class="hero-top"><b>Today</b><span>${date}</span></div>
           <h2 class="hero-name">${name}</h2>
           <p class="hero-desc">${sub}</p>
-          ${today.done ? `<div class="hero-done">&#10003; ${esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : ''}
+          ${today.done ? `<div class="hero-done"><span class="ck">&#10003;</span> ${esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : ''}
         </div>
         <div class="hero-btns">${free(true)}</div>
       </div>${heroRecovery(today)}`;
