@@ -1373,8 +1373,11 @@ async function canRide() {
 async function startWorkout(w, intensity = 1, btn = null) {
   if (app.launching || app.session) return;
   const go = () => { if (!app.session) beginSession({ workout: w, intensity }); };
-  if (btn && (app.demo || app.trainer?.state === 'connected')) return launchFrom(btn, go);
-  if (await canRide()) go();
+  const ready = app.demo || app.trainer?.state === 'connected';
+  if (!(btn && ready) && !await canRide()) return;
+  if (isSim(w) && !await confirmBike()) return; // slope steps ride the bike's gearing and weight; ERG doesn't care
+  if (btn && ready) return launchFrom(btn, go);
+  go();
 }
 
 /** Start workout / Free ride launch (asked for by Agustín, Nov 11): each button plays its own intro
@@ -1535,8 +1538,55 @@ function speedLines(btn, box, dx) {
 async function startFree(btn = null) {
   if (app.launching || app.session) return;
   const go = () => { if (!app.session) beginSession({}); };
-  if (btn && (app.demo || app.trainer?.state === 'connected')) return launchFrom(btn, go, 'free');
-  if (await canRide()) go();
+  const ready = app.demo || app.trainer?.state === 'connected';
+  if (!(btn && ready) && !await canRide()) return;
+  if (!await confirmBike()) return;
+  if (btn && ready) return launchFrom(btn, go, 'free');
+  go();
+}
+
+/** Bike check before a slope workout or a free ride (asked for by Agustín, Nov 12): shows the bike in use
+   with the rest of the garage beside it; a tap (or the controller's left / right) picks another one, and
+   the main button starts the ride on the picked bike. Cancel / B doesn't start. Nothing changes until the
+   ride is confirmed. Skipped when the garage is empty. Resolves true to ride. */
+async function confirmBike() {
+  const g = garageOf(app.settings);
+  if (!g.length) return true;
+  let pick = currentBike(app.settings)?.id || '';
+  const tile = (b) => `<button type="button" class="bk-tile gar-tile${b.id === pick ? ' on' : ''}" data-bk="${esc(b.id)}" role="radio" aria-checked="${b.id === pick}">
+      <span class="gar-pick">${artFor(b)}<span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></span>${b.id === pick ? '<span class="gar-riding">Selected</span>' : ''}</button>`;
+  const paint = () => {
+    const box = $('#bk-grid');
+    if (box) box.innerHTML = g.map(tile).join('');
+    const b = g.find((x) => x.id === pick);
+    $('#modal-title').textContent = b ? `Riding the ${b.name}?` : 'Which bike are you riding?';
+    $('#modal-ok').disabled = !b;
+  };
+  const move = (d) => {
+    const i = g.findIndex((x) => x.id === pick);
+    pick = g[i < 0 ? 0 : (i + d + g.length) % g.length].id;
+    paint();
+  };
+  const nav = (a) => {
+    if (['left', 'easier'].includes(a)) { move(-1); return true; }
+    if (['right', 'harder'].includes(a)) { move(1); return true; }
+    if (a === 'select' && !g.some((x) => x.id === pick)) return true;
+    return false;
+  };
+  const body = `<div class="bk-grid" id="bk-grid" role="radiogroup" aria-label="Bikes"></div>`;
+  const onTap = (e) => { const t = e.target.closest('[data-bk]'); if (t) { pick = t.dataset.bk; paint(); } };
+  $('#modal-body').addEventListener('click', onTap);
+  const done = ask('Slope mode uses its gearing, shifting and weight. Pick another bike to switch.',
+    { title: ' ', ok: 'Ride this bike', body, nav, wide: true });
+  paint();
+  const ok = await done;
+  $('#modal-body').removeEventListener('click', onTap);
+  $('#modal-ok').disabled = false;
+  if (ok && pick && pick !== app.settings.bike) {
+    Object.assign(app.settings, selectBike(app.settings, pick));
+    saveSettings();
+  }
+  return ok;
 }
 
 let wakeLock = null;
@@ -3107,14 +3157,20 @@ function toast(msg) {
 // In-app replacement for alert()/confirm(), which open as browser windows.
 // ask() resolves true (OK) or false (Cancel, Esc, controller B, tap outside).
 // tell() is the one-button version. Never use alert/confirm/prompt in this app.
-let modalDone = null, modalFocus = 0;
+// `body` = extra HTML under the text (the bike check's tiles), `nav(a)` = its own controller handling
+// (return true when it used the action), `wide` = a wider box.
+let modalDone = null, modalFocus = 0, modalNav = null;
 const modalOpen = () => !!modalDone;
 const modalBtns = () => $$('#modal .modal-btns button:not(.hidden)');
-function ask(text, { title = '', ok = 'OK', cancel = 'Cancel', danger = false } = {}) {
+function ask(text, { title = '', ok = 'OK', cancel = 'Cancel', danger = false, body = '', nav = null, wide = false } = {}) {
   modalDone?.(false);
   $('#modal-title').textContent = title;
   $('#modal-text').textContent = text;
   $('#modal-text').classList.toggle('hidden', !text);
+  $('#modal-body').innerHTML = body;
+  $('#modal-body').classList.toggle('hidden', !body);
+  $('#modal .modal-box').classList.toggle('wide', wide);
+  modalNav = nav;
   $('#modal-ok').textContent = ok;
   $('#modal-cancel').textContent = cancel || '';
   $('#modal-cancel').classList.toggle('hidden', !cancel);
@@ -3123,7 +3179,7 @@ function ask(text, { title = '', ok = 'OK', cancel = 'Cancel', danger = false } 
   modalFocus = danger && cancel ? 0 : modalBtns().length - 1;
   setModalFocus();
   return new Promise((resolve) => {
-    modalDone = (v) => { modalDone = null; $('#modal').classList.add('hidden'); $$('#modal .focus').forEach((x) => x.classList.remove('focus')); resolve(v); };
+    modalDone = (v) => { modalDone = null; modalNav = null; $('#modal').classList.add('hidden'); $$('#modal .focus').forEach((x) => x.classList.remove('focus')); resolve(v); };
   });
 }
 const tell = (text, title = '') => ask(text, { title, cancel: null });
@@ -3134,6 +3190,7 @@ function setModalFocus() {
 }
 function modalAction(a) {
   app.usedNav = true; // keyboard or controller: show which button A / Enter will press
+  if (modalNav?.(a)) return;
   const btns = modalBtns();
   switch (a) {
     case 'left': case 'up': case 'easier': modalFocus = 0; setModalFocus(); break;
@@ -3611,7 +3668,6 @@ $('#devpop-close').onclick = () => setDevPop(false);
 document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #pz-devices, #modal')) setDevPop(false); });
 // pause screen of a ride: the same panels as the home top bar
 $('#pz-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!(devPopOpen() && $('#devpop').classList.contains('on-ride')), 'ride'); };
-$('#pz-garage').onclick = () => $('#btn-garage').click();
 $('#pz-controls').onclick = () => $('#btn-controls').click();
 $('#pz-settings').onclick = () => $('#btn-settings').click();
 setWoKind(app.woKind);
