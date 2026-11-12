@@ -844,6 +844,24 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .cal-prof { margin-top: 8px; } /* profile of the selected day: same hover/tap readout as the today hero */
 .cal-ride { font-size: 13.5px; padding: 8px 0; border-top: 1px solid var(--rule); color: var(--good); }
 .cal-ride b { color: var(--ink); }
+/* Calendar day whose planned workout was ridden: result first (same stat row as the done hero) */
+.cal-done-head { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.cal-done-head .done-ico { width: 26px; height: 26px; }
+.cal-done-name { font-size: 20px; font-weight: 750; line-height: 1.2; }
+.cal-done-name .ok { color: var(--good); }
+.cal-done-sub { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.cal-stats { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; margin-top: 14px; padding-top: 12px; }
+.cal-stats .hs .v { font-size: 26px; }
+.cal-stats .hs + .hs { padding-left: 12px; }
+.cal-stats .hs:nth-child(3n + 1) { border-left: 0; padding-left: 0; }
+.cal-stats .wide-only { display: none; }
+.cal-done-wo .cal-prof { margin-top: 14px; }
+.cal-see-main { margin-top: 12px; }
+.cal-see-main .see-ico { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
+.cal-missed-line { color: var(--muted); }
+/* name with duration / TSS under it (the narrow detail column made the meta wrap to a right-aligned line of its own) */
+.cal-wo .wo-top { display: block; }
+.cal-wo .wo-top .wo-meta { width: auto; text-align: left; margin-top: 2px; color: var(--muted); }
 
 /* ERG: gears, grade and speed are irrelevant (speed + distance sit in the Elapsed card as #r-trip).
    The three cards are a compact group centered under the interval card: HR | Power | Cadence (Nov 10, Agustín). */

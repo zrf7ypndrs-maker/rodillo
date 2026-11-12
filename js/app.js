@@ -712,14 +712,12 @@ const DONE_ICO = '<svg class="done-ico" viewBox="0 0 32 32" aria-hidden="true"><
 const SEE_ICO = '<svg class="see-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>';
 
 /** Today's hero once the planned ride is done: result headline, the ride's real numbers, See ride + Free ride. */
-function heroDoneBody(w, r, date) {
-  const same = r.workoutId === w.id;
-  const at = r.start ? new Date(r.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+/** Stat row of a finished ride (done hero, Calendar day): only the numbers the ride has. */
+function rideStatsHtml(w, r) {
+  const same = !!w && r.workoutId === w.id;
   const c = r.compliance;
-  const sub = !same ? `Instead of ${esc(w.name)}.`
-    : c ? (c.min >= 95 ? `All ${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} on target.` : `Weakest rep at ${c.min}% of target.`) : '';
   const stat = (v, l, extra = '', cls = '') => `<div class="hs"><div class="v ${cls}">${v}</div><div class="l"><b>${l}</b>${extra ? `<span class="wide-only"> &middot; ${extra}</span>` : ''}</div></div>`;
-  const stats = [
+  return [
     r.durSec != null && stat(fmtTime(r.durSec), 'Time', same ? `plan ${fmtTime(totalDuration(w))}` : ''),
     r.np && stat(`${r.np} W`, 'NP', r.avgP ? `avg ${r.avgP} W` : ''),
     r.tss != null && stat(r.tss, 'TSS', same && !isSim(w) ? `plan ~${estimateTSS(w)}` : ''),
@@ -727,6 +725,18 @@ function heroDoneBody(w, r, date) {
     r.avgHr && stat(r.avgHr, 'Avg HR', r.maxHr ? `max ${r.maxHr}` : '', 'hr'),
     c && stat(`${c.avg}%`, 'Intervals', `${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} &middot; min ${c.min}%`, c.min >= 95 ? 'ok' : 'warn'),
   ].filter(Boolean).join('');
+}
+
+/** "All 3 reps on target." / "Weakest rep at 88% of target." */
+const complianceLine = (c) => !c ? '' : c.min >= 95 ? `All ${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} on target.` : `Weakest rep at ${c.min}% of target.`;
+
+function heroDoneBody(w, r, date) {
+  const same = r.workoutId === w.id;
+  const at = r.start ? new Date(r.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  const c = r.compliance;
+  const sub = !same ? `Instead of ${esc(w.name)}.`
+    : complianceLine(c);
+  const stats = rideStatsHtml(w, r);
   return `<div class="hero-main">
       <div class="hero-text">
         <div class="hero-top"><b>Today</b><span>${date}${at ? ` &middot; ${at}` : ''}</span></div>
@@ -939,16 +949,28 @@ function renderCalendar() {
   const info = dayInfo(sel);
   const date = new Date(sel + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   let html = `<h3>${date}</h3>`;
-  if (info.workout) {
+  // The planned workout already ridden: lead with the result, not the plan (no Start, no pre-ride coach note).
+  const doneRide = info.workout && info.ridden.find((r) => r.workoutId === info.workout.id);
+  if (doneRide) {
+    const w = info.workout, r = doneRide;
+    const at = r.start ? new Date(r.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const sub = [complianceLine(r.compliance), at && `Ridden at ${at}.`].filter(Boolean).join(' ');
+    html += `<div class="cal-wo cal-done-wo">
+      <div class="cal-done-head">${DONE_ICO}<div><div class="cal-done-name"><span class="ok">Done.</span> ${esc(w.name)}</div>${sub ? `<div class="cal-done-sub">${sub}</div>` : ''}</div></div>
+      <div class="hero-stats cal-stats">${rideStatsHtml(w, r)}</div>
+      <div class="cal-prof prof-hover">${profileSvg(w, 600, 60)}</div>
+      <button class="primary small cal-see-main" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
+  } else if (info.workout) {
     const w = info.workout;
     html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div><div class="cal-prof prof-hover">${profileSvg(w, 600, 60)}</div>
-      ${info.note ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
-      <button class="primary small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
+      ${info.note && !info.isPast ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
+      ${info.isPast ? `<p class="cal-missed-line">${info.optional ? 'Skipped (optional).' : 'Missed.'}</p>` : ''}
+      <button class="${info.isPast ? 'ghost' : 'primary'} small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
   html += coachDecision(sel);
   const wd = whoopDay(sel);
   if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}</div>`;
-  for (const r of info.ridden) {
+  for (const r of info.ridden.filter((x) => x !== doneRide)) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}<button class="ghost small cal-see" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   }
   $('#cal-detail').innerHTML = html;
