@@ -32,10 +32,10 @@ const fmtTime = (s) => {
 };
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
-let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FORM_BAR, FATIGUE, GRADE = [], TOK = {};
+let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE, GRADE = [], TOK = {};
 function readTokens() {
   const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
-  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FORM_BAR, FATIGUE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line', '--form-bar', '--fatigue'].map(v);
+  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line', '--fitness', '--fatigue'].map(v);
   GRADE = ['--g-down', '--g0', '--g1', '--g2', '--g3', '--g4'].map(v);
   // the ride page chart (js/ridepage.js) takes its colors as one object
   TOK = { ink: INK, rule: RULE, faint: FAINT, ftp: FTP_LINE, hr: HR_LINE, info: v('--info'), infoLine: v('--info-line'), band: v('--sheet2'), dim: v('--dim'), sheet: v('--sheet') };
@@ -1083,22 +1083,41 @@ async function trainingRows() {
   return [...rows.values()].sort((x, y) => (x.summary.id < y.summary.id ? 1 : -1));
 }
 
+// Form states, same cutoffs as formLabel() in stats.js (the Form tile)
+const FORM_BANDS = [[15, 25, 'Very fresh'], [5, 15, 'Fresh'], [-10, 5, 'Balanced'], [-30, -10, 'Productive fatigue'], [-45, -30, 'Overreaching']];
 function svgLoad(series) {
-  const W = 560, H = 230, top = 150, n = series.length;
+  // phone: the svg shrinks to about half, so text is drawn about twice as big there
+  const ph = isPhone(), k = ph ? 1.8 : 1;
+  const W = 640, H = ph ? 370 : 330, top = 150, n = series.length, PR = W - (ph ? 190 : 120); // PR = right edge of the plot, labels to its right
   if (n < 2) return '<p class="muted">Ride a few times to see fitness and fatigue.</p>';
   const maxL = Math.max(10, ...series.map((d) => Math.max(d.ctl, d.atl))) * 1.1;
-  const maxB = Math.max(10, ...series.map((d) => Math.abs(d.tsb)));
-  const X = (i) => (i / (n - 1)) * (W - 40) + 30;
+  const X = (i) => (i / (n - 1)) * (PR - 30) + 30;
   const Y = (v) => top - (v / maxL) * (top - 10);
-  const B = (v) => 190 - (v / maxB) * 35;
-  const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2.5" points="${series.map((d, i) => `${X(i)},${Y(d[k])}`).join(' ')}"/>`;
-  const bw = Math.max(1, (W - 40) / n - 1);
-  const bars = series.map((d, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(B(d.tsb), 190)}" width="${bw}" height="${Math.abs(B(d.tsb) - 190)}" fill="${FORM_BAR}" opacity=".75"/>`).join('');
-  const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="226" fill="${MUTED}" font-size="12">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
+  // form strip: fixed scale -45..+25 so the bands never move
+  const S0 = ph ? 196 : 178, S1 = H - (ph ? 36 : 24), lo = -45, hi = 25, B = (v) => S0 + ((hi - Math.max(lo, Math.min(hi, v))) / (hi - lo)) * (S1 - S0), Z = B(0);
+  const f = (v) => v.toFixed(1);
+  const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round" points="${series.map((d, i) => `${f(X(i))},${f(Y(d[k]))}`).join(' ')}"/>`;
+  let gap = '';
+  for (let i = 0; i < n - 1; i++) {
+    const a = series[i], b = series[i + 1], da = a.ctl - a.atl, db = b.ctl - b.atl;
+    const quad = (x0, c0, t0, x1, c1, t1, col) => `<polygon points="${f(x0)},${f(Y(c0))} ${f(x1)},${f(Y(c1))} ${f(x1)},${f(Y(t1))} ${f(x0)},${f(Y(t0))}" fill="${col}" opacity=".2"/>`;
+    if (da * db < 0) {
+      const t = da / (da - db), xm = X(i) + t * (X(i + 1) - X(i)), vm = a.ctl + t * (b.ctl - a.ctl);
+      gap += quad(X(i), a.ctl, a.atl, xm, vm, vm, da > 0 ? FITNESS : FATIGUE) + quad(xm, vm, vm, X(i + 1), b.ctl, b.atl, db > 0 ? FITNESS : FATIGUE);
+    } else gap += quad(X(i), a.ctl, a.atl, X(i + 1), b.ctl, b.atl, da + db >= 0 ? FITNESS : FATIGUE);
+  }
+  const now = series.at(-1).tsb, cur = FORM_BANDS.find(([l, h]) => now > l && now <= h) || FORM_BANDS.at(-1);
+  const bands = FORM_BANDS.map(([l, h, name], j) => `<rect x="30" y="${f(B(h))}" width="${W - 40}" height="${f(B(l) - B(h))}" fill="${INK}" opacity="${j % 2 ? 0.045 : 0.0}"/>`
+    + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${l < now && now <= h ? INK : MUTED}" font-size="${11 * k}" font-weight="${l < now && now <= h ? 700 : 400}">${name}</text>`).join('');
+  const bw = Math.max(1, (PR - 30) / n - 1);
+  const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
+  const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="${H - 4}" fill="${MUTED}" font-size="${12 * k}">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
-    <text x="0" y="14" fill="${MUTED}" font-size="12">${Math.round(maxL)}</text>
-    <line x1="30" x2="${W - 10}" y1="190" y2="190" stroke="${RULE}"/>${bars}${line('atl', FATIGUE)}${line('ctl', INK)}${ticks}
-    <text x="${W - 10}" y="14" text-anchor="end" font-size="11"><tspan fill="${INK}">&#9632; Fitness</tspan> <tspan fill="${FATIGUE}">&#9632; Fatigue</tspan> <tspan fill="${FORM_BAR}">&#9632; Form</tspan></text></svg>`;
+    <text x="0" y="${14 * k}" fill="${MUTED}" font-size="${12 * k}">${Math.round(maxL)}</text>
+    ${gap}${line('atl', FATIGUE)}${line('ctl', FITNESS)}
+    <text x="30" y="${S0 - 8 * k}" fill="${INK}" font-size="${12 * k}" font-weight="650">Form <tspan fill="${MUTED}" font-weight="400">now ${now > 0 ? '+' : ''}${Math.round(now)}, ${cur[2].toLowerCase()}</tspan></text>
+    ${bands}<line x1="30" x2="${PR}" y1="${f(Z)}" y2="${f(Z)}" stroke="${RULE}"/>${bars}${ticks}
+    <text x="${W - 10}" y="${14 * k}" text-anchor="end" font-size="${11 * k}"><tspan fill="${FITNESS}">&#9632; Fitness</tspan><tspan dx="10" fill="${FATIGUE}">&#9632; Fatigue</tspan>${ph ? '' : `<tspan dx="10" fill="${MUTED}">Form = fitness minus fatigue</tspan>`}</text></svg>`;
 }
 
 function svgWeekly(weeks) {

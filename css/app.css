@@ -50,7 +50,7 @@
   --ftp-line: rgba(22, 24, 27, .32);
   --hr-line: #c4196e;  /* heart rate only */
   /* Training load chart: hues no zone uses */
-  --fatigue: #7048e8; --form-bar: #12a4b8;
+  --fitness: #12a4b8; --fatigue: #7048e8; /* Training load chart; form takes the color of whichever is ahead */
   /* grade scale (slope mode): steeper = redder; flat is sand, not blue, so it never reads as Z2 */
   --g-down: #3fa596; --g0: #aeb2ad; --g1: #d2a531; --g2: #e27a35; --g3: #d9434b; --g4: #9e1f2b;
   --underlay: #dde1dc;
@@ -91,7 +91,7 @@
   --inv-muted: #5f666c; --inv-good: #15894a; --inv-yellow: #a86f00; --inv-red: #cf2f3b; --inv-info: var(--inv-muted);
   --ftp-line: rgba(238, 241, 236, .35);
   --hr-line: #ff5fa8;
-  --fatigue: #a48bff; --form-bar: #3fcfe0;
+  --fitness: #3fcfe0; --fatigue: #a48bff;
   --underlay: #262b27;
   --dim: rgba(24, 27, 25, .74);
   --today-end: #181b19; --today-shadow: rgba(255, 255, 255, .32);
