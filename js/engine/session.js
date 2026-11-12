@@ -5,6 +5,7 @@ import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
 import { flatten, retime, segTarget, fillMessage } from './workout.js?v=202611102147';
 import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain } from './drivetrain.js?v=202611102147';
 import { Emitter } from '../ble/base.js?v=202611102147';
+import { ZP_WHEEL } from '../ble/zwifthub.js?v=202611102147';
 
 export const DEFAULT_SETTINGS = {
   ftp: 200,
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS = {
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
   riderName: '',         // the coach uses it in messages ({name})
+  trainerShifting: 'auto', // 'auto' = in the trainer when it speaks the Zwift protocol, else in Rodillo; 'app' = always Rodillo
   climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
 };
 
@@ -209,7 +211,9 @@ export class Session extends Emitter {
     const trainerV = (td.speedKmh || 0) / 3.6;
     const hr = (this.hr && this.hr.bpm) || td.hr || 0;
 
-    this.devEst.update(trainerV, cadence);
+    // Shifting in the trainer (Zwift protocol): the trainer may report virtual speed, so don't learn the real gear from it.
+    const zp = this.mode === 'sim' && this.s.trainerShifting !== 'app' && !!this.trainer.zwiftShifting;
+    if (!zp) this.devEst.update(trainerV, cadence);
     this.powerBuf.push(power);
     this.cadBuf = this.cadBuf || [];
     this.cadBuf.push(cadence);
@@ -273,9 +277,25 @@ export class Session extends Emitter {
       if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);
       else this.bike.stepPower(dt, power, 0);
       this.maxed = false;
+    } else if (this.s.trainerShifting !== 'app' && this.trainer.zwiftShifting) {
+      // Zwift protocol (Nov 11): send the road grade and the virtual gear; the trainer measures its real gear and
+      // sets the brake itself, many times a second. No feedforward, no trim, nothing to wind up. The ratio is scaled
+      // to the wheel the trainer assumes (700c) so its virtual speed matches this bike's.
+      this.mode = 'sim';
+      this.target = null;
+      this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
+      this.zwiftShifting = true;
+      this.maxed = false;
+      this.lastSentGrade = this.grade;
+      this.trainer.setZwiftSim({
+        grade: this.grade,
+        gearRatio: this.ratio * (this.s.wheelCirc / ZP_WHEEL),
+        riderKg: this.s.riderKg, bikeKg: this.s.bikeKg,
+      });
     } else {
       this.mode = 'sim';
       this.target = null;
+      this.zwiftShifting = false;
       const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
       const k = this.bike.dev(this.ratio) / this.devEst.dev;
       const vr = Math.max(trainerV, 2);
@@ -321,7 +341,8 @@ export class Session extends Emitter {
         grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
         // slope diagnostics (Nov 11): grade actually sent to the trainer and the closed-loop trim, both in %
         sent: this.mode === 'sim' ? Math.round((this.lastSentGrade ?? 0) * 1000) / 10 : undefined,
-        trim: this.mode === 'sim' ? Math.round(this.gOff * 1000) / 10 : undefined,
+        trim: this.mode === 'sim' && !this.zwiftShifting ? Math.round(this.gOff * 1000) / 10 : undefined,
+        zp: this.mode === 'sim' && this.zwiftShifting ? 1 : undefined, // shifting done by the trainer (Zwift protocol)
         wt: this.workoutTime, wx: this.chartPos, si: this.segIndex, st: Math.round(this.segElapsed),
       });
       this._aggregate(this.samples.at(-1));

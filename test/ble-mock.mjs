@@ -55,6 +55,61 @@ await new Promise((r) => setTimeout(r, 20));
 assert.deepEqual(cp.writes.at(-1), [0x11, 0, 0, 0xf4, 0x01, 0, 0]);
 console.log('ok - trainer connect, control, coalescing');
 
+// ---- trainer with the Zwift protocol (shifting in the trainer)
+{
+  const zAsync = new FakeChar('00000002-19ca-4651-86e5-fa29dcdd09d1');
+  const zRx = new FakeChar('00000003-19ca-4651-86e5-fa29dcdd09d1');
+  const zTx = new FakeChar('00000004-19ca-4651-86e5-fa29dcdd09d1');
+  zRx.properties = { write: true, writeWithoutResponse: true };
+  const origW = zRx.writeValueWithoutResponse.bind(zRx);
+  zRx.writeValueWithoutResponse = async (d) => { await origW(d); if (d[0] === 0x52) setTimeout(() => zTx.fire([0x52, 0x69, 0x64, 0x65, 0x4f, 0x6e, 0x02, 0x00]), 2); };
+  const cp2 = new FakeChar(uuid16(0x2ad9));
+  cp2.onWrite = (d) => setTimeout(() => cp2.fire([0x80, d[0], 0x01]), 1);
+  const zt = new Trainer();
+  await zt.attach(fakeDevice('KICKR CORE 1234', [
+    new FakeService(uuid16(0x1826), [new FakeChar(uuid16(0x2ad2)), cp2]),
+    new FakeService(uuid16(0xfc82), [zAsync, zRx, zTx]),
+  ]));
+  assert.equal(zt.zwiftShifting, true);
+  assert.deepEqual(zRx.writes[0], [0x52, 0x69, 0x64, 0x65, 0x4f, 0x6e]);
+  zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 });
+  zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 }); // same: not sent again
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(zRx.writes.length, 2);
+  assert.equal(zRx.writes[1][0], 0x04);
+  zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 50, riderKg: 77, bikeKg: 12.5 }); // shift inside 250 ms: sent a moment later
+  assert.equal(zRx.writes.length, 2);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(zRx.writes.length, 3);
+  zAsync.fire([0x03, 0x08, 0xbe, 0x01, 0x10, 0x50]);
+  assert.equal(zt.zwift.data.power, 190);
+  // switching to ERG goes back to FTMS
+  zt.setErg(200);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(cp2.writes.at(-1), [0x05, 200, 0]);
+  console.log('ok - trainer Zwift protocol handshake, sim commands, ERG still FTMS');
+
+  // silent trainer (has the service, never answers): shifting stays in Rodillo
+  const st = new Trainer();
+  const cp3 = new FakeChar(uuid16(0x2ad9));
+  cp3.onWrite = (d) => setTimeout(() => cp3.fire([0x80, d[0], 0x01]), 1);
+  const t0 = Date.now();
+  st.zwiftTimeoutMs = 50;
+  await st.attach(fakeDevice('KICKR CORE 9', [
+    new FakeService(uuid16(0x1826), [new FakeChar(uuid16(0x2ad2)), cp3]),
+    new FakeService(uuid16(0xfc82), [new FakeChar('00000002-19ca-4651-86e5-fa29dcdd09d1'), new FakeChar('00000003-19ca-4651-86e5-fa29dcdd09d1'), new FakeChar('00000004-19ca-4651-86e5-fa29dcdd09d1')]),
+  ]));
+  assert.equal(st.zwiftShifting, false);
+  assert.ok(Date.now() - t0 < 1000);
+  // turned off in settings: no handshake at all
+  const off = new Trainer(); off.useZwift = false;
+  const offRx = new FakeChar('00000003-19ca-4651-86e5-fa29dcdd09d1');
+  const cp4 = new FakeChar(uuid16(0x2ad9)); cp4.onWrite = (d) => setTimeout(() => cp4.fire([0x80, d[0], 0x01]), 1);
+  await off.attach(fakeDevice('KICKR CORE 8', [new FakeService(uuid16(0x1826), [new FakeChar(uuid16(0x2ad2)), cp4]), new FakeService(uuid16(0xfc82), [offRx])]));
+  assert.equal(offRx.writes.length, 0); assert.equal(off.zwiftShifting, false);
+  console.log('ok - silent trainer or setting off: shifting stays in Rodillo');
+}
+
 // ---- zwift ride
 const asyncC = new FakeChar('00000002-19ca-4651-86e5-fa29dcdd09d1');
 const rx = new FakeChar('00000003-19ca-4651-86e5-fa29dcdd09d1');

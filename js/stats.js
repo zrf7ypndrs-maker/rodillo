@@ -155,6 +155,8 @@ export function buildRide(samples, meta) {
       seg: samples.map((s) => (s.si ?? -1)), // workout step per second (-1 = none): the ride page times intervals with it
       // slope diagnostics: grade sent to the trainer and the closed-loop trim (%), only when the ride had slope
       ...(samples.some((s) => s.sent != null) ? { sent: samples.map((s) => s.sent ?? 0), trim: samples.map((s) => s.trim ?? 0) } : {}),
+      // 1 where the trainer did the shifting (Zwift protocol), 0 where Rodillo did (FTMS)
+      ...(samples.some((s) => s.zp) ? { zp: samples.map((s) => s.zp ?? 0) } : {}),
     },
   };
 }

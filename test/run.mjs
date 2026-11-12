@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { parseIndoorBikeData, cmd, parseCyclingPower, CrankCadence } from '../js/ble/trainer.js';
-import { decodeRideButtons } from '../js/ble/zwiftride.js';
+import { decodeRideButtons, decodeProto } from '../js/ble/zwiftride.js';
+import { hubCommand, ridingData, ZP_WHEEL } from '../js/ble/zwifthub.js';
 import { parseHr } from '../js/ble/hr.js';
 import { SimTrainer, SimHr } from '../js/ble/sim.js';
 import { Session } from '../js/engine/session.js';
@@ -68,6 +69,52 @@ function ride(session, trainer, hr, seconds, dt = 0.25) {
     session.tick(dt);
   }
 }
+
+test('Zwift trainer protocol: commands and riding data match the captured bytes', () => {
+  const hx = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(' ');
+  // Makinolo's KICKR CORE capture: Physical { gear 0, bike 6.41 kg, rider 76.2 kg }
+  assert.equal(hx(hubCommand({ physical: { gearRatio: 0, bikeKg: 6.41, riderKg: 76.2 } })), '04 2a 08 10 00 20 81 05 28 c4 3b');
+  // Simulation: 5% up, Zwift's CWa 0.51 and Crr 0.004, no wind
+  const sim = decodeProto(hubCommand({ sim: { grade: 0.05 } }).slice(1));
+  assert.equal(sim[0][0], 4);
+  assert.deepEqual(decodeProto(sim[0][1]), [[1, 0], [2, 1000], [3, 5100], [4, 400]]); // incline 500 zigzagged
+  const down = decodeProto(decodeProto(hubCommand({ sim: { grade: -0.05 } }).slice(1))[0][1]);
+  assert.deepEqual(down[1], [2, 999]); // -500 zigzagged
+  // both in one message, gear 32x52
+  const both = decodeProto(hubCommand({ sim: { grade: 0.2 }, physical: { gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 } }).slice(1));
+  assert.deepEqual(both.map((f) => f[0]), [4, 5]);
+  assert.deepEqual(decodeProto(both[1][1]), [[2, 6154], [4, 1250], [5, 7700]]);
+  // riding data capture: 190 W, 80 rpm
+  const r = ridingData(new Uint8Array([0x08, 0xbe, 0x01, 0x10, 0x50, 0x18, 0xbd, 0x06, 0x20, 0x00, 0x28, 0xe2, 0xba, 0x01, 0x30, 0x8b, 0xeb, 0x01]));
+  assert.equal(r.power, 190); assert.equal(r.cadence, 80); assert.equal(r.speedKmh, 8.29); assert.equal(r.hr, 0);
+  assert.equal(ZP_WHEEL, 2.105);
+});
+
+test('Zwift protocol shifting: road grade + scaled gear go to the trainer, no trim, no FTMS grade', () => {
+  const sent = [], ftms = [];
+  const trainer = { data: { power: 250, cadence: 70, speedKmh: 12 }, zwiftShifting: true, setZwiftSim: (p) => sent.push(p), setGrade: (g) => ftms.push(g), setErg() {} };
+  const wo = { name: 'Steep', steps: [{ dur: 600, grade: 20 }] };
+  const s = new Session({ trainer, settings: { drivetrain: 'mtb-1x12-sram-32', riderKg: 77, bikeKg: 12.5, gradeTrim: 0.03 }, workout: wo });
+  s.start();
+  const dev0 = s.devEst.dev;
+  for (let i = 0; i < 4 * 60; i++) s.tick(0.25);
+  assert.equal(ftms.length, 0);
+  const last = sent.at(-1);
+  assert.ok(Math.abs(last.grade - 0.2) < 1e-9, `grade ${last.grade}`);
+  assert.ok(Math.abs(last.gearRatio - s.ratio * (s.s.wheelCirc / ZP_WHEEL)) < 1e-9);
+  assert.equal(last.riderKg, 77); assert.equal(last.bikeKg, 12.5);
+  assert.equal(s.maxed, false);
+  assert.equal(s.devEst.dev, dev0); // the trainer's speed is virtual here: don't learn the real gear from it
+  assert.equal(s.samples.at(-1).zp, 1); assert.equal(s.samples.at(-1).trim, undefined);
+  // shifting changes the ratio that goes out
+  const r0 = last.gearRatio;
+  s.shift(-1); s.tick(0.25);
+  assert.ok(sent.at(-1).gearRatio < r0, 'easier gear goes out');
+  // setting 'app': back to FTMS grades
+  s.s.trainerShifting = 'app';
+  s.tick(0.25);
+  assert.equal(ftms.length, 1);
+});
 
 test('Virtual gearbox: trainer power matches virtual bike physics', () => {
   // the "real" trainer differs from the app defaults; the app must learn it

@@ -106,7 +106,10 @@ function bindDevice(d) {
   d._bound = true;
   d.on('state', renderDevices);
   d.on('battery', renderDevices);
-  if (d.kind === 'trainer') d.on('state', (st) => { if (st === 'connected') detectTrainer(d); });
+  if (d.kind === 'trainer') {
+    d.useZwift = app.settings.trainerShifting !== 'app';
+    d.on('state', (st) => { if (st === 'connected') detectTrainer(d); const l = $('#shift-line'); if (l) l.textContent = shiftLine(); });
+  }
 }
 
 /** On reload Chrome can hand back previously-permitted devices without the chooser. */
@@ -162,7 +165,8 @@ function renderDevices() {
     const btn = el.querySelector('[data-connect]');
     btn.textContent = st === 'connected' ? 'Reconnect' : 'Connect';
   };
-  card('trainer', app.trainer, app.demo ? 'Simulated' : '');
+  const tz = app.trainer?.state === 'connected' && !app.demo ? `<br>Shifting: ${app.trainer.zwiftShifting && app.settings.trainerShifting !== 'app' ? 'in the trainer (Zwift protocol)' : 'in Rodillo (FTMS)'}` : '';
+  card('trainer', app.trainer, app.demo ? 'Simulated' : tz);
   card('hr', app.hr);
   const ctl = app.controllers.find((c) => c.state === 'connected') || app.controllers[0];
   const names = app.controllers.filter((c) => c.state === 'connected').map((c) => c.name);
@@ -3104,6 +3108,14 @@ function detectTrainer(dev) {
   const t = TRAINERS[id];
   toast(`${t.name}: grades from ${pct(t.min)}% to ${pct(t.max)}% (Settings > Trainer)`);
 }
+/** Where virtual shifting happens right now, for Settings > Trainer. */
+function shiftLine() {
+  const t = app.trainer, want = app.settings.trainerShifting !== 'app';
+  if (!want) return 'Rodillo works out the gear and sends the trainer a grade (FTMS). Takes effect on the next trainer connection.';
+  if (t?.state === 'connected' && t.zwiftShifting) return 'Now: in the trainer. Rodillo sends the road grade and your gear; the trainer sets the resistance itself, like with Zwift.';
+  if (t?.state === 'connected') return "Now: in Rodillo. This trainer didn't answer the Zwift protocol (KICKR CORE needs firmware 1.3.17 or newer), so Rodillo does the gearing.";
+  return 'The trainer does the gearing when it speaks the Zwift protocol (KICKR CORE with firmware 1.3.17 or newer); otherwise Rodillo does. Checked when the trainer connects.';
+}
 function renderSettings() {
   const f = $('#settings-form');
   const extra = {
@@ -3120,6 +3132,8 @@ function renderSettings() {
       <label for="set-style">Shifting style</label><select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>
       <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring. Takes effect on the next ride.</div>`,
     trainer: `<label for="set-trainer">Trainer</label><select id="set-trainer" class="wide-select">${trainerOptions()}</select>
+      <label for="set-shift">Virtual shifting</label><select id="set-shift" class="wide-select"><option value="auto">In the trainer when it can (like Zwift)</option><option value="app">Always in Rodillo</option></select>
+      <div class="help" id="shift-line">${shiftLine()}</div>
       <label for="set-gmax">Max grade (%)</label><input id="set-gmax" type="number" step="1" min="1" max="40">
       <label for="set-gmin">Min grade (%)</label><input id="set-gmin" type="number" step="1" min="-30" max="0">
       <div class="help">From the trainer's spec. Rodillo never sends a grade outside this range; past the max you'll see Max resistance. Brake trainers can't push you downhill: below 0% they just get as light as they can.</div>
@@ -3134,6 +3148,7 @@ function renderSettings() {
   fillTrainer();
   fillBike();
   $('#set-style').value = app.settings.shiftStyle || 'sram';
+  $('#set-shift').value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
   f.oninput = (e) => {
     const el = e.target;
     if (el.id === 'set-name') app.settings.riderName = el.value.trim();
@@ -3151,6 +3166,7 @@ function renderSettings() {
     }
     else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
+    else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) app.trainer.useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
     saveSettings();
   };

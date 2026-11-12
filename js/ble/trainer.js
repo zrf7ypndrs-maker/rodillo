@@ -2,6 +2,7 @@
 // fallback/supplement for power, cadence and wheel data.
 
 import { BleDevice, uuid16, logMsg, hex } from './base.js?v=202611102147';
+import { ZwiftHubLink, ZP_SERVICES } from './zwifthub.js?v=202611102147';
 
 export const FTMS = uuid16(0x1826);
 export const CPS = uuid16(0x1818);
@@ -84,12 +85,14 @@ export class Trainer extends BleDevice {
     this.crank = new CrankCadence();
     this.hasFtmsCadence = false;
     this.mode = null;
+    this.useZwift = true; // try the Zwift trainer protocol (shifting in the trainer); app.js sets it from settings
+    this.zwift = null;    // ZwiftHubLink once the trainer answered the handshake
   }
 
   static requestOptions() {
     return {
       filters: [{ services: [FTMS] }, { namePrefix: 'KICKR' }],
-      optionalServices: [FTMS, CPS, uuid16(0x180a), uuid16(0x180f), uuid16(0xfc82), 'a026ee0b-0a7d-4ab3-97fa-f1500f9feb8b'],
+      optionalServices: [FTMS, CPS, uuid16(0x180a), uuid16(0x180f), ...ZP_SERVICES, 'a026ee0b-0a7d-4ab3-97fa-f1500f9feb8b'],
     };
   }
 
@@ -119,6 +122,24 @@ export class Trainer extends BleDevice {
     await this.write(this.cp, cmd.requestControl());
     await this.write(this.cp, cmd.start());
     if (this.lastCmd) await this.write(this.cp, this.lastCmd); // restore after reconnect
+
+    // Zwift trainer protocol: virtual shifting done by the trainer itself. Falls back to FTMS (shifting in Rodillo)
+    // when the trainer has no such service or doesn't answer in 3 s.
+    this.zwift = null;
+    if (this.useZwift) {
+      const link = new ZwiftHubLink(this);
+      if (await link.start(this.zwiftTimeoutMs || 3000)) this.zwift = link;
+    }
+  }
+
+  /** True when slope riding goes through the Zwift protocol (the trainer does the gearing). */
+  get zwiftShifting() { return !!this.zwift?.ok && this.state === 'connected'; }
+
+  /** Slope with virtual gearing in the trainer (Zwift protocol). grade as a fraction, gearRatio = ring / cog. */
+  setZwiftSim(p) {
+    if (!this.zwift) return;
+    if (this.mode !== 'zwift') { this.zwift.reset(); this.mode = 'zwift'; this.lastCmd = null; this._lastGrade = null; }
+    this.zwift.setSim(p);
   }
 
   _onIbd(dv) {
