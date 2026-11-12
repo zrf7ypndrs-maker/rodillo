@@ -71,9 +71,16 @@ export function intervalResults(samples, segs, ftp) {
       res.cadInRange = settled.length ? Math.round((settled.filter((s) => s.cadence >= seg.cad.lo && s.cadence <= seg.cad.hi).length / settled.length) * 100) : undefined;
     }
     if (seg.kind === 'erg') {
+      // planned watts (rides since Nov 12) so lowering the effort doesn't make a rep look on target;
+      // older rides only have the target sent to the trainer, which already includes the effort
+      const pl = xs.filter((s) => s.plan).map((s) => s.plan);
       const tg = xs.filter((s) => s.target).map((s) => s.target);
-      res.target = Math.round(tg.length ? mean(tg) : mean([seg.from, seg.to]) * ftp);
+      res.target = Math.round(pl.length ? mean(pl) : tg.length ? mean(tg) : mean([seg.from, seg.to]) * ftp);
       res.pct = res.target ? Math.round((res.avgP / res.target) * 100) : undefined;
+      if (pl.length) {
+        const eff = Math.round(mean(xs.filter((s) => s.plan).map((s) => s.eff ?? 1)) * 100);
+        if (eff !== 100) res.effort = eff; // average effort over the rep, in %
+      }
       res.work = mean([seg.from, seg.to]) >= 0.85;
     } else {
       res.grade = r1(mean(xs.map((s) => s.grade || 0)));
@@ -119,7 +126,9 @@ export function buildRide(samples, meta) {
   const IF = np / ftp;
   const hrs = hr.filter(Boolean);
   const intervals = intervalResults(samples, meta.segs, ftp);
-  const work = intervals.filter((x) => x.work && x.pct);
+  // compliance counts the reps when the workout has them (not a one-off opener), else every work interval
+  let work = intervals.filter((x) => x.work && x.pct);
+  if (work.some((x) => x.rep)) work = work.filter((x) => x.rep);
   const summary = {
     id: rideIdFor(meta.startMs),
     start: new Date(meta.startMs).toISOString(),
@@ -153,6 +162,8 @@ export function buildRide(samples, meta) {
       target: samples.map((s) => s.target || 0),
       gear: samples.map((s) => s.gear || 0),
       seg: samples.map((s) => (s.si ?? -1)), // workout step per second (-1 = none): the ride page times intervals with it
+      // planned watts per second (effort 100%), only when the ride had ERG with a changed effort
+      ...(samples.some((s) => s.eff != null) ? { plan: samples.map((s) => s.plan ?? 0) } : {}),
       // slope diagnostics: grade sent to the trainer and the closed-loop trim (%), only when the ride had slope
       ...(samples.some((s) => s.sent != null) ? { sent: samples.map((s) => s.sent ?? 0), trim: samples.map((s) => s.trim ?? 0) } : {}),
       // 1 where the trainer did the shifting (Zwift protocol), 0 where Rodillo did (FTMS)

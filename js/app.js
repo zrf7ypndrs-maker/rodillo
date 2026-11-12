@@ -16,7 +16,7 @@ import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
 import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
 import { ls, rides, docs } from './store.js?v=202611102147';
-import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc } from './ridepage.js?v=202611102147';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js?v=202611102147';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
 import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
 import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102147';
@@ -1505,7 +1505,8 @@ async function endSession() {
     saveSettings();
   }
   const ride = await saveRide('done');
-  showSummary(ride);
+  app.session = null;
+  openDone(ride);
 }
 
 function rideDoc(ride) {
@@ -1543,28 +1544,31 @@ const syncHint = () => (authEnabled() ? 'Sign in with GitHub' : 'Add your GitHub
 
 async function syncRide(ride) {
   const gh = syncClient();
-  const el = $('#s-sync');
-  const say = (t) => { if (el && app.screen === 'summary') el.textContent = t; };
-  if (ride.demo) { say('Demo ride: kept on this Mac only, not added to your training history.'); return false; }
-  if (!gh) { say(`Not synced: ${syncHint().toLowerCase()} in Settings to send rides to rodillo-data.`); return false; }
+  const say = (state, text) => doneSync(ride, state, text);
+  if (ride.demo || !gh) return false;
   try {
-    say('Syncing to rodillo-data...');
+    say('busy', 'Syncing to rodillo-data');
     const doc = { ...rideDoc(ride), laps: ride.laps };
     const index = await gh.pushRide(doc);
     ride.synced = true;
-    await rides.put(ride);
+    if (!ride.discarded) await rides.put(ride);
     ls.set('remoteIndex', index.rides);
-    say('Synced to rodillo-data. Your coach can see it.');
+    say('ok', 'Synced. Your coach can see it.');
     return true;
   } catch (e) {
     logMsg('sync', e.message);
-    say(`Sync failed, will retry next launch: ${e.message}`);
+    say('err', 'Not synced yet, will retry next launch');
     return false;
   }
 }
 
 async function syncPending() {
-  if (!syncClient()) return;
+  const gh = syncClient();
+  if (!gh) return;
+  for (const id of ls.get('pendingDeletes', [])) {
+    try { ls.set('remoteIndex', (await gh.deleteRide(id)).rides); ls.set('pendingDeletes', ls.get('pendingDeletes', []).filter((x) => x !== id)); logMsg('sync', `deleted ${id}`); }
+    catch (e) { logMsg('sync', `delete ${id} failed: ${e.message}`); }
+  }
   let all = [];
   try { all = await rides.list(); } catch { return; }
   for (const meta of all) {
@@ -1603,9 +1607,9 @@ const RD_BACK = { training: 'Training', calendar: 'Calendar' };
 const BACK_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 const canHover = matchMedia('(hover: hover)');
 
-async function openRide(id) {
+async function openRide(id, done = null) {
   if (!id) return;
-  Object.assign(rd, { id, doc: null, local: null, segs: [], sel: null, t: null, geo: null, from: app.tab, scrollY: window.scrollY });
+  Object.assign(rd, { id, doc: null, local: null, segs: [], sel: null, t: null, geo: null, from: done ? 'home' : app.tab, scrollY: done ? 0 : window.scrollY, done });
   $$('.panel').forEach((p) => p.classList.add('hidden'));
   setDevPop(false);
   show('ridepage');
@@ -1641,9 +1645,72 @@ async function loadRideDoc(id) {
 }
 
 function closeRide() {
-  rd.id = null;
+  const wasDone = !!rd.done;
+  rd.id = null; rd.done = null;
   show('home');
   window.scrollTo(0, rd.scrollY);
+  if (wasDone) { if (app.tab === 'training') renderTraining(); refreshPlanViews(); }
+}
+
+// ------------------------------------------------------------------ end of ride: the ride page with a "done" bar
+// The ride is already saved on this device (saveRide) and starts syncing right away. Done goes home;
+// Discard deletes it here and, if it already reached rodillo-data, there too (queued when offline).
+function openDone(ride) {
+  const st = ride.summary;
+  const found = ride.demo ? null : ftpFromRide(st);
+  const cur = app.settings.ftp;
+  const gh = syncClient();
+  const sync = ride.demo ? { state: 'off', text: 'Demo ride: not added to your history' }
+    : gh ? { state: 'busy', text: 'Syncing to rodillo-data' }
+    : { state: 'off', text: `Kept on this device. ${syncHint()} in Settings to sync it.` };
+  const done = {
+    ride, sync, demo: ride.demo,
+    headline: doneHeadline(ride),
+    vs: vsLastTime(st, lastSameWorkout(st, app.rows)),
+    ftp: found && (found.ftp > cur || (found.test && found.ftp !== cur)) ? { ...found, cur } : null,
+  };
+  openRide(st.id, done);
+  if (!ride.demo && gh) done.syncP = syncRide(ride);
+}
+
+function doneSync(ride, state, text) {
+  if (rd.done?.ride !== ride) return;
+  rd.done.sync = { state, text };
+  const el = $('#rd-syncst');
+  if (el) { el.className = `dn-sync ${state}`; el.textContent = text; }
+}
+
+async function doneDiscard() {
+  const d = rd.done, ride = d.ride;
+  const remote = !ride.demo && !!syncClient();
+  const ok = await ask(remote ? 'It will be deleted here and from your synced history in rodillo-data.' : 'It will be deleted from this device.',
+    { title: 'Discard this ride?', ok: 'Discard', danger: true });
+  if (!ok || rd.done !== d) return;
+  ride.discarded = true;
+  try { await rides.del(ride.id); } catch { /* ignore */ }
+  closeRide();
+  toast('Ride discarded');
+  if (!remote) return;
+  await d.syncP; // a push still in flight lands first, then it's removed
+  if (!ride.synced) return;
+  const id = ride.summary.id;
+  try { ls.set('remoteIndex', (await syncClient().deleteRide(id)).rides); }
+  catch (e) { logMsg('sync', `delete ${id} failed: ${e.message}`); ls.set('pendingDeletes', [...new Set([...ls.get('pendingDeletes', []), id])]); }
+  refreshPlanViews();
+}
+
+async function doneFtp(take) {
+  const f = rd.done?.ftp;
+  if (!f || f.msg) return;
+  const st = rd.done.ride.summary;
+  const say = (msg) => { f.msg = msg; const b = $('#dn-ftp .dn-ftp-btns'); if (b) b.remove(); $('#dn-ftpmsg').textContent = msg; };
+  if (!take) { if (f.test) declineTestFtp(st.id); say(`Kept ${f.cur} W.`); return; }
+  $$('#dn-ftp button').forEach((b) => (b.disabled = true));
+  app.settings.ftp = f.ftp;
+  reconcileSettings(`${f.test ? 'ramp test' : 'ride'} ${st.id.slice(0, 10)}`);
+  const synced = await flushSettings();
+  refreshPlanViews();
+  say(synced ? `FTP is now ${f.ftp} W on all devices.` : `FTP is now ${f.ftp} W here. It goes to your plan on the next sync.`);
 }
 
 const rideFtp = () => rd.doc?.summary?.ftp || app.settings.ftp;
@@ -1658,6 +1725,7 @@ function renderRidePage() {
     segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
     profile: w ? profileSvg(w, 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
     canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!rd.local,
+    done: rd.done,
   });
   bindRideChart();
   drawRideChart();
@@ -1743,6 +1811,7 @@ function rideAction(a) {
   };
   switch (a) {
     case 'back': if (rd.sel != null) selectRideSeg(null); else closeRide(); break;
+    case 'select': if (rd.done) closeRide(); break;
     case 'left': case 'easier': step(-1); break;
     case 'right': case 'harder': step(+1); break;
     case 'up': window.scrollBy({ top: -240, behavior: 'smooth' }); break;
@@ -1754,7 +1823,9 @@ $('#rd').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-rd]');
   if (b) {
     const a = b.dataset.rd;
-    if (a === 'back') closeRide();
+    if (a === 'back' || a === 'done') closeRide();
+    else if (a === 'discard') doneDiscard();
+    else if (a === 'setftp' || a === 'keepftp') doneFtp(a === 'setftp');
     else if (a === 'clear') selectRideSeg(null);
     else if (a === 'fit') {
       const st = rd.doc.summary;
@@ -1776,69 +1847,6 @@ $('#rd').addEventListener('click', async (e) => {
 document.addEventListener('touchstart', (e) => { if (app.screen === 'ridepage' && rd.t != null && !e.target.closest('#rd-wrap')) rideCrosshair(null); }, { passive: true });
 let rdResize = 0;
 window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return; cancelAnimationFrame(rdResize); rdResize = requestAnimationFrame(drawRideChart); });
-
-function showSummary(ride) {
-  const st = ride.summary;
-  $('#s-name').textContent = ride.name;
-  $('#s-date').textContent = new Date(ride.id).toLocaleString();
-  const stat = (v, l) => `<div class="stat"><div class="v">${v ?? '-'}</div><div class="l">${l}</div></div>`;
-  $('#s-stats').innerHTML = [
-    stat(fmtTime(st.durSec), 'Ride time'), stat(`${st.distKm.toFixed(1)} km`, 'Distance'),
-    stat(`${st.avgP} W`, 'Avg power'), stat(`${st.np} W`, 'Normalized'),
-    stat(st.avgHr ?? '-', 'Avg HR'), stat(st.maxHr ?? '-', 'Max HR'),
-    stat(st.tss, 'TSS'), stat(st.if, 'Intensity'),
-  ].join('');
-  let extra = '';
-  // New FTP: any ride that beats the current one, or a ramp test that says something different
-  const found = ride.demo ? null : ftpFromRide(st);
-  const cur = app.settings.ftp;
-  if (found && (found.ftp > cur || (found.test && found.ftp !== cur))) {
-    extra += `<div class="callout ftp-callout"><div><b>${found.ftp > cur ? 'New FTP detected' : 'Ramp test result'}: ${found.ftp} W</b> <span class="muted">(${found.basis}; currently ${cur} W)</span><div class="muted" id="s-ftpmsg">Updating saves it to your plan, so every device gets it.</div></div>
-      <div class="ftp-btns"><button class="primary small" id="s-setftp">Update to ${found.ftp} W</button><button class="ghost small" id="s-keepftp">Keep ${cur} W</button></div></div>`;
-  }
-  const work = (ride.intervals || []).filter((x) => x.work);
-  if (work.length) {
-    extra += `<h4>Work intervals</h4><table class="ints"><tr><th>Interval</th><th>Target</th><th>Actual</th><th></th><th>HR</th><th>Cadence</th></tr>
-      ${work.map((x) => `<tr><td>${esc(x.label)}${x.rep ? ' ' + x.rep : ''}</td><td>${x.target ? x.target + ' W' : (x.grade ?? '') + (x.grade != null ? '%' : '')}</td><td>${x.avgP} W</td>
-      <td>${x.pct ? `<span class="pct ${x.pct < 95 ? 'low' : x.pct > 105 ? 'high' : 'ok'}">${x.pct}%</span>` : ''}</td><td>${x.avgHr ?? '-'}</td><td>${x.avgCad}${x.cadTarget ? ` <span class="muted">(${x.cadTarget}, ${x.cadInRange ?? '-'}% in range)</span>` : ''}</td></tr>`).join('')}</table>`;
-  }
-  if (st.zones?.some(Boolean)) extra += `<h4>Time in zones <span class="muted">at FTP ${st.ftp} W</span></h4>${zoneBars(st.zones, st.ftp)}`;
-  if (st.decoupling != null) extra += `<p class="muted">Aerobic decoupling (Pw:HR): <b style="color:var(--text)">${st.decoupling}%</b> ${st.decoupling < 5 ? '(steady: aerobic base is handling this power)' : '(HR drifted: this power is at the edge of your Z2)'}</p>`;
-  $('#s-extra').innerHTML = extra;
-  if ($('#s-setftp')) {
-    const done = (msg) => { $$('.ftp-callout button').forEach((b) => b.remove()); $('#s-ftpmsg').textContent = msg; };
-    $('#s-setftp').onclick = async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Saving...';
-      app.settings.ftp = found.ftp;
-      reconcileSettings(`${found.test ? 'ramp test' : 'ride'} ${st.id.slice(0, 10)}`);
-      const synced = await flushSettings();
-      refreshPlanViews();
-      done(synced ? `FTP is now ${found.ftp} W on all devices.` : `FTP is now ${found.ftp} W here. It goes to your plan on the next sync.`);
-    };
-    $('#s-keepftp').onclick = () => { if (found.test) declineTestFtp(st.id); done(`Kept ${cur} W.`); };
-  }
-  $('#s-sync').textContent = ride.demo ? 'Demo ride: saving keeps it on this Mac only.' : syncClient() ? 'Saving adds it to your training history in rodillo-data.' : `Saving keeps it on this device. ${syncHint()} in Settings to sync it.`;
-  $('#s-fit').onclick = () => downloadFit(ride);
-  $('#s-home').onclick = async () => {
-    app.session = null;
-    show('home');
-    if (!ride.demo && syncClient()) {
-      toast('Syncing ride...');
-      toast((await syncRide(ride)) ? 'Ride synced' : 'Sync failed, will retry next launch');
-    } else toast('Ride saved');
-    if (app.tab === 'training') renderTraining();
-    refreshPlanViews();
-  };
-  $('#s-discard').onclick = async () => {
-    if (!(await ask('It will not be saved or synced.', { title: 'Discard this ride?', ok: 'Discard', danger: true }))) return;
-    try { await rides.del(ride.id); } catch { /* ignore */ }
-    app.session = null;
-    show('home');
-    toast('Ride discarded');
-    if (app.tab === 'training') renderTraining();
-  };
-  show('summary');
-}
 
 // ------------------------------------------------------------------ actions (controller + keyboard)
 function action(a, src = 'tap') {
@@ -1863,7 +1871,6 @@ function action(a, src = 'tap') {
     renderRide();
     return;
   }
-  if (app.screen === 'summary') { if (a === 'select') $('#s-home').click(); return; }
   // home navigation
   const items = focusables();
   switch (a) {

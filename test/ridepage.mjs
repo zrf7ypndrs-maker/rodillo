@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
 import { flatten } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
-import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, laneKeys, segName } from '../js/ridepage.js';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, laneKeys, segName, doneHeadline, lastSameWorkout, vsLastTime, doneBarHtml } from '../js/ridepage.js';
 
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
@@ -89,5 +89,59 @@ assert.ok(sm.at(-1).distance > sm[1].distance);
 const fit = encodeActivity(sm, [], { tss: doc.summary.tss });
 assert.ok(fit.length > 1000 && fit[8] === 0x2e);
 ok('.FIT from a synced ride document');
+
+// ---- end of ride: effort scored against the plan, done bar
+{
+  const w5 = JSON.parse(fs.readFileSync(new URL('../workouts/vo2-5x4.json', import.meta.url)));
+  const sg = flatten(w5, ftp), T0 = Date.parse('2026-11-12T18:00:00');
+  // rider drops effort to 95% on reps 4 and 5 and holds the lowered target exactly
+  const sm = [];
+  for (let wt = 0; wt < sg.at(-1).end; wt++) {
+    const si = sg.findIndex((s) => wt < s.end), g = sg[si];
+    const plan = Math.round((g.from + (g.to - g.from) * ((wt - g.start) / g.dur)) * ftp);
+    const eff = g.rep?.i >= 4 ? 0.95 : undefined;
+    const target = Math.round(plan * (eff ?? 1));
+    sm.push({ t: T0 + wt * 1000, wt, si, st: wt - g.start, power: target, target, plan, eff, hr: 150, cadence: 95, speed: 8, distance: wt * 8, grade: 0 });
+  }
+  const d = buildRide(sm, { name: w5.name, workoutId: w5.id, tags: w5.tags, ftp, startMs: T0, segs: sg });
+  const reps = d.intervals.filter((x) => x.work && x.rep);
+  assert.deepEqual(reps.map((x) => x.pct), [100, 100, 100, 95, 95]);
+  assert.deepEqual(reps.map((x) => x.effort), [undefined, undefined, undefined, 95, 95]);
+  assert.equal(reps[3].target, 224); // the planned watts, not the 213 W sent
+  assert.equal(d.summary.compliance.reps, 5); // the opener doesn't count
+  assert.ok(Array.isArray(d.streams.plan));
+  assert.deepEqual(doneHeadline(d), { h: 'Done. 5 of 5 reps on target.', note: 'Effort lowered to 95% on 2 reps.' });
+  // 90% effort: under target
+  const lo = sm.map((x) => (x.eff ? { ...x, eff: 0.9, power: Math.round(x.plan * 0.9), target: Math.round(x.plan * 0.9) } : x));
+  const d2 = buildRide(lo, { name: w5.name, workoutId: w5.id, tags: w5.tags, ftp, startMs: T0, segs: sg });
+  assert.equal(doneHeadline(d2).h, 'Done. 3 of 5 reps on target.');
+  // old rides (no plan): unchanged, scored against the target sent
+  const old = buildRide(sm.map(({ plan, eff, ...x }) => x), { name: w5.name, workoutId: w5.id, ftp, startMs: T0, segs: sg });
+  assert.deepEqual(old.intervals.filter((x) => x.work && x.rep).map((x) => x.pct), [100, 100, 100, 100, 100]);
+  assert.equal(old.streams.plan, undefined);
+  assert.equal(doneHeadline({ intervals: [] }).h, 'Done. Nice work.');
+
+  // vs last time: same workout, before this ride, demo rides skipped
+  const st = d.summary;
+  const rows = [
+    { summary: { id: '2026-11-11T1800', workoutId: 'vo2-5x4', compliance: { avg: 90 }, avgHr: 170, ftp: 200 }, demo: true },
+    { summary: { id: '2026-11-04T1800', workoutId: 'vo2-5x4', compliance: { avg: 96 }, avgHr: 156, ftp: 200 } },
+    { summary: { id: '2026-10-28T1800', workoutId: 'vo2-5x4', compliance: { avg: 92 }, avgHr: 160, ftp: 200 } },
+    { summary: { id: '2026-11-13T1800', workoutId: 'vo2-5x4', compliance: { avg: 99 }, avgHr: 150, ftp: 200 } },
+    { summary: { id: '2026-11-05T1800', workoutId: 'z2-60', ftp: 200 } },
+  ];
+  const prev = lastSameWorkout(st, rows);
+  assert.equal(prev.id, '2026-11-04T1800');
+  const vs = vsLastTime(st, prev);
+  assert.equal(vs.items[0].k, 'On target');
+  assert.equal(vs.items[1].k, 'Avg HR');
+  assert.equal(vsLastTime(st, { ...prev, ftp: 190 }).items.length, 1); // other FTP: no HR comparison
+  assert.equal(lastSameWorkout({ ...st, workoutId: null }, rows), null);
+  const html = doneBarHtml({ headline: doneHeadline(d), vs, sync: { state: 'ok', text: 'Synced' }, ftp: null });
+  for (const t of ['Stop and save your Garmin', 'data-rd="done"', 'data-rd="discard"', 'data-rd="fit"', 'Effort lowered']) assert.ok(html.includes(t), t);
+  assert.ok(!html.includes('—'));
+  assert.ok(pageHtml(d, { segs: rideSegs(d, sg), ftp, zoneHex, gradeHex, done: { headline: doneHeadline(d), vs: null, sync: { state: 'off', text: 'x' }, ftp: null } }).includes('95% effort'));
+  ok('end of ride: reps scored against the plan, effort noted, vs last time, done bar');
+}
 
 console.log(`ridepage: ${n} tests passed`);

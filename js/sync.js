@@ -195,6 +195,36 @@ export class GitHubSync {
     throw new Error('Could not commit the import after 3 attempts');
   }
 
+  /**
+   * Removes one ride (rides/YYYY/<id>.json and its index.json entry) in ONE commit through the git
+   * data API. Missing file or entry is fine (already gone). Retries if someone else pushed in between.
+   */
+  async deleteRide(id) {
+    const path = `rides/${id.slice(0, 4)}/${id}.json`;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ref = await this.api(`/git/ref/heads/${this.branch}`);
+      const head = ref.object.sha;
+      const commit = await this.api(`/git/commits/${head}`);
+      const cur = await this.api(`/contents/index.json?ref=${head}`);
+      const index = cur ? JSON.parse(unb64(cur.content || (await this.api(`/git/blobs/${cur.sha}`)).content)) : { version: 1, rides: [] };
+      const file = await this.api(`/contents/${path}?ref=${head}`);
+      const before = index.rides.length;
+      index.rides = index.rides.filter((r) => r.id !== id);
+      if (!file && index.rides.length === before) return index; // nothing to delete
+      const entries = [{ path: 'index.json', mode: '100644', type: 'blob', content: JSON.stringify(index, null, 2) }];
+      if (file) entries.push({ path, mode: '100644', type: 'blob', sha: null });
+      const t = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: commit.tree.sha, tree: entries }) });
+      const c = await this.api('/git/commits', { method: 'POST', body: JSON.stringify({ message: `Discard ride ${id}`, tree: t.sha, parents: [head] }) });
+      try {
+        await this.api(`/git/refs/heads/${this.branch}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha, force: false }) });
+        return index;
+      } catch (e) {
+        if (e.status !== 422 && e.status !== 409) throw e;
+      }
+    }
+    throw new Error('Could not delete the ride after 3 attempts');
+  }
+
   async fetchIndex() {
     const r = await this.getJson('index.json');
     return r?.json?.rides || [];

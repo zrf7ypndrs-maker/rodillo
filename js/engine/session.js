@@ -262,8 +262,12 @@ export class Session extends Emitter {
     const seg = this.seg;
     let targetGrade = this.gradeOffset;
     let ergTarget = null;
+    this.planTarget = null; // the workout's own watts (effort 100%): reps are scored against this
     if (seg) {
-      if (seg.kind === 'erg' && !this.ergOff) ergTarget = segTarget(seg, this.segProgress) * this.s.ftp * this.intensity;
+      if (seg.kind === 'erg' && !this.ergOff) {
+        this.planTarget = segTarget(seg, this.segProgress) * this.s.ftp;
+        ergTarget = this.planTarget * this.intensity;
+      }
       else if (seg.kind === 'sim') targetGrade = (seg.free ? 0 : seg.grade) + this.gradeOffset;
     } else if (this.segs && !this.workoutDone) {
       this.workoutDone = true;
@@ -352,6 +356,9 @@ export class Session extends Emitter {
         t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
         speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
         grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
+        // planned watts (effort 100%) and the effort multiplier when it isn't 1 (Nov 12: reps are scored against the plan)
+        plan: this.mode === 'erg' && this.planTarget != null ? Math.round(this.planTarget) : undefined,
+        eff: this.mode === 'erg' && this.planTarget != null && this.intensity !== 1 ? this.intensity : undefined,
         // slope diagnostics (Nov 11): grade actually sent to the trainer and the closed-loop trim, both in %
         sent: this.mode === 'sim' ? Math.round((this.lastSentGrade ?? 0) * 1000) / 10 : undefined,
         trim: this.mode === 'sim' && !this.zwiftShifting ? Math.round(this.gOff * 1000) / 10 : undefined,

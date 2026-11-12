@@ -136,7 +136,7 @@ export function pageHtml(doc, opts) {
   const rows = segs.filter((s) => s.res).map((s) => {
     const x = s.res, ss = segStats(doc, s);
     const tgt = s.kind === 'erg' ? (x.target ? `${x.target} W` : '') : `${+(x.grade ?? (s.grade || 0) * 100).toFixed(1)}%`;
-    const pct = s.kind === 'erg' && s.work && x.pct ? `<span class="pct ${pctCls(x.pct)}">${x.pct}%</span>` : '';
+    const pct = s.kind === 'erg' && s.work && x.pct ? `<span class="pct ${pctCls(x.pct)}">${x.pct}%</span>${x.effort ? `<span class="effn">${x.effort}% effort</span>` : ''}` : '';
     const third = ergTable ? `<td class="r">${pct}</td>` : `<td class="r num rd-wide">${ss.avgKmh != null ? `${ss.avgKmh} km/h` : ''}</td>`;
     const cad = `${x.avgCad ?? ''}${x.cadTarget ? `<span class="cadin">${x.cadInRange ?? '-'}% in ${esc(x.cadTarget)}</span>` : ''}`;
     return `<tr data-i="${s.i}" class="${s.work ? '' : 'rec'} ${opts.sel === s.i ? 'sel' : ''}">
@@ -166,8 +166,12 @@ export function pageHtml(doc, opts) {
   const back = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
   const lanes = laneKeys(doc);
 
+  const top = opts.done
+    ? doneBarHtml(opts.done)
+    : `<div class="rd-nav"><button class="ghost small rd-back" data-rd="back">${back}${esc(opts.backLabel || 'Back')}</button><div class="rd-acts">${acts}</div></div>`;
+
   return `
-    <div class="rd-nav"><button class="ghost small rd-back" data-rd="back">${back}${esc(opts.backLabel || 'Back')}</button><div class="rd-acts">${acts}</div></div>
+    ${top}
     <header class="rd-head ${opts.profile ? '' : 'noprof'}">
       <div><h2>${esc(st.name)}</h2><div class="rd-sub">${when} &middot; ${mode}${st.ftp ? ` &middot; FTP ${st.ftp} W` : ''}${tags ? ` ${tags}` : ''}</div></div>
       ${opts.profile ? `<div class="rd-thumb">${opts.profile}</div>` : ''}
@@ -181,7 +185,88 @@ export function pageHtml(doc, opts) {
       ${rows ? `<section class="card rd-ints"><h3>Intervals</h3><table class="ints" id="rd-ints"><tr>${head}</tr>${rows}</table></section>` : ''}
       ${side ? `<div class="rd-side">${side}</div>` : ''}
     </div>` : ''}
-    ${acts ? `<div class="rd-foot">${acts}</div>` : ''}`;
+    ${acts && !opts.done ? `<div class="rd-foot">${acts}</div>` : ''}`;
+}
+
+// ------------------------------------------------------------------ end of ride: the "done" bar
+const shortDay = (id) => {
+  const d = new Date(`${id.slice(0, 10)}T12:00`);
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+/**
+ * { h: "Done. 4 of 5 reps on target.", note: "Effort lowered to 95% on 2 reps." | '' }.
+ * On target = 95 to 105% of the planned watts (effort changes don't move the target, see stats.js).
+ */
+export function doneHeadline(doc) {
+  let work = (doc.intervals || []).filter((x) => x.work && x.pct);
+  if (work.some((x) => x.rep)) work = work.filter((x) => x.rep); // count the reps, not a one-off opener
+  if (!work.length) return { h: 'Done. Nice work.', note: '' };
+  const ok = work.filter((x) => pctCls(x.pct) === 'ok').length;
+  const n = (k) => `${k} ${k === 1 ? 'rep' : 'reps'}`;
+  const eff = work.filter((x) => x.effort);
+  const vals = [...new Set(eff.map((x) => x.effort))];
+  const note = !eff.length ? ''
+    : vals.length === 1 ? `Effort ${vals[0] < 100 ? 'lowered' : 'raised'} to ${vals[0]}% on ${n(eff.length)}.`
+    : `Effort changed on ${n(eff.length)}.`;
+  return { h: `Done. ${ok} of ${n(work.length)} on target.`, note };
+}
+
+/**
+ * The last ride of the same workout before this one (rows = training rows, newest first), or null.
+ * Demo rides and the ride itself don't count.
+ */
+export function lastSameWorkout(st, rows) {
+  if (!st?.workoutId) return null;
+  return (rows || []).map((r) => (r.demo ? null : r.summary))
+    .filter((x) => x && x.workoutId === st.workoutId && x.id < st.id)
+    .sort((a, b) => (a.id < b.id ? 1 : -1))[0] || null;
+}
+
+/**
+ * "vs last time" pieces for a repeat workout: [{ k, now, was, better }]. On target = average % of
+ * target over the work reps. Avg HR only when both rides ran at the same FTP (same watts).
+ */
+export function vsLastTime(st, prev) {
+  if (!prev) return null;
+  const out = [];
+  if (st.compliance && prev.compliance) out.push({ k: 'On target', now: `${st.compliance.avg}%`, was: `${prev.compliance.avg}%`, better: Math.abs(st.compliance.avg - 100) < Math.abs(prev.compliance.avg - 100) });
+  if (st.avgHr && prev.avgHr && st.ftp === prev.ftp) out.push({ k: 'Avg HR', now: `${st.avgHr}`, was: `${prev.avgHr}`, better: st.avgHr < prev.avgHr });
+  if (!out.length && st.np && prev.np) out.push({ k: 'NP', now: `${st.np} W`, was: `${prev.np} W`, better: st.np > prev.np });
+  return out.length ? { day: shortDay(prev.id), items: out } : null;
+}
+
+/**
+ * done = { headline, vs, sync: { state, text }, ftp: { ftp, cur, basis, test, msg } | null, demo }
+ * sync.state: 'busy' | 'ok' | 'off' | 'err'
+ */
+export function doneBarHtml(done) {
+  const check = '<svg class="dn-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12"/><path d="M6.5 12.5l3.6 3.6 7.4-7.6"/></svg>';
+  const watch = '<svg class="dn-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 9.5V12l1.6 1.2"/></svg>';
+  const vs = done.vs ? `<div class="dn-vs"><span class="dn-vs-l">vs ${esc(done.vs.day)}</span>${done.vs.items.map((x) =>
+    `<span class="dn-vs-i">${esc(x.k)} <b class="${x.better ? 'up' : ''}">${esc(x.now)}</b> <span class="was">was ${esc(x.was)}</span></span>`).join('')}</div>` : '';
+  const f = done.ftp;
+  const ftp = f ? `<div class="dn-ftp" id="dn-ftp"><div><b>${f.ftp > f.cur ? 'New FTP' : 'Ramp test result'}: ${f.ftp} W</b> <span class="muted">${esc(f.basis)}, currently ${f.cur} W</span>
+      <div class="muted" id="dn-ftpmsg">${esc(f.msg || 'Updating saves it to your plan, so every device gets it.')}</div></div>
+      ${f.msg ? '' : `<div class="dn-ftp-btns"><button class="primary small" data-rd="setftp">Update to ${f.ftp} W</button><button class="ghost small" data-rd="keepftp">Keep ${f.cur} W</button></div>`}</div>` : '';
+  return `
+    <section class="rd-done" id="rd-done">
+      <div class="dn-main">
+        ${check}
+        <div class="dn-txt">
+          <h2 class="dn-h">${esc(done.headline.h)}</h2>
+          ${done.headline.note ? `<div class="dn-eff">${esc(done.headline.note)}</div>` : ''}
+          ${vs}
+          <div class="dn-meta"><span class="dn-garmin">${watch}Stop and save your Garmin</span><span class="dn-sync ${done.sync.state}" id="rd-syncst">${esc(done.sync.text)}</span></div>
+        </div>
+        <div class="dn-btns">
+          <button class="ghost small" data-rd="fit">Export .FIT</button>
+          <button class="ghost small danger" data-rd="discard">Discard</button>
+          <button class="primary" data-rd="done">Done</button>
+        </div>
+      </div>
+      ${ftp}
+    </section>`;
 }
 
 /** Which lanes this ride has data for, top to bottom. */

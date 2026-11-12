@@ -227,4 +227,38 @@ ok(`GitHub sync: ride file + index upsert (${gh.calls.length} API calls)`);
   ok('my workouts: newest change wins across devices, tombstones, parsing, validation');
 }
 
+// ---- discard a synced ride: file + index entry in one commit, retried on a race
+{
+  const calls = [], trees = [];
+  let head = 'c0', races = 1;
+  const index = { version: 1, rides: [{ id: '2026-11-04T1832' }, { id: '2026-11-12T1741' }] };
+  const res = (status, body) => ({ ok: status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
+  const fileThere = { v: true };
+  const fetchImpl = async (url, opts = {}) => {
+    const p = new URL(url).pathname.replace('/repos/o/r', '');
+    calls.push(`${opts.method || 'GET'} ${p}`);
+    if (p === '/git/ref/heads/main') return res(200, { object: { sha: head } });
+    if (p.startsWith('/git/commits/')) return res(200, { tree: { sha: 't-' + head } });
+    if (p === '/contents/index.json') return res(200, { sha: 'i', content: Buffer.from(JSON.stringify(index)).toString('base64') });
+    if (p === '/contents/rides/2026/2026-11-12T1741.json') return fileThere.v ? res(200, { sha: 'f', content: '' }) : res(404, {});
+    if (p === '/git/trees') { trees.push(JSON.parse(opts.body)); return res(201, { sha: 'tree' + trees.length }); }
+    if (p === '/git/commits') return res(201, { sha: 'new' });
+    if (p === '/git/refs/heads/main') { if (races-- > 0) { head = 'c1'; return res(422, {}); } return res(200, {}); }
+    return res(404, {});
+  };
+  const g = new GitHubSync({ token: 't', repo: 'o/r', fetchImpl });
+  const out = await g.deleteRide('2026-11-12T1741');
+  assert.deepEqual(out.rides.map((r) => r.id), ['2026-11-04T1832']);
+  const last = trees.at(-1);
+  assert.equal(last.base_tree, 't-c1');
+  assert.deepEqual(last.tree.find((e) => e.path.startsWith('rides/')), { path: 'rides/2026/2026-11-12T1741.json', mode: '100644', type: 'blob', sha: null });
+  assert.ok(last.tree.some((e) => e.path === 'index.json'));
+  // already gone: no commit
+  fileThere.v = false; index.rides = index.rides.filter((r) => r.id !== '2026-11-12T1741');
+  const n0 = trees.length;
+  await g.deleteRide('2026-11-12T1741');
+  assert.equal(trees.length, n0);
+  ok('discard: ride file and index entry removed in one commit');
+}
+
 console.log(`\n${n} stats/sync tests passed`);
