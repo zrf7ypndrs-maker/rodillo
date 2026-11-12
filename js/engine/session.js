@@ -319,6 +319,9 @@ export class Session extends Emitter {
         t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
         speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
         grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
+        // slope diagnostics (Nov 11): grade actually sent to the trainer and the closed-loop trim, both in %
+        sent: this.mode === 'sim' ? Math.round((this.lastSentGrade ?? 0) * 1000) / 10 : undefined,
+        trim: this.mode === 'sim' ? Math.round(this.gOff * 1000) / 10 : undefined,
         wt: this.workoutTime, wx: this.chartPos, si: this.segIndex, st: Math.round(this.segElapsed),
       });
       this._aggregate(this.samples.at(-1));
