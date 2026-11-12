@@ -6,6 +6,7 @@ import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds, gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
+import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, storeSetup, bikeFromModel, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
@@ -1533,6 +1534,7 @@ async function saveRide(status) {
     name: s.name, workoutId: s.workout?.id || null, tags: s.workout?.tags || (s.segs ? [] : ['free-slope']),
     ftp: app.settings.ftp, startMs: s.startMs || app.rideId, segs: s.segs, source: app.demo ? 'demo' : 'rodillo',
     segsChanged: !!s.segsChanged, // open-ended test: the steps ridden differ from the workout file
+    bike: currentBike(app.settings)?.name || null,
   };
   const doc = buildRide(s.samples, meta);
   const ride = {
@@ -3057,6 +3059,7 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') moda
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
   rider: [['ftp', 'FTP (W)', 1], ['riderKg', 'Rider weight (kg)', 0.1]],
+  garage: [],
   ride: [['autoPauseSec', 'Auto-pause after (s, 0 = off)', 1, 1, 'ERG: no pedaling. Slope: bike stopped.']],
   gearing: [],
   road: [
@@ -3065,7 +3068,7 @@ const SET_TABS = {
   ],
   trainer: [],
 };
-const SET_TAB_IDS = ['rider', 'ride', 'gearing', 'road', 'trainer', 'sync'];
+const SET_TAB_IDS = ['rider', 'garage', 'ride', 'gearing', 'road', 'trainer', 'sync'];
 const numField = ([k, label, step, mult = 1, help, offset = 0]) =>
   `<label for="set-${k}">${label}</label><input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">${help ? `<div class="help">${help}</div>` : ''}`;
 const nameField = () => `<label for="set-name">Your name</label><input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">
@@ -3083,7 +3086,11 @@ function dtSpec() {
   if (st.drivetrain === CUSTOM) { const r = checkSpec(st.customDrivetrain || {}); if (r.spec) return r.spec; }
   return DRIVETRAINS[st.drivetrain] || DRIVETRAINS[DEFAULT_SETTINGS.drivetrain];
 }
+const bikeNote = () => { const b = currentBike(app.settings); return b ? ` Saved to ${b.name} (Garage).` : ''; };
 function dtSummary(d) {
+  return dtLine(d) + bikeNote();
+}
+function dtLine(d) {
   if (d.seq) return `${speeds(d)}, ratios ${d.seq[0].toFixed(2)} to ${d.seq.at(-1).toFixed(2)}. Takes effect on the next ride.`;
   const lo = d.rings[0], hi = d.rings.at(-1), big = d.cogs.at(-1), small = d.cogs[0];
   return `${speeds(d)}. Easiest ${lo}\u00d7${big} (${(lo / big).toFixed(2)}), hardest ${hi}\u00d7${small} (${(hi / small).toFixed(2)}). Takes effect on the next ride.`;
@@ -3159,8 +3166,8 @@ function fillBike(keepWeight = false) {
     $$('.bike-mtb').forEach((el) => el.classList.toggle('hidden', BIKE_TYPES[spec.type].fam !== 'mtb'));
   }
   $('#bike-sum').textContent = spec
-    ? 'Estimated from frame, suspension and build (size M, no pedals). Type a weight to use your own. Only slope mode uses it.'
-    : 'Your own weight. Only slope mode uses it (climbing and coasting).';
+    ? `Estimated from frame, suspension and build (size M, no pedals). Type a weight to use your own. Only slope mode uses it.${bikeNote()}`
+    : `Your own weight. Only slope mode uses it (climbing and coasting).${bikeNote()}`;
 }
 function setBikeSpec(spec) {
   app.settings.bikeSpec = spec && cleanSpec(spec);
@@ -3184,6 +3191,70 @@ function editBike(el) {
   setBikeSpec(s);
   fillBike();
   return true;
+}
+
+// ---- garage: saved bikes, each with its own gearing and weight (engine/garage.js)
+function garageHtml() {
+  return `<div class="garage" id="garage" role="radiogroup" aria-label="Bikes"></div>
+    <div class="help" id="gar-sum"></div>
+    <div class="gar-edit">
+      <label for="set-gname">Name</label><input id="set-gname" class="wide-input" type="text" maxlength="40" autocomplete="off">
+      <div class="help"><a href="#" id="gar-remove">Remove this bike</a></div>
+    </div>
+    <label for="set-gadd">Add a bike</label><select id="set-gadd" class="wide-select"></select>`;
+}
+function fillGarage() {
+  const st = app.settings, g = garageOf(st), cur = currentBike(st);
+  $('#garage').innerHTML = g.length ? g.map((b) => {
+    const on = cur?.id === b.id;
+    return `<button type="button" class="gar-row${on ? ' on' : ''}" data-bike="${esc(b.id)}" role="radio" aria-checked="${on}">
+      <span class="gar-dot"></span><span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></button>`;
+  }).join('') : '<div class="gar-empty">No bikes yet. Add one below.</div>';
+  $('#gar-sum').textContent = cur
+    ? `In use: ${cur.name}. Changes to gearing (Gearing tab) and bike weight (Rider tab) save to this bike. Slope mode uses both; takes effect on the next ride.`
+    : 'No bike picked: Gearing and the bike weight in Rider are used as set. Pick a bike to switch both at once.';
+  $('.gar-edit').classList.toggle('hidden', !cur);
+  if (cur && document.activeElement?.id !== 'set-gname') $('#set-gname').value = cur.name;
+  const have = new Set(g.map((b) => b.model).filter(Boolean));
+  const models = Object.entries(BIKE_MODELS).filter(([k]) => !have.has(k));
+  $('#set-gadd').innerHTML = `<option value="" selected disabled>Pick one</option>` +
+    models.map(([k, m]) => `<option value="m:${k}">${esc(m.name)}</option>`).join('') +
+    `<option value="new">New bike from the current gearing and weight</option>`;
+  $('#set-gadd').disabled = g.length >= MAX_BIKES;
+}
+/** Puts a garage bike in use and shows its gearing and weight everywhere in Settings. */
+function pickGarageBike(id) {
+  Object.assign(app.settings, selectBike(app.settings, id));
+  fillGarage(); fillDrivetrain(); fillBike();
+}
+function addGarageBike(v) {
+  const g = garageOf(app.settings);
+  if (g.length >= MAX_BIKES) return;
+  let b;
+  if (v.startsWith('m:')) b = bikeFromModel(v.slice(2), newBikeId(g, v.slice(2)));
+  else {
+    const st = app.settings;
+    b = { id: newBikeId(g), name: `Bike ${g.length + 1}`, drivetrain: st.drivetrain, customDrivetrain: st.customDrivetrain || null, bikeKg: st.bikeKg, bikeSpec: st.bikeSpec || null };
+  }
+  if (!b) return;
+  app.settings.garage = [...g, b];
+  pickGarageBike(b.id);
+  if (v === 'new') { $('#set-gname').focus(); $('#set-gname').select(); }
+}
+async function removeGarageBike() {
+  const cur = currentBike(app.settings);
+  if (!cur) return;
+  if (!await ask(`Remove ${cur.name} from the garage? The gearing and weight stay as they are now.`, { title: 'Remove bike', ok: 'Remove', danger: true })) return;
+  app.settings.garage = garageOf(app.settings).filter((b) => b.id !== cur.id);
+  app.settings.bike = '';
+  fillGarage();
+  saveSettings();
+}
+/** While a bike is in use, gearing and weight edits save to it. */
+function keepBikeSetup() {
+  if (!currentBike(app.settings)) return;
+  const g = storeSetup(app.settings);
+  if (JSON.stringify(g) !== JSON.stringify(garageOf(app.settings))) app.settings.garage = g;
 }
 
 // ---- trainer: the grade range it can simulate
@@ -3238,6 +3309,7 @@ function renderSettings() {
   const f = $('#settings-form');
   const extra = {
     rider: `${bikeHtml()}<div class="help">All settings are saved to your plan, so every device gets them.</div>`,
+    garage: garageHtml(),
     ride: `<label for="set-guard">ERG low-cadence guard</label><select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>
       <div class="help">If cadence drops under 40 rpm in ERG, the target eases to 60% until you're spinning again.</div>`,
     gearing: `<label for="set-dt">Drivetrain</label><select id="set-dt" class="wide-select">${dtOptions()}</select>
@@ -3265,11 +3337,19 @@ function renderSettings() {
   fillDrivetrain();
   fillTrainer();
   fillBike();
+  fillGarage();
   $('#set-style').value = app.settings.shiftStyle || 'sram';
   $('#set-shift').value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
   f.oninput = (e) => {
     const el = e.target;
     if (el.id === 'set-name') app.settings.riderName = el.value.trim();
+    else if (el.id === 'set-gadd') { if (el.value) addGarageBike(el.value); }
+    else if (el.id === 'set-gname') {
+      const name = el.value.trim();
+      if (!name) return;
+      app.settings.garage = garageOf(app.settings).map((b) => (b.id === app.settings.bike ? { ...b, name } : b));
+      fillGarage();
+    }
     else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
     else if (el.id === 'set-dt') pickDrivetrain(el.value);
     else if (['set-rings', 'set-cogs', 'set-wheel'].includes(el.id)) { if (!editDrivetrain()) return; }
@@ -3286,7 +3366,14 @@ function renderSettings() {
     else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
     else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) app.trainer.useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
+    keepBikeSetup();
+    if (el.closest('[data-pane="gearing"], [data-pane="rider"]')) fillGarage();
     saveSettings();
+  };
+  f.onclick = (e) => {
+    const row = e.target.closest('.gar-row');
+    if (row) { pickGarageBike(row.dataset.bike); saveSettings(); return; }
+    if (e.target.id === 'gar-remove') { e.preventDefault(); removeGarageBike(); }
   };
   // tidy the typed teeth / grades once the field is left (only when they were valid)
   f.onchange = (e) => {

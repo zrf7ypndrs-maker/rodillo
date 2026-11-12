@@ -344,6 +344,50 @@ import { BIKE_PRESETS, BIKE_TYPES, presetSpec, cleanSpec, estimateBikeKg, bikePr
   console.log('ok - bike weight presets and estimate');
 }
 
+import { BIKE_MODELS, DEFAULT_GARAGE, garageOf, currentBike, selectBike, storeSetup, cleanBike, newBikeId, bikeLine, bikeFromModel } from '../js/engine/garage.js';
+import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
+{
+  // built-in bikes: real drivetrains and maker's weights
+  for (const [k, m] of Object.entries(BIKE_MODELS)) { assert.ok(DTS[m.drivetrain], k); assert.ok(m.bikeKg > 6 && m.bikeKg < 20, k); }
+  const lux = DTS['mtb-1x12-sram-t-32'], aero = DTS['road-2x12-shimano-52-36-1134'];
+  assert.deepEqual(lux.rings, [32]); assert.deepEqual(lux.cogs, [10, 12, 14, 16, 18, 21, 24, 28, 32, 38, 44, 52]); assert.equal(lux.wheel, 2.32);
+  assert.deepEqual(aero.rings, [36, 52]); assert.equal(aero.cogs.at(-1), 34);
+  assert.equal(DEFAULT_GARAGE.length, 2);
+  assert.equal(bikeLine(DEFAULT_GARAGE[0]), '1x12, 32 + 10-52 \u00b7 13.1 kg');
+  assert.equal(bikeLine(DEFAULT_GARAGE[1]), '2x12, 52/36 + 11-34 \u00b7 8.1 kg');
+  // no garage in settings = the built-in one; an emptied garage stays empty; junk and duplicates are dropped
+  assert.equal(garageOf({}).length, 2);
+  assert.equal(garageOf({ garage: [] }).length, 0);
+  assert.equal(garageOf({ garage: [DEFAULT_GARAGE[0], DEFAULT_GARAGE[0], { id: 'x', drivetrain: 'nope' }, null] }).length, 1);
+  assert.equal(cleanBike({ id: 'c', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18], wheel: 2.2 }, bikeKg: 11.04 }).bikeKg, 11);
+  assert.equal(cleanBike({ id: 'c', drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10] } }), null);
+  // picking a bike sets gearing and weight; '' or an unknown id puts no bike in use
+  let st = { drivetrain: 'road-2x12-shimano-50-34', bikeKg: 9, bikeSpec: { type: 'road' }, garage: null, bike: '' };
+  assert.equal(currentBike(st), null);
+  st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
+  assert.equal(st.drivetrain, 'mtb-1x12-sram-t-32'); assert.equal(st.bikeKg, 13.1); assert.equal(st.bikeSpec, null);
+  assert.equal(currentBike(st).name, 'Canyon Lux Trail CF 7');
+  assert.deepEqual(selectBike(st, 'nope'), { bike: '' });
+  // edits while a bike is in use save to that bike only
+  st.bikeKg = 13.4; st.drivetrain = 'mtb-1x12-sram-t-34';
+  st.garage = storeSetup(st);
+  assert.equal(st.garage[0].bikeKg, 13.4); assert.equal(st.garage[0].drivetrain, 'mtb-1x12-sram-t-34');
+  assert.equal(st.garage[1].bikeKg, 8.1);
+  st = { ...st, ...selectBike(st, 'canyon-aeroad-cf-slx-7-di2') };
+  assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1);
+  st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
+  assert.equal(st.bikeKg, 13.4);
+  assert.deepEqual(storeSetup({ ...st, bike: '' }), garageOf(st));
+  // ids
+  assert.equal(newBikeId(DEFAULT_GARAGE), 'bike');
+  assert.equal(newBikeId([{ id: 'bike' }, { id: 'bike-2' }]), 'bike-3');
+  assert.equal(bikeFromModel('nope'), null);
+  // a ride on the Lux Trail shifts on its 1x12 (start near 2.2: 32x14)
+  const gb = new GB(selectBike({}, 'canyon-lux-trail-cf-7').drivetrain);
+  assert.equal(gb.label, '32x14'); assert.equal(gb.isDouble, false); assert.equal(gb.nRear, 12);
+  console.log('ok - bike garage');
+}
+
 test('steep grade at the trainer ceiling: no wound-up trim, no freewheel while grinding', () => {
   // Nov 11: 20% in 32x14 maxed the trainer; after shifting to 32x52 it stayed maxed (wound-up trim), and grinding
   // at 20-30 rpm the resistance dropped to nothing when the cadence reading blinked to 0.

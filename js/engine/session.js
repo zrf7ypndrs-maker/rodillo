@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS = {
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
   riderName: '',         // the coach uses it in messages ({name})
   trainerShifting: 'auto', // 'auto' = in the trainer when it speaks the Zwift protocol, else in Rodillo; 'app' = always Rodillo
+  garage: null,          // saved bikes (engine/garage.js); null = the built-in garage, not edited yet
+  bike: '',              // id of the garage bike in use ('' = none: drivetrain and weight as set)
   climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
 };
 

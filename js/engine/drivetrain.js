@@ -21,6 +21,7 @@ const C = {
   sh12_1051: [10, 12, 14, 16, 18, 21, 24, 28, 33, 39, 45, 51],
   eagle_1050: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 50],
   eagle_1052: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 52],
+  eagle_t_1052: [10, 12, 14, 16, 18, 21, 24, 28, 32, 38, 44, 52], // Eagle Transmission (T-Type) XS-1275 / 1295 / 1299
 };
 
 /** Wheel circumference (m) by tire. */
@@ -50,6 +51,8 @@ export const DRIVETRAINS = {
   'gravel-1x12-sram-40': { group: 'Gravel', name: 'SRAM XPLR 1x12, 40T + 10-44', rings: [40], cogs: C.xplr_1044, wheel: GRAVEL },
   'mtb-1x12-sram-34': { group: 'Mountain bike', name: 'SRAM Eagle, 34T + 10-52', rings: [34], cogs: C.eagle_1052, wheel: MTB },
   'mtb-1x12-sram-32': { group: 'Mountain bike', name: 'SRAM Eagle, 32T + 10-52', rings: [32], cogs: C.eagle_1052, wheel: MTB },
+  'mtb-1x12-sram-t-32': { group: 'Mountain bike', name: 'SRAM Eagle Transmission, 32T + 10-52', rings: [32], cogs: C.eagle_t_1052, wheel: MTB },
+  'mtb-1x12-sram-t-34': { group: 'Mountain bike', name: 'SRAM Eagle Transmission, 34T + 10-52', rings: [34], cogs: C.eagle_t_1052, wheel: MTB },
   'mtb-1x12-sram-32-1050': { group: 'Mountain bike', name: 'SRAM Eagle, 32T + 10-50', rings: [32], cogs: C.eagle_1050, wheel: MTB },
   'mtb-1x12-shimano-32': { group: 'Mountain bike', name: 'Shimano 12s, 32T + 10-51', rings: [32], cogs: C.sh12_1051, wheel: MTB },
   'mtb-1x12-shimano-34': { group: 'Mountain bike', name: 'Shimano 12s, 34T + 10-51', rings: [34], cogs: C.sh12_1051, wheel: MTB },
