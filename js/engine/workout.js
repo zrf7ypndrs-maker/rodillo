@@ -181,6 +181,52 @@ export function totalDuration(workout) {
 }
 
 /** Target as a fraction of FTP at progress p (0..1) through an ERG segment. */
+const fmtSpan = (s) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
+const keep = (s) => s.replace(/ /g, '\u00a0'); // one phrase never wraps inside; a long line breaks after the comma
+
+/** The main set in one phrase (UX roadmap item 11): "5 x 4 min at 239 W", "3 x 10 x 30 s at 271 W",
+ *  "3 x 9 min at 206/250 W" (over-unders), "60 min at 152 W, 3 x 5 min at 178 W" (Zone 2 ride with pickups).
+ *  Work blocks = runs of steady steps at Z3+ (76%+ FTP), so an over-under is one block; the blocks holding the
+ *  top power are the main set; a gap more than 3x the shortest gap starts a new set. When over half the ride is
+ *  steady Zone 2 (56-75%), that leads. Empty for tests, slope sessions and rides with no main set. */
+export function mainSet(workout, ftp) {
+  if (!workout || (workout.tags || []).includes('test')) return '';
+  const all = flatten(workout, ftp);
+  if (all.some((x) => x.kind === 'sim')) return '';
+  const segs = all.filter((x) => x.kind === 'erg');
+  const W = (f) => Math.round(f * ftp);
+  const blocks = []; let cur = null, t = 0;
+  for (const x of segs) {
+    if (x.from === x.to && x.from >= 0.76) {
+      if (!cur) blocks.push(cur = { start: t, dur: 0, levels: new Set() });
+      cur.dur += x.dur; cur.levels.add(x.from);
+    } else cur = null;
+    t += x.dur;
+  }
+  const peak = Math.max(0, ...blocks.map((b) => Math.max(...b.levels)));
+  const main = blocks.filter((b) => b.levels.has(peak));
+  let hard = '';
+  if (main.length) {
+    const watts = [...new Set(main.flatMap((b) => [...b.levels]))].sort((a, b) => a - b).map(W).join('/');
+    const gaps = main.slice(1).map((b, i) => b.start - (main[i].start + main[i].dur));
+    const sets = 1 + gaps.filter((g) => g > 3 * Math.min(...gaps)).length;
+    if (main.length === 1) hard = `${fmtSpan(main[0].dur)} at ${watts} W`;
+    else if (!main.every((b) => b.dur === main[0].dur)) hard = `up to ${W(peak)} W`;
+    else if (sets > 1 && main.length % sets === 0) hard = `${sets} x ${main.length / sets} x ${fmtSpan(main[0].dur)} at ${watts} W`;
+    else hard = `${main.length} x ${fmtSpan(main[0].dur)} at ${watts} W`;
+  }
+  const z2 = segs.filter((x) => x.from === x.to && x.from >= 0.56 && x.from <= 0.75);
+  const z2t = z2.reduce((a, x) => a + x.dur, 0);
+  if (z2t > 0.5 * totalDuration(workout)) {
+    const by = {};
+    for (const x of z2) by[x.from] = (by[x.from] || 0) + x.dur;
+    const lvl = +Object.keys(by).sort((a, b) => by[b] - by[a])[0];
+    return [`${fmtSpan(z2t)} at ${W(lvl)} W`, hard].filter(Boolean).map(keep).join(', ');
+  }
+  if (main.length === 1 && main[0].dur < 600) return ''; // a lone short effort isn't a main set
+  return keep(hard);
+}
+
 export function segTarget(seg, p) {
   if (seg.kind !== 'erg') return null;
   const x = Math.min(1, Math.max(0, p));

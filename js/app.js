@@ -9,7 +9,7 @@ import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, M
 import { bikeArt, bikeKind } from './bikeart.js?v=202611102147';
 import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
-import { flatten, totalDuration, estimateTSS, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
+import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
@@ -773,21 +773,9 @@ function dayCardHtml(info) {
     <div class="d-top"><span class="d-dow">${dow} ${d.getDate()}</span></div>${body}${status}</div>`;
 }
 
-const fmtSpan = (s) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
 
-/** The main set in one phrase: "4 x 4 min at 229 W", "40 min at 136 W". Empty for tests and slope sessions. */
-function workSummary(w) {
-  if (!w || isSim(w) || (w.tags || []).includes('test')) return '';
-  const ftp = app.settings.ftp;
-  const segs = flatten(w, ftp).filter((x) => x.kind === 'erg' && x.dur >= 20);
-  if (!segs.length) return '';
-  const avg = (x) => (x.from + x.to) / 2;
-  const top = Math.max(...segs.map(avg));
-  const reps = segs.filter((x) => Math.abs(avg(x) - top) < 0.005);
-  const watts = Math.round(top * ftp);
-  if (reps.length === 1) return reps[0].dur >= 600 ? `${fmtSpan(reps[0].dur)} at ${watts} W` : '';
-  return reps.every((x) => x.dur === reps[0].dur) ? `${reps.length} x ${fmtSpan(reps[0].dur)} at ${watts} W` : `up to ${watts} W`;
-}
+/** The main set in one phrase at the rider's FTP (`mainSet()` in js/engine/workout.js). */
+const workSummary = (w) => mainSet(w, app.settings.ftp);
 
 // Inline so the crank can spin on hover / controller focus (css: .bike-ico). Same drawing as the old icons/bike.png.
 const BIKE_ICO = '<svg class="bike-ico" viewBox="0 0 156 96" aria-hidden="true">'

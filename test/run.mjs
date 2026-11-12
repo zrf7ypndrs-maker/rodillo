@@ -7,7 +7,7 @@ import { parseHr } from '../js/ble/hr.js';
 import { SimTrainer, SimHr } from '../js/ble/sim.js';
 import { Session } from '../js/engine/session.js';
 import { powerAt } from '../js/engine/physics.js';
-import { parseZwo, flatten, totalDuration, estimateTSS, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
+import { parseZwo, flatten, totalDuration, estimateTSS, mainSet, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
 import { withDetail, profileSteps, defaultDetail, DETAIL_MAX } from '../js/engine/climb.js';
 import { steepestGrade } from '../js/engine/trainers.js';
@@ -689,6 +689,25 @@ import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../
   assert.equal(slope.mode, 'sim');
   console.log('ok - mode known before start');
 }
+
+test('Main set phrase: sets, over-unders, Zone 2 rides with pickups', () => {
+  const wo = (id) => JSON.parse(fs.readFileSync(new URL(`../workouts/${id}.json`, import.meta.url)));
+  const ftp = 217;
+  const ms = (w) => mainSet(w, ftp).replace(/\u00a0/g, ' ');
+  assert.ok(!/ /.test(mainSet(wo('vo2-30-15'), ftp)), 'phrases keep together');
+  assert.equal(ms(wo('vo2-30-15')), '3 x 10 x 30 s at 271 W');
+  assert.equal(ms(wo('mtb-overunders-3x9')), '3 x 9 min at 206/250 W');
+  assert.equal(ms(wo('z2-90')), '60 min at 152 W, 3 x 5 min at 178 W');
+  assert.equal(ms(wo('z2-120')), '90 min at 152 W, 2 x 5 min at 174 W');
+  assert.equal(ms(wo('easy-45-spinups')), '27 min at 141 W, 3 x 1 min at 184 W');
+  assert.equal(ms(wo('vo2-5x4-110')), '5 x 4 min at 239 W');
+  assert.equal(ms(wo('sweetspot-3x12')), '3 x 12 min at 195 W');
+  assert.equal(ms(wo('z2-tempo-60')), '20 min at 174 W');
+  assert.equal(ms(wo('z2-60')), '45 min at 148 W');
+  assert.equal(ms(wo('ramp-test')), '');
+  assert.equal(ms(wo('sim-climb-repeats')), '');
+  assert.equal(ms({ steps: [{ dur: 600, power: 0.5 }, { dur: 60, power: 1.2 }, { dur: 600, power: 0.5 }] }), ''); // lone short effort
+});
 
 test('Ramp test is open-ended and ends when the rider fails', () => {
   const wo = JSON.parse(fs.readFileSync(new URL('../workouts/ramp-test.json', import.meta.url)));
