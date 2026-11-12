@@ -7,6 +7,9 @@ import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain } from './drivetrain.js?
 import { Emitter } from '../ble/base.js?v=202611102147';
 import { ZP_WHEEL } from '../ble/zwifthub.js?v=202611102147';
 
+export const POWER_SHOW_S = 5; // power box smoothing, seconds
+const POWER_BUF_S = 10;
+
 export const DEFAULT_SETTINGS = {
   ftp: 200,
   riderKg: 77,
@@ -200,7 +203,16 @@ export class Session extends Emitter {
     const c = this.cadBuf.reduce((a, x) => a + x, 0) / this.cadBuf.length;
     return c < g.cad.lo ? 'low' : c > g.cad.hi ? 'high' : 'ok';
   }
-  get power3s() { const b = this.powerBuf; return b.length ? b.reduce((a, x) => a + x, 0) / b.length : 0; }
+  /** Trailing average of the last `sec` seconds of trainer power (buffer holds POWER_BUF_S). */
+  powerAvg(sec) {
+    const b = this.powerBuf, n = Math.min(b.length, Math.max(1, Math.round(sec / (this._dt || 0.25))));
+    if (!n || !b.length) return 0;
+    let t = 0; for (let i = b.length - n; i < b.length; i++) t += b[i];
+    return t / n;
+  }
+  get power3s() { return this.powerAvg(3); }
+  /** What the power box shows: POWER_SHOW_S average (3 s felt spiky, Nov 11). */
+  get powerShown() { return this.powerAvg(POWER_SHOW_S); }
   get ratio() { return this.gb.ratio; }
 
   /** Called ~4x per second with dt seconds. */
@@ -218,7 +230,8 @@ export class Session extends Emitter {
     this.cadBuf = this.cadBuf || [];
     this.cadBuf.push(cadence);
     while (this.cadBuf.length > Math.round(3 / dt)) this.cadBuf.shift();
-    while (this.powerBuf.length > Math.round(3 / dt)) this.powerBuf.shift();
+    this._dt = dt;
+    while (this.powerBuf.length > Math.round(POWER_BUF_S / dt)) this.powerBuf.shift();
 
     if (this._noPauseFor > 0) this._noPauseFor -= dt;
     // ---- auto start / pause / resume ----

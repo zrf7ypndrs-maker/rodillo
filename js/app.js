@@ -3,7 +3,7 @@ import { HeartRate } from './ble/hr.js?v=202611102147';
 import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
 import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
-import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
+import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds, gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
@@ -2230,7 +2230,7 @@ function renderRide() {
   const td = s.trainer.data || {};
   const hr = Math.round(app.hr?.bpm || td.hr || 0);
   $('#r-elapsed').textContent = fmtTime(s.elapsed);
-  const p = Math.round(s.power3s);
+  const p = Math.round(s.powerShown);
   $('#r-power').textContent = p;
   const pt = $('.tile.power');
   pt.classList.remove('low', 'high', 'ok');
@@ -2381,7 +2381,8 @@ function drawChart() {
     }
     // power trace
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-    s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    const sp = smoothPower(s.samples);
+    s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(sp[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
     ctx.stroke();
     drawHrTrace(ctx, s.samples, (x) => X(x.wx ?? x.wt), W, H, pad, dpr);
     ctx.fillStyle = INK; ctx.fillRect(X(s.chartPos) - dpr, 0, 2 * dpr, H);
@@ -2396,7 +2397,8 @@ function drawChart() {
   ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
   ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-  data.forEach((x, i) => { i ? ctx.lineTo(X(i), Yp(x.power)) : ctx.moveTo(X(i), Yp(x.power)); });
+  const sp = smoothPower(s.samples).slice(-win);
+  data.forEach((x, i) => { i ? ctx.lineTo(X(i), Yp(sp[i])) : ctx.moveTo(X(i), Yp(sp[i])); });
   ctx.stroke();
   drawHrTrace(ctx, data, (x, i) => X(i), W, H, pad, dpr);
   ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 6 * dpr, 16 * dpr);
@@ -2449,7 +2451,8 @@ function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, (compact ? 2 : 6) * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
   ctx.strokeStyle = INK; ctx.lineWidth = (compact ? 1.8 : 2) * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-  s.samples.forEach((x, i) => { const px = xOf(x), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  const sp = smoothPower(s.samples);
+  s.samples.forEach((x, i) => { const px = xOf(x), py = Yp(sp[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
   ctx.stroke();
   drawHrTrace(ctx, s.samples, xOf, W, H, top, dpr);
 
@@ -2502,6 +2505,18 @@ function trackProgress(s) {
 // HR line is drawn as a trailing rolling average (display only: stored samples, FIT, averages and the live number stay raw).
 // Strap jitter of a few bpm made the raw 1 Hz line spiky. 3 s (Agustín, Nov 10).
 const HR_SMOOTH_S = 3;
+// Power line on the ride screen: same trailing average as the power box (POWER_SHOW_S, 5 s; 3 s felt spiky, Nov 11).
+// Display only: samples, FIT, NP and averages stay raw.
+function smoothPower(samples) {
+  const out = new Array(samples.length);
+  let sum = 0;
+  samples.forEach((x, i) => {
+    sum += x.power || 0;
+    if (i >= POWER_SHOW_S) sum -= samples[i - POWER_SHOW_S].power || 0;
+    out[i] = sum / Math.min(i + 1, POWER_SHOW_S);
+  });
+  return out;
+}
 function smoothHr(samples) {
   const out = new Array(samples.length);
   let sum = 0, win = [];
@@ -2556,7 +2571,7 @@ function renderPhone(s) {
   const td = s.trainer.data || {};
   const ftp = app.settings.ftp;
   const hr = Math.round(app.hr?.bpm || td.hr || 0);
-  const p = Math.round(s.power3s);
+  const p = Math.round(s.powerShown);
   const seg = s.seg;
   const set = (id, v) => { const el = document.getElementById(id); if (el.innerHTML !== String(v)) el.innerHTML = v; };
 
@@ -2711,7 +2726,8 @@ function drawPhoneChart() {
       ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect((i / win) * W, bot - h, W / win + 1, h);
     });
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-    data.forEach((x, i) => { const px = (i / win) * W; i ? ctx.lineTo(px, Y(x.power)) : ctx.moveTo(px, Y(x.power)); });
+    const sp = smoothPower(s.samples).slice(-win);
+    data.forEach((x, i) => { const px = (i / win) * W; i ? ctx.lineTo(px, Y(sp[i])) : ctx.moveTo(px, Y(sp[i])); });
     ctx.stroke();
     drawHrTrace(ctx, data, (x, i) => (i / win) * W, W, H, top, dpr);
     ctx.fillStyle = MUTED; ctx.fillText('Last 10 min', 2 * dpr, 10 * dpr);
@@ -2757,7 +2773,8 @@ function drawPhoneChart() {
 
   // power trace over the done part
   ctx.strokeStyle = INK; ctx.lineWidth = 1.8 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-  s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(x.power); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  const sp = smoothPower(s.samples);
+    s.samples.forEach((x, i) => { const px = X(x.wx ?? x.wt), py = Yp(sp[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
   ctx.stroke();
   drawHrTrace(ctx, s.samples, (x) => X(x.wx ?? x.wt), W, H, top, dpr);
 
