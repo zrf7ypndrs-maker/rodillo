@@ -2466,6 +2466,19 @@ function drawChart() {
 const trackCache = new WeakMap(); // session -> track(segs)
 const rideTrack = (s) => { let t = trackCache.get(s); if (!t) { t = track(s.segs); trackCache.set(s, t); } return t; };
 const trackKmStep = (D) => (D > 40000 ? 10 : D > 12000 ? 5 : D > 5000 ? 2 : 1);
+/**
+ * The stretch of road the ride chart shows. A real climb's warm-up (profile.lead) leaves the chart once it's ridden,
+ * so the climb fills the width (Nov 12, Agustín): v0 = metres where the view starts, km marks and progress count
+ * from there, lo/hi are the elevation range of what's shown.
+ */
+function trackView(s, tr) {
+  const n = s.workout?.profile?.lead?.length || 0;
+  const past = n && n < s.segs.length && (s.segIndex >= n || s.chartPos >= s.segs[n - 1].end);
+  if (!past) return { v0: 0, lo: tr.lo, hi: tr.hi, up0: 0, first: 0 };
+  const parts = tr.parts.slice(n), v0 = parts[0].d0;
+  const hs = parts.flatMap((p) => [p.h0, p.h1]);
+  return { v0, lo: Math.min(...hs), hi: Math.max(...hs), up0: trackClimbed(tr, v0), first: n };
+}
 
 /**
  * Slope-only workout on the ride screen (desktop and phone; Nov 11, picked by Agustín from the mockups): the road's
@@ -2475,13 +2488,15 @@ const trackKmStep = (D) => (D > 40000 ? 10 : D > 12000 ? 5 : D > 5000 ? 2 : 1);
 function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
   const segs = s.segs, tr = rideTrack(s), ftp = app.settings.ftp, plotH = bot - top;
   const pos = trackDist(tr, segs, s.chartPos), hNow = trackHeight(tr, pos);
-  const X = (d) => (d / tr.D) * W;
+  const view = trackView(s, tr), v0 = view.v0, VD = tr.D - v0;
+  const X = (d) => ((d - v0) / VD) * W;
   const xOf = (x) => X(trackDist(tr, segs, x.wx ?? x.wt));
-  const rng = Math.max(tr.hi - tr.lo, ELEV_MIN), aTop = bot - plotH * area, floor = plotH * 0.06;
-  const Y = (h) => aTop + (1 - (h - tr.lo) / rng) * (bot - floor - aTop);
+  const rng = Math.max(view.hi - view.lo, ELEV_MIN), aTop = bot - plotH * area, floor = plotH * 0.06;
+  const Y = (h) => aTop + (1 - (h - view.lo) / rng) * (bot - floor - aTop);
 
   // the road: ridden part faded, the rest at full strength
   segs.forEach((g, i) => {
+    if (i < view.first) return; // warm-up already ridden and out of view
     const p = tr.parts[i];
     const pieces = p.d1 <= pos ? [[p.d0, p.d1, true]] : p.d0 >= pos ? [[p.d0, p.d1, false]] : [[p.d0, pos, true], [pos, p.d1, false]];
     ctx.fillStyle = gradeHex(g.grade);
@@ -2492,13 +2507,13 @@ function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
     }
   });
   ctx.globalAlpha = 0.55; ctx.strokeStyle = INK; ctx.lineWidth = 1.25 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
-  tr.parts.forEach((p, i) => (i ? ctx.lineTo(X(p.d0), Y(p.h0)) : ctx.moveTo(X(p.d0), Y(p.h0))));
+  tr.parts.slice(view.first).forEach((p, i) => (i ? ctx.lineTo(X(p.d0), Y(p.h0)) : ctx.moveTo(X(p.d0), Y(p.h0))));
   ctx.lineTo(W, Y(tr.parts.at(-1).h1)); ctx.stroke();
   ctx.globalAlpha = 1;
   if (!compact) { // km marks along the bottom
     ctx.fillStyle = MUTED; ctx.textAlign = 'center';
-    const step = trackKmStep(tr.D);
-    for (let k = step; k * 1000 < tr.D * 0.97; k += step) ctx.fillText(`${k} km`, X(k * 1000), bot - 5 * dpr);
+    const step = trackKmStep(VD);
+    for (let k = step; k * 1000 < VD * 0.97; k += step) ctx.fillText(`${k} km`, X(v0 + k * 1000), bot - 5 * dpr);
     ctx.textAlign = 'left';
   }
 
@@ -2555,8 +2570,8 @@ function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
 
 /** "12.5 of 24.9 km · +215 of 495 m" for a slope-only ride. */
 function trackProgress(s) {
-  const tr = rideTrack(s), d = trackDist(tr, s.segs, s.chartPos);
-  return `${(d / 1000).toFixed(1)} of ${(tr.D / 1000).toFixed(1)} km · +${Math.round(trackClimbed(tr, d))} of ${Math.round(tr.ascent / 5) * 5} m`;
+  const tr = rideTrack(s), { v0, up0 } = trackView(s, tr), d = trackDist(tr, s.segs, s.chartPos);
+  return `${((d - v0) / 1000).toFixed(1)} of ${((tr.D - v0) / 1000).toFixed(1)} km · +${Math.round(trackClimbed(tr, d) - up0)} of ${Math.round((tr.ascent - up0) / 5) * 5} m`;
 }
 
 // Heart rate on its own scale (at least 80-190 bpm, widened to fit).
