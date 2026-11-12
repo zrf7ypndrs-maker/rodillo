@@ -32,17 +32,20 @@ const fmtTime = (s) => {
 };
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
-let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, TOK = {};
+let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FORM_BAR, FATIGUE, GRADE = [], TOK = {};
 function readTokens() {
   const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
-  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line'].map(v);
+  [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FORM_BAR, FATIGUE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line', '--form-bar', '--fatigue'].map(v);
+  GRADE = ['--g-down', '--g0', '--g1', '--g2', '--g3', '--g4'].map(v);
   // the ride page chart (js/ridepage.js) takes its colors as one object
   TOK = { ink: INK, rule: RULE, faint: FAINT, ftp: FTP_LINE, hr: HR_LINE, info: v('--info'), infoLine: v('--info-line'), band: v('--sheet2'), dim: v('--dim'), sheet: v('--sheet') };
 }
 readTokens();
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
 const zoneHex = (f) => ZC[ZONES[zoneOf(f)].color]; // Coggan zones from zones.js
-const gradeHex = (g) => g < 0 ? '#3fa596' : g < 0.03 ? '#6f8fbf' : g < 0.06 ? '#d2a531' : g < 0.09 ? '#e27a35' : '#d9434b';
+/** Fill an interval card / phone hero; the darkest grade (12%+) needs light text. */
+const setZc = (el, c) => { el.style.setProperty('--zc', c); el.style.setProperty('--on-zone', c === GRADE[5] ? 'var(--on-zone-inv)' : ''); };
+const gradeHex = (g) => GRADE[g < 0 ? 0 : g < 0.03 ? 1 : g < 0.06 ? 2 : g < 0.09 ? 3 : g < 0.12 ? 4 : 5];
 
 // ------------------------------------------------------------------ state
 const app = {
@@ -628,7 +631,7 @@ const mondayOf = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setD
 
 function workoutColor(w) {
   const segs = flatten(w);
-  if (segs.every((x) => x.kind === 'sim')) return '#6f8fbf';
+  if (segs.every((x) => x.kind === 'sim')) return gradeHex(Math.max(...segs.map((x) => x.grade ?? 0))); // slope day = its steepest grade
   const work = Math.max(...segs.filter((x) => x.kind === 'erg' && x.dur >= 30).map((x) => (x.from + x.to) / 2));
   return zoneHex(work);
 }
@@ -1090,12 +1093,12 @@ function svgLoad(series) {
   const B = (v) => 190 - (v / maxB) * 35;
   const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2.5" points="${series.map((d, i) => `${X(i)},${Y(d[k])}`).join(' ')}"/>`;
   const bw = Math.max(1, (W - 40) / n - 1);
-  const bars = series.map((d, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(B(d.tsb), 190)}" width="${bw}" height="${Math.abs(B(d.tsb) - 190)}" fill="${d.tsb >= 0 ? ZC.z3 : ZC.z5}" opacity=".8"/>`).join('');
+  const bars = series.map((d, i) => `<rect x="${X(i) - bw / 2}" y="${Math.min(B(d.tsb), 190)}" width="${bw}" height="${Math.abs(B(d.tsb) - 190)}" fill="${FORM_BAR}" opacity=".75"/>`).join('');
   const ticks = series.map((d, i) => d.date.endsWith('-01') || i === 0 ? `<text x="${X(i)}" y="226" fill="${MUTED}" font-size="12">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
     <text x="0" y="14" fill="${MUTED}" font-size="12">${Math.round(maxL)}</text>
-    <line x1="30" x2="${W - 10}" y1="190" y2="190" stroke="${RULE}"/>${bars}${line('atl', '#c2255c')}${line('ctl', INK)}${ticks}
-    <text x="${W - 10}" y="14" text-anchor="end" font-size="11"><tspan fill="${INK}">&#9632; Fitness</tspan> <tspan fill="#c2255c">&#9632; Fatigue</tspan> <tspan fill="${ZC.z3}">&#9632; Form</tspan></text></svg>`;
+    <line x1="30" x2="${W - 10}" y1="190" y2="190" stroke="${RULE}"/>${bars}${line('atl', FATIGUE)}${line('ctl', INK)}${ticks}
+    <text x="${W - 10}" y="14" text-anchor="end" font-size="11"><tspan fill="${INK}">&#9632; Fitness</tspan> <tspan fill="${FATIGUE}">&#9632; Fatigue</tspan> <tspan fill="${FORM_BAR}">&#9632; Form</tspan></text></svg>`;
 }
 
 function svgWeekly(weeks) {
@@ -2303,7 +2306,7 @@ function renderRide() {
     if (seg.kind === 'erg') {
       const tgt = segTarget(seg, s.segProgress);
       const w = s.target || Math.round(tgt * app.settings.ftp * s.intensity);
-      card.style.setProperty('--zc', zoneHex(tgt));
+      setZc(card, zoneHex(tgt));
       if (seg.from === seg.to) {
         big = `${word('Hold')}${num(w, 'W')}${word('for')}${left}`;
         sub = `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`;
@@ -2313,7 +2316,7 @@ function renderRide() {
       }
     } else {
       const g = seg.grade + s.gradeOffset;
-      card.style.setProperty('--zc', gradeHex(g));
+      setZc(card, gradeHex(g));
       big = `${num((g * 100).toFixed(0), '%')}${word('grade for')}${left}`;
       sub = `use your gears${cad}`;
     }
@@ -2324,14 +2327,14 @@ function renderRide() {
     bar.firstElementChild.style.width = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
     renderNextCard(s, s.segs[s.segIndex + 1], setHTML);
   } else if (s.segs) {
-    card.style.setProperty('--zc', ZC.z3);
+    setZc(card, 'var(--ok-bg)');
     setHTML($('#r-int-label'), 'Workout complete');
     setHTML($('#r-int-text'), 'keep riding or hold B to finish');
     setHTML($('#r-int-big'), '<span class="msg">Done. Nice work.</span>');
     bar.classList.add('hidden');
     renderNextCard(s, undefined, setHTML);
   } else {
-    card.style.setProperty('--zc', gradeHex(s.grade));
+    setZc(card, gradeHex(s.grade));
     setHTML($('#r-int-label'), 'Free ride');
     setHTML($('#r-int-text'), 'up/down changes the grade by 1%, shift to hold your cadence');
     setHTML($('#r-int-big'), `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`);
@@ -2627,7 +2630,7 @@ function renderPhone(s) {
       set('rp-target-sub', `grade, use your gears${cad}`);
     }
   } else if (s.segs) {
-    zc = ZC.z3;
+    zc = 'var(--ok-bg)';
     set('rp-int-label', 'Workout complete');
     set('rp-count', 'Done');
     set('rp-target', '');
@@ -2639,7 +2642,7 @@ function renderPhone(s) {
     set('rp-target', '');
     set('rp-target-sub', 'D-pad &#9650;&#9660; changes the grade');
   }
-  hero.style.setProperty('--zc', zc);
+  setZc(hero, zc);
 
   // power + on-target gauge (centre = target, ends = ±20%)
   set('rp-power', p);

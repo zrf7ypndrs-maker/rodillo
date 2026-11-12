@@ -29,11 +29,10 @@
   --good: #15894a;
   --warn: #a86f00;
   --bad: #cf2f3b;
-  --info: #1f5fbf;       /* cadence chips, "easier" */
-  --info-line: #b9cdea;
+  --info: var(--ink);     /* cadence chips and cadence traces: ink, no hue (zone hues mean zones only) */
+  --info-line: var(--rule);
   --warn-line: #e2c98f;
   --bad-line: #ebb5b9;
-  --up: #c4560c;         /* "harder" */
   --hi: #ffffff;         /* hover / pressed surface */
   --press: #000000;      /* pressed primary */
   --ok-bg: #dff3e6; --ok-ink: #0f6e3a;
@@ -44,12 +43,16 @@
   --hatch: rgba(22, 24, 27, .035);
   --log: #33383d;
   /* text on inverted surfaces (today, current interval) */
-  --inv-muted: #a9b0b6; --inv-good: #6fd39b; --inv-yellow: #ffd166; --inv-red: #ff8a92; --inv-info: #9cc2ff;
+  --inv-muted: #a9b0b6; --inv-good: #6fd39b; --inv-yellow: #ffd166; --inv-red: #ff8a92; --inv-info: var(--inv-muted);
   /* text on zone-colored blocks: always dark, whatever the theme */
   --on-zone: #16181b; --on-zone-inv: #f7f9f6;
   /* canvas */
   --ftp-line: rgba(22, 24, 27, .32);
-  --hr-line: #c4196e;  /* heart rate trace on the ride chart */
+  --hr-line: #c4196e;  /* heart rate only */
+  /* Training load chart: hues no zone uses */
+  --fatigue: #7048e8; --form-bar: #12a4b8;
+  /* grade scale (slope mode): steeper = redder; flat is sand, not blue, so it never reads as Z2 */
+  --g-down: #3fa596; --g0: #aeb2ad; --g1: #d2a531; --g2: #e27a35; --g3: #d9434b; --g4: #9e1f2b;
   --underlay: #dde1dc;
   --dim: rgba(247, 249, 246, .72); /* ride page: everything outside the selected interval */
   /* today's card: the zone color fades into this, and this is its lift shadow */
@@ -76,8 +79,7 @@
   --muted: #98a09a;
   --faint: #69716b;
   --good: #3fcf7e; --warn: #f0b429; --bad: #ff5c66;
-  --info: #8fb8ff; --info-line: #2c4466; --warn-line: #5a4614; --bad-line: #5e252b;
-  --up: #ffa36b;
+  --info: var(--ink); --info-line: var(--rule); --warn-line: #5a4614; --bad-line: #5e252b;
   --hi: #242925; --press: #ffffff;
   --ok-bg: #12301f; --ok-ink: #7be3a6;
   --bad-bg: #3a1519;
@@ -86,9 +88,10 @@
   --shadow: rgba(0, 0, 0, .55);
   --hatch: rgba(238, 241, 236, .035);
   --log: #c9d1c9;
-  --inv-muted: #5f666c; --inv-good: #15894a; --inv-yellow: #a86f00; --inv-red: #cf2f3b; --inv-info: #1f5fbf;
+  --inv-muted: #5f666c; --inv-good: #15894a; --inv-yellow: #a86f00; --inv-red: #cf2f3b; --inv-info: var(--inv-muted);
   --ftp-line: rgba(238, 241, 236, .35);
   --hr-line: #ff5fa8;
+  --fatigue: #a48bff; --form-bar: #3fcfe0;
   --underlay: #262b27;
   --dim: rgba(24, 27, 25, .74);
   --today-end: #181b19; --today-shadow: rgba(255, 255, 255, .32);
@@ -453,9 +456,8 @@ table.ints { margin-bottom: 14px; }
 .t-sub { font-size: 15px; color: var(--muted); min-height: 20px; font-variant-numeric: tabular-nums; }
 .t-sub b { color: var(--ink); }
 .unit { font-size: .38em; color: var(--muted); margin-left: 3px; letter-spacing: 0; font-weight: 700; }
-.tile.power.low { box-shadow: inset 0 -7px 0 var(--z2); }
-.tile.power.high { box-shadow: inset 0 -7px 0 var(--z6); }
-.tile.power.ok { box-shadow: inset 0 -7px 0 var(--z3); }
+.tile.power.low, .tile.power.high { box-shadow: inset 0 -7px 0 var(--rule); }
+.tile.power.ok { box-shadow: inset 0 -7px 0 var(--good); }
 .tile.gear.flash { animation: flash .35s; }
 @keyframes flash { from { background: var(--flash); } }
 .tile.gear.dim { opacity: .4; }
@@ -700,7 +702,7 @@ table.ints { margin-bottom: 14px; }
 .hero-rec .rdot { margin-top: -1px; }
 .hero-rec .tag { margin-right: 6px; }
 .rdot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--good); }
-.rdot.yellow { background: var(--z4); }
+.rdot.yellow { background: var(--warn); }
 .rdot.red { background: var(--bad); }
 .hero.nowo { color: var(--sheet); background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 22%), var(--ink); }
 .hero.nowo .hero-top, .hero.nowo .hero-desc, .hero.nowo .hero-rec { color: var(--inv-muted); }
@@ -852,7 +854,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 
 /* cadence target */
 .tile.cad { transition: background .2s, box-shadow .2s; }
-.tile.cad.ok { background: var(--ok-bg); box-shadow: inset 0 -7px 0 var(--z3); }
+.tile.cad.ok { background: var(--ok-bg); box-shadow: inset 0 -7px 0 var(--good); }
 .tile.cad.ok .t-val { color: var(--ok-ink); }
 .tile.cad.bad { background: var(--bad-bg); box-shadow: inset 0 0 0 3px var(--bad); animation: cadpulse 0.9s ease-in-out infinite; }
 .tile.cad.bad .t-val, .tile.cad.bad .t-sub b { color: var(--bad); }
@@ -863,16 +865,15 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .seg.erg .big { font-size: 19px; font-weight: 750; }
 
 .t-pct { position: absolute; top: 12px; right: 16px; font-size: 24px; font-weight: 800; padding: 0 10px; border-radius: 4px; border: 1.5px solid var(--rule); color: var(--muted); }
-.t-pct.up { color: var(--sheet); background: var(--z5); border-color: var(--z5); }
-.t-pct.down { color: var(--sheet); background: var(--z2); border-color: var(--z2); }
+.t-pct.up, .t-pct.down { color: var(--sheet); background: var(--ink); border-color: var(--ink); }
 
 /* WHOOP recovery */
 .rz.green { color: var(--good); }
 .rz.yellow { color: var(--warn); }
 .rz.red { color: var(--bad); }
 .rec-advice { margin: 10px 2px 0; padding: 11px 16px; border-radius: var(--r); background: var(--sheet); border-left: 5px solid var(--good); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.rec-advice.yellow { border-left-color: var(--z4); }
-.rec-advice.red { border-left-color: var(--z6); }
+.rec-advice.yellow { border-left-color: var(--warn); }
+.rec-advice.red { border-left-color: var(--bad); }
 .rec-advice p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
 .rec-advice p b { color: var(--ink); }
 .rec-advice .row-btns { flex-wrap: nowrap; flex-shrink: 0; }
@@ -1211,7 +1212,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rp-pval { font-size: clamp(80px, 29vw, 160px); font-weight: 900; line-height: .86; letter-spacing: -0.01em; }
   .rp-unit { font-size: .26em; color: var(--muted); margin-left: 4px; letter-spacing: 0; font-weight: 800; }
   .rp-gauge { position: relative; height: 8px; margin: 8px auto 0; width: 72%; border-radius: 2px;
-    background: linear-gradient(90deg, var(--z2) 0 30%, var(--z3) 30% 70%, var(--z6) 70% 100%); }
+    background: linear-gradient(90deg, var(--rule) 0 30%, var(--good) 30% 70%, var(--rule) 70% 100%); }
   .rp-gauge b { position: absolute; top: -5px; width: 5px; height: 18px; border-radius: 2px; background: var(--ink); left: 50%; transform: translateX(-50%); transition: left .25s; box-shadow: 0 0 0 2px var(--paper); }
   .rp-gauge i { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 2px; background: var(--paper); }
   .rp-gauge.off { visibility: hidden; }
@@ -1224,7 +1225,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rp-s { display: block; font-size: 12px; color: var(--muted); min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rp-m.ok { background: var(--ok-bg); } .rp-m.ok .rp-v { color: var(--ok-ink); }
   .rp-m.bad { background: var(--bad-bg); animation: cadpulse .9s ease-in-out infinite; } .rp-m.bad .rp-v { color: var(--bad); }
-  .rp-m.up .rp-v { color: var(--up); } .rp-m.down .rp-v { color: var(--info); }
+  
 
   .rp-chart-wrap { flex: 1; min-height: 100px; display: flex; flex-direction: column; gap: 4px; }
   .rp-view-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
