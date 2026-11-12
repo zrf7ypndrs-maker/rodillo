@@ -4,7 +4,7 @@ import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
 import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
-import { DRIVETRAINS, WHEELS, CUSTOM, parseTeeth, checkSpec, presetFor, speeds, gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
+import { DRIVETRAINS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
 import { BIKE_MODELS, MAX_BIKES, garageOf, currentBike, selectBike, storeSetup, bikeFromModel, bikeFromSettings, newBikeId, bikeLine } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
@@ -1946,18 +1946,16 @@ const isLeft = (b) => b.endsWith('L');
  *  Shimano: right shift-up = harder, right shift-down = easier (rear);
  *           left shift-up = big ring, left shift-down = small ring (2x);
  *           paddles: right harder / left easier. On 1x the left buttons also shift the rear.
- *  MTB:     everything on the right, like a 1x mountain bike: right shift-up and right paddle = harder,
- *           right shift-down = easier. Left side does nothing (2x: left shift-up / down = big / small ring).
+ *  1x (either style): everything on the right, like a 1x bike: right shift-up and right paddle = harder,
+ *           right shift-down = easier. The left side doesn't shift. Styles only differ on 2x.
  */
 function shiftFor(b) {
   const s = app.session;
   const style = app.settings.shiftStyle || 'sram';
   const double = s?.gb.isDouble;
-  if (style === 'mtb') {
+  if (!double && !s?.gb.seq) {
     if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
     if (b === 'shiftDnR') return ['rear', -1];
-    if (double && b === 'shiftUpL') return ['front', +1];
-    if (double && b === 'shiftDnL') return ['front', -1];
     return null;
   }
   if (style === 'shimano') {
@@ -3107,12 +3105,7 @@ const numField = ([k, label, step, mult = 1, help, offset = 0, cls = '']) =>
   fld(`set-${k}`, label, `<input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">`, help, cls);
 const nameField = () => fld('set-name', 'Your name', `<input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">`, 'The coach uses it in workout messages.', 'full');
 // ---- gearing: a known drivetrain, or your own chainrings and cogs
-function dtOptions() {
-  const groups = {};
-  for (const [k, d] of Object.entries(DRIVETRAINS)) (groups[d.group] ||= []).push(`<option value="${k}">${esc(d.name)}</option>`);
-  return Object.entries(groups).map(([g, o]) => `<optgroup label="${esc(g)}">${o.join('')}</optgroup>`).join('') +
-    `<option value="${CUSTOM}">Custom (your own chainrings and cogs)</option>`;
-}
+// The menu is "a x b" gears, chainring teeth, smallest and largest cog (the cogs between come from cassette()).
 /** The chainrings/cogs in use: the preset's, or the custom ones. */
 function dtSpec() {
   const st = app.settings;
@@ -3120,42 +3113,73 @@ function dtSpec() {
   return DRIVETRAINS[st.drivetrain] || DRIVETRAINS[DEFAULT_SETTINGS.drivetrain];
 }
 function dtSummary(d) {
-  if (d.seq) return `${speeds(d)}, ratios ${d.seq[0].toFixed(2)} to ${d.seq.at(-1).toFixed(2)}. Takes effect on the next ride.`;
+  if (d.seq) return `Zwift's 24 virtual gears, ratios ${d.seq[0].toFixed(2)} to ${d.seq.at(-1).toFixed(2)}. Takes effect on the next ride.`;
   const lo = d.rings[0], hi = d.rings.at(-1), big = d.cogs.at(-1), small = d.cogs[0];
-  return `${speeds(d)}. Easiest ${lo}\u00d7${big} (${(lo / big).toFixed(2)}), hardest ${hi}\u00d7${small} (${(hi / small).toFixed(2)}). Takes effect on the next ride.`;
+  return `Cogs ${d.cogs.join('-')}. Easiest ${lo}×${big}, hardest ${hi}×${small}. Takes effect on the next ride.`;
+}
+const cogOpts = (list, cur) => [...new Set([...list, cur])].sort((a, b) => a - b).map((t) => `<option value="${t}">${t}</option>`).join('');
+function gearingHtml() {
+  return `${fld('set-gears', 'Gears', `<select id="set-gears">${GEAR_COUNTS.map((g) => `<option value="${g}">${g}</option>`).join('')}<option value="zwift">Zwift virtual, 24 gears</option></select>`, '', 'full')}
+    <div class="dt-fields">
+      ${fld('set-ring1', 'Chainring (teeth)', '<input id="set-ring1" type="number" min="20" max="60" step="1" inputmode="numeric">')}
+      ${fld('set-ring2', 'Small ring (teeth)', '<input id="set-ring2" type="number" min="20" max="60" step="1" inputmode="numeric">', '', 'dt-2x')}
+      ${fld('set-cmin', 'Smallest cog', '<select id="set-cmin"></select>')}
+      ${fld('set-cmax', 'Largest cog', '<select id="set-cmax"></select>')}
+    </div>
+    <div class="help" id="dt-sum"></div>
+    ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>')}
+    <div class="help" id="style-help"></div>`;
+}
+function styleHelp(d) {
+  if (d.seq || d.rings.length === 1) return '1x: everything on the right, with SRAM or Shimano. Right shift-up or paddle = harder, right shift-down = easier; the left side doesn\'t shift.';
+  return app.settings.shiftStyle === 'shimano'
+    ? 'Shimano 2x: right buttons = rear harder / easier, left buttons = big / small ring.'
+    : 'SRAM 2x: right = harder, left = easier, both together = front shift.';
 }
 function fillDrivetrain() {
-  const st = app.settings, d = dtSpec();
-  $('#set-dt').value = st.drivetrain === CUSTOM && checkSpec(st.customDrivetrain || {}).spec ? CUSTOM : (DRIVETRAINS[st.drivetrain] ? st.drivetrain : DEFAULT_SETTINGS.drivetrain);
+  const d = dtSpec(), two = !d.seq && d.rings.length > 1;
+  $('#set-gears').value = d.seq ? 'zwift' : `${d.rings.length}x${d.cogs.length}`;
   $('.dt-fields').classList.toggle('hidden', !!d.seq);
+  $$('.dt-2x').forEach((el) => el.classList.toggle('hidden', !two));
   if (!d.seq) {
-    $('#set-rings').value = [...d.rings].reverse().join('/');
-    $('#set-cogs').value = d.cogs.join('-');
-    const w = WHEELS.reduce((a, b) => (Math.abs(b[0] - d.wheel) < Math.abs(a[0] - d.wheel) ? b : a));
-    $('#set-wheel').value = String(w[0]);
+    $('label[for="set-ring1"]').textContent = two ? 'Big ring (teeth)' : 'Chainring (teeth)';
+    $('#set-ring1').closest('.fld').classList.toggle('full', !two);
+    $('#set-ring1').value = d.rings.at(-1);
+    $('#set-ring2').value = two ? d.rings[0] : '';
+    $('#set-cmin').innerHTML = cogOpts(COG_MINS, d.cogs[0]);
+    $('#set-cmax').innerHTML = cogOpts(COG_MAXES, d.cogs.at(-1));
+    $('#set-cmin').value = d.cogs[0];
+    $('#set-cmax').value = d.cogs.at(-1);
   }
+  $('#set-style').value = app.settings.shiftStyle || 'sram';
   $('#dt-sum').textContent = dtSummary(d);
+  $('#style-help').textContent = styleHelp(d);
 }
-function pickDrivetrain(id) {
-  if (id === CUSTOM) {
-    // start from what's on screen (or the last preset) so there's something to edit
-    const d = dtSpec();
-    app.settings.customDrivetrain = d.seq ? { ...DRIVETRAINS[DEFAULT_SETTINGS.drivetrain] } : { rings: d.rings, cogs: d.cogs, wheel: d.wheel };
-    delete app.settings.customDrivetrain.group; delete app.settings.customDrivetrain.name;
+/** Reads the gearing fields. Saves only a valid set; returns false (and says why) otherwise. */
+function editDrivetrain(el) {
+  const count = $('#set-gears').value;
+  if (count === 'zwift') { app.settings.drivetrain = 'zwift-24'; fillDrivetrain(); return true; }
+  const two = count.startsWith('2');
+  let r1 = Number($('#set-ring1').value) || 0, r2 = Number($('#set-ring2').value) || 0;
+  if (el?.id === 'set-gears') {
+    // coming from Zwift's gears or switching 1x / 2x: start from rings that make sense
+    if (!r1) r1 = two ? 50 : 32;
+    if (two && !r2) { r2 = Math.max(24, r1 - 16); if (r1 < 44) { r1 = 50; r2 = 34; } }
+    $('#set-ring1').value = r1;
+    $('#set-ring2').value = two ? r2 : '';
+    if ($('#set-cmin').options.length === 0) { $('#set-cmin').innerHTML = cogOpts(COG_MINS, 11); $('#set-cmax').innerHTML = cogOpts(COG_MAXES, 34); $('#set-cmin').value = 11; $('#set-cmax').value = 34; }
+    $$('.dt-2x').forEach((x) => x.classList.toggle('hidden', !two));
+    $('label[for="set-ring1"]').textContent = two ? 'Big ring (teeth)' : 'Chainring (teeth)';
+    $('#set-ring1').closest('.fld').classList.toggle('full', !two);
+    $('.dt-fields').classList.remove('hidden');
   }
-  app.settings.drivetrain = id;
-  fillDrivetrain();
-  if (id === CUSTOM) $('#set-rings').focus();
-}
-/** Reads the chainring/cog fields. Saves only a valid set; returns false (and says why) otherwise. */
-function editDrivetrain() {
-  const r = checkSpec({ rings: parseTeeth($('#set-rings').value), cogs: parseTeeth($('#set-cogs').value), wheel: Number($('#set-wheel').value) });
+  const r = simpleSpec({ count, rings: two ? [r1, r2] : [r1], min: $('#set-cmin').value, max: $('#set-cmax').value });
   if (r.error) { $('#dt-sum').textContent = `Not saved yet. ${r.error}`; return false; }
   const id = presetFor(r.spec);
   if (id) app.settings.drivetrain = id;
   else { app.settings.drivetrain = CUSTOM; app.settings.customDrivetrain = r.spec; }
-  $('#set-dt').value = app.settings.drivetrain;
   $('#dt-sum').textContent = dtSummary(r.spec);
+  $('#style-help').textContent = styleHelp(r.spec);
   return true;
 }
 
@@ -3230,15 +3254,7 @@ function garageHtml() {
       <div class="section" id="gar-title">This bike</div>
       ${fld('set-gname', 'Name', '<input id="set-gname" type="text" maxlength="40" autocomplete="off">', '', 'full')}
       <div class="section">Gearing</div>
-      ${fld('set-dt', 'Drivetrain', `<select id="set-dt">${dtOptions()}</select>`, '', 'full')}
-      <div class="dt-fields">
-        ${fld('set-rings', 'Chainrings (teeth)', '<input id="set-rings" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="50/34">')}
-        ${fld('set-wheel', 'Wheel', `<select id="set-wheel">${WHEELS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>`)}
-        ${fld('set-cogs', 'Cogs (teeth)', '<input id="set-cogs" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="11-12-13-14-15-17-19-21-24-27-30-34">', '', 'full')}
-      </div>
-      <div class="help" id="dt-sum"></div>
-      ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM road</option><option value="shimano">Shimano road</option><option value="mtb">Mountain bike (all on the right)</option></select>', '', 'full')}
-      <div class="help">SRAM road: right = harder, left = easier, both together = front shift. Shimano road: right buttons = rear harder/easier, left buttons = big/small ring. Mountain bike: right shift-up or paddle = harder, right shift-down = easier; the left side doesn't shift.</div>
+      ${gearingHtml()}
       <div class="section">Weight</div>
       ${bikeHtml()}
       <div class="help gar-remove"><a href="#" id="gar-remove">Remove this bike</a></div>
@@ -3270,7 +3286,7 @@ function fillGarage() {
 function pickGarageBike(id) {
   Object.assign(app.settings, selectBike(app.settings, id));
   fillGarage();
-  if (currentBike(app.settings)) { fillDrivetrain(); fillBike(); $('#set-style').value = app.settings.shiftStyle || 'sram'; }
+  if (currentBike(app.settings)) { fillDrivetrain(); fillBike(); }
 }
 function renderGarage() {
   const f = $('#garage-form');
@@ -3284,9 +3300,8 @@ function renderGarage() {
       if (!name) return;
       app.settings.garage = garageOf(app.settings).map((b) => (b.id === app.settings.bike ? { ...b, name } : b));
     }
-    else if (el.id === 'set-dt') pickDrivetrain(el.value);
-    else if (['set-rings', 'set-cogs', 'set-wheel'].includes(el.id)) { if (!editDrivetrain()) return; }
-    else if (el.id === 'set-style') { app.settings.shiftStyle = el.value; app.settings.garage = garageOf(app.settings).map((b) => (b.id === app.settings.bike ? { ...b, shiftPicked: true } : b)); }
+    else if (['set-gears', 'set-ring1', 'set-ring2', 'set-cmin', 'set-cmax'].includes(el.id)) { if (!editDrivetrain(el)) return; }
+    else if (el.id === 'set-style') { app.settings.shiftStyle = el.value; $('#style-help').textContent = styleHelp(dtSpec()); }
     else if (el.id === 'set-bike') pickBike(el.value);
     else if (['set-btype', 'set-bmat', 'set-bfront', 'set-brear', 'set-bbuild'].includes(el.id)) { if (!editBike(el)) return; }
     else if (el.id === 'set-bikeKg') {
@@ -3300,9 +3315,7 @@ function renderGarage() {
     saveSettings();
   };
   // tidy the typed teeth once the field is left (only when they were valid)
-  f.onchange = (e) => {
-    if (['set-rings', 'set-cogs'].includes(e.target.id) && !$('.dt-fields').classList.contains('hidden') && editDrivetrain()) fillDrivetrain();
-  };
+  f.onchange = (e) => { if (['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
   f.onclick = (e) => {
     const row = e.target.closest('.gar-row');
     if (row) { pickGarageBike(row.dataset.bike); saveSettings(); return; }
@@ -3432,12 +3445,13 @@ function setSetTab(id, animate = false) {
   ls.set('setTab', id);
 }
 
-const SHIFT_NAMES = { sram: 'SRAM road style', shimano: 'Shimano road style', mtb: 'mountain bike style (all on the right)' };
 // ------------------------------------------------------------------ controls (own panel, top-bar gamepad)
 function renderControls() {
-  const style = SHIFT_NAMES[app.settings.shiftStyle] ? app.settings.shiftStyle : 'sram';
-  const rear = { sram: 'Left side / right side', shimano: 'Right shift-down / shift-up', mtb: 'Right shift-down / right shift-up or paddle' }[style];
-  const front = { sram: 'Left + right together', shimano: 'Left shift-up / shift-down', mtb: 'Left shift-up / shift-down' }[style];
+  const d = dtSpec(), one = !d.seq && d.rings.length === 1;
+  const style = one ? '1x' : app.settings.shiftStyle === 'shimano' ? 'shimano' : 'sram';
+  const rear = { sram: 'Left side / right side', shimano: 'Right shift-down / shift-up', '1x': 'Right shift-down / right shift-up or paddle' }[style];
+  const front = { sram: 'Left + right together', shimano: 'Left shift-up / shift-down', '1x': 'None (1x)' }[style];
+  const name = { sram: 'SRAM 2x', shimano: 'Shimano 2x', '1x': '1x, all on the right' }[style];
   const rows = [
     ['Riding'],
     ['Start / pause', 'A', 'Space'],
@@ -3456,7 +3470,7 @@ function renderControls() {
     ['Switch home tabs', 'D-pad left / right', '&larr; / &rarr;'],
   ];
   $('#controls-body').innerHTML =
-    `<p class="muted ctl-style">Shifting: ${SHIFT_NAMES[style]}, from the bike in the Garage. <a href="#" data-open-garage>Change</a></p>
+    `<p class="muted ctl-style">Shifting: ${name}, from the bike in the Garage. <a href="#" data-open-garage>Change</a></p>
      <table class="keys"><tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>${rows.map(([a, b, c]) => b === undefined
       ? `<tr class="keys-group"><td colspan="3">${a}</td></tr>`
       : `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`).join('')}</table>`;

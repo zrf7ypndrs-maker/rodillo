@@ -22,6 +22,13 @@ const C = {
   eagle_1050: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 50],
   eagle_1052: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 42, 52],
   eagle_t_1052: [10, 12, 14, 16, 18, 21, 24, 28, 32, 38, 44, 52], // Eagle Transmission (T-Type) XS-1275 / 1295 / 1299
+  sh11_1125: [11, 12, 13, 14, 15, 16, 17, 19, 21, 23, 25],
+  sh11_1130: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30],
+  sh11_1134: [11, 13, 15, 17, 19, 21, 23, 25, 27, 30, 34],
+  sh10_1125: [11, 12, 13, 14, 15, 17, 19, 21, 23, 25],
+  sh10_1128: [11, 12, 13, 14, 15, 17, 19, 21, 24, 28],
+  sh10_1132: [11, 12, 14, 16, 18, 20, 22, 25, 28, 32],
+  sh10_1136: [11, 13, 15, 17, 19, 21, 24, 28, 32, 36],
 };
 
 /** Wheel circumference (m) by tire. */
@@ -60,6 +67,42 @@ export const DRIVETRAINS = {
 };
 export const DEFAULT_DRIVETRAIN = 'road-2x12-shimano-50-34';
 export const CUSTOM = 'custom';
+
+// ---- simple gearing editor (Garage): gears "a x b", chainring teeth, smallest and largest cog
+export const GEAR_COUNTS = ['1x9', '1x10', '1x11', '1x12', '1x13', '2x9', '2x10', '2x11', '2x12', '2x13'];
+export const COG_MINS = [9, 10, 11, 12, 13];
+export const COG_MAXES = [21, 23, 24, 25, 26, 27, 28, 30, 32, 33, 34, 36, 38, 40, 42, 44, 45, 46, 48, 50, 51, 52];
+// Real cassettes first (the newest when two share a range: 10-52 12s = Eagle Transmission)
+const KNOWN = [C.eagle_t_1052, ...Object.values(C)];
+
+/** The cogs of an n-speed cassette from min to max: a real one when it exists, else steps that grow like real ones. */
+export function cassette(n, min, max) {
+  const real = KNOWN.find((c) => c.length === n && c[0] === min && c.at(-1) === max);
+  if (real) return [...real];
+  if (max - min + 1 < n) return null;
+  const r = Math.pow(max / min, 1 / (n - 1)), c = [min];
+  for (let i = 1; i < n; i++) c.push(Math.max(c[i - 1] + 1, Math.round(min * r ** i)));
+  c[n - 1] = max;
+  for (let i = n - 2; i >= 0; i--) c[i] = Math.min(c[i], c[i + 1] - 1);
+  return c[0] === min ? c : null;
+}
+
+/** Wheel the gearing points to: big MTB cassettes = 29 x 2.4, other 1x and sub-compact rings = gravel, else road. */
+export function wheelFor(rings, cogs) {
+  if (rings.length === 1 && cogs.at(-1) >= 48) return MTB;
+  if (rings.length === 1 || rings[0] <= 31) return GRAVEL;
+  return ROAD;
+}
+
+/** A full spec from the simple editor, or { error }. */
+export function simpleSpec({ count, rings, min, max }) {
+  const [a, n] = String(count).split('x').map(Number);
+  rings = (rings || []).map(Number).filter((t) => t > 0).slice(0, a);
+  if (rings.length !== a) return { error: a === 2 ? 'Chainrings: type both rings.' : 'Chainring: type its teeth.' };
+  const cogs = cassette(n, Number(min), Number(max));
+  if (!cogs) return { error: `Cogs: ${n} cogs don't fit between ${min} and ${max}.` };
+  return checkSpec({ rings, cogs, wheel: wheelFor([...rings].sort((x, y) => x - y), cogs) });
+}
 
 /** Teeth from free text ("50/34", "11-12-13 ..."). Returns numbers or null if something isn't a number. */
 export function parseTeeth(text) {

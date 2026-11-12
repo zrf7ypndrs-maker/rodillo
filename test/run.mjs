@@ -393,10 +393,8 @@ import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
   st = { ...st, ...selectBike(st, 'canyon-aeroad-cf-slx-7-di2') };
   assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1); assert.equal(st.shiftStyle, 'shimano');
   st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
-  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'mtb');
-  // the Lux Trail saved with SRAM road style before the MTB style existed moves to MTB; a style picked by hand stays
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'sram' }).shiftStyle, 'mtb');
-  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'sram', shiftPicked: true }).shiftStyle, 'sram');
+  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'sram');
+  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'mtb' }).shiftStyle, 'sram'); // the short-lived MTB style
   // bikes saved before shifting was per bike get their model's style (or SRAM)
   assert.equal(cleanBike({ id: 'a', model: 'canyon-aeroad-cf-slx-7-di2', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'shimano');
   assert.equal(cleanBike({ id: 'b', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'sram');
@@ -412,6 +410,29 @@ import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
   const gb = new GB(selectBike({}, 'canyon-lux-trail-cf-7').drivetrain);
   assert.equal(gb.label, '32x14'); assert.equal(gb.isDouble, false); assert.equal(gb.nRear, 12);
   console.log('ok - bike garage');
+}
+import { cassette, simpleSpec, wheelFor, GEAR_COUNTS, COG_MINS, COG_MAXES } from '../js/engine/drivetrain.js';
+{
+  // real cassettes when they exist
+  assert.deepEqual(cassette(12, 10, 52), [10, 12, 14, 16, 18, 21, 24, 28, 32, 38, 44, 52]);
+  assert.deepEqual(cassette(12, 11, 34), [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34]);
+  assert.deepEqual(cassette(11, 11, 28), [11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 28]);
+  // otherwise growing steps, strictly increasing, ends right
+  for (const gc of GEAR_COUNTS) for (const mn of COG_MINS) for (const mx of COG_MAXES) {
+    const n = Number(gc.split('x')[1]), c = cassette(n, mn, mx);
+    if (mx - mn + 1 < n) { assert.equal(c, null); continue; }
+    assert.equal(c.length, n); assert.equal(c[0], mn); assert.equal(c.at(-1), mx);
+    assert.ok(c.every((t, i) => !i || t > c[i - 1]), `${gc} ${mn}-${mx}`);
+  }
+  // the two garage bikes come back out of the simple editor as their presets
+  const lux = simpleSpec({ count: '1x12', rings: [32], min: 10, max: 52 }).spec;
+  assert.equal(presetFor(lux), 'mtb-1x12-sram-t-32');
+  const aero = simpleSpec({ count: '2x12', rings: [52, 36], min: 11, max: 34 }).spec;
+  assert.equal(presetFor(aero), 'road-2x12-shimano-52-36-1134');
+  assert.equal(wheelFor([40], cassette(12, 10, 44)), 2.2);
+  assert.ok(simpleSpec({ count: '2x12', rings: [50], min: 11, max: 34 }).error);
+  assert.ok(simpleSpec({ count: '1x12', rings: [32], min: 13, max: 21 }).error);
+  console.log('ok - simple gearing editor');
 }
 
 test('steep grade at the trainer ceiling: no wound-up trim, no freewheel while grinding', () => {

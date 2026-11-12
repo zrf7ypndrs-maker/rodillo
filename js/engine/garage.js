@@ -15,7 +15,7 @@ export const BIKE_MODELS = {
   'canyon-lux-trail-cf-7': {
     name: 'Canyon Lux Trail CF 7',
     // 2027: SRAM Eagle 90 Transmission, 32T + XS-1275 10-52, Maxxis 29 x 2.4, 12.8 kg (M) + Shimano XT M8100 pedals 0.34 kg
-    drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'mtb', bikeKg: 13.1,
+    drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'sram', bikeKg: 13.1,
   },
   'canyon-aeroad-cf-slx-7-di2': {
     name: 'Canyon Aeroad CF SLX 7 Di2',
@@ -25,7 +25,7 @@ export const BIKE_MODELS = {
 };
 
 export const MAX_BIKES = 12;
-export const SHIFT_STYLES = ['sram', 'shimano', 'mtb']; // mtb = 1x, everything on the right hood
+export const SHIFT_STYLES = ['sram', 'shimano']; // only changes 2x; a 1x shifts on the right hood with either
 const r1 = (x) => Math.round(x * 10) / 10;
 
 /** A garage bike from a known model. */
@@ -36,14 +36,6 @@ export function bikeFromModel(model, id = model) {
 }
 
 export const DEFAULT_GARAGE = Object.keys(BIKE_MODELS).map((m) => bikeFromModel(m));
-
-// The style a bike shifts with. Its own when set by hand (shiftPicked); else the model's. The Lux Trail first
-// shipped with SRAM road style (Nov 12) before the mountain bike style existed, so an unpicked style follows the model.
-function shiftOf(b) {
-  const own = SHIFT_STYLES.includes(b.shiftStyle) ? b.shiftStyle : null;
-  const model = BIKE_MODELS[b.model]?.shiftStyle;
-  return (b.shiftPicked && own) || model || own || 'sram';
-}
 
 /** A bike with known keys and a setup the ride can use; null if it can't be repaired. */
 export function cleanBike(b) {
@@ -58,8 +50,7 @@ export function cleanBike(b) {
     ...(BIKE_MODELS[b.model] ? { model: b.model } : {}),
     drivetrain,
     customDrivetrain: custom,
-    shiftStyle: shiftOf(b),
-    ...(b.shiftPicked ? { shiftPicked: true } : {}),
+    shiftStyle: SHIFT_STYLES.includes(b.shiftStyle) ? b.shiftStyle : BIKE_MODELS[b.model]?.shiftStyle || 'sram',
     bikeKg: kg > 0 && kg < 40 ? r1(kg) : BIKE_MODELS[b.model]?.bikeKg ?? 9,
     bikeSpec: b.bikeSpec ? cleanSpec(b.bikeSpec) : null,
   };
@@ -79,7 +70,7 @@ export function currentBike(settings = {}) {
 
 /** A new bike named `name` with the current setup (gearing, shifting, weight). */
 export function bikeFromSettings(st, id, name) {
-  return cleanBike({ id, name, drivetrain: st.drivetrain, customDrivetrain: st.customDrivetrain, shiftStyle: st.shiftStyle, shiftPicked: true, bikeKg: st.bikeKg, bikeSpec: st.bikeSpec });
+  return cleanBike({ id, name, drivetrain: st.drivetrain, customDrivetrain: st.customDrivetrain, shiftStyle: st.shiftStyle, bikeKg: st.bikeKg, bikeSpec: st.bikeSpec });
 }
 
 /** The settings a bike sets. */
