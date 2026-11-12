@@ -264,6 +264,10 @@ async function loadCoachData() {
 function reconcileSettings(source = 'settings') {
   const r = reconcile({ plan: app.coachPlan, settings: app.settings, base: ls.get('settingsBase', null), pending: ls.get('settingsPending', {}), defaults: DEFAULT_SETTINGS, source });
   app.settings = r.settings;
+  // the bike in use decides the shifting style (bikes can change style without being picked again, e.g. the Lux Trail
+  // moving from SRAM road to MTB style); the next save sends it to the plan
+  const cb = currentBike(app.settings);
+  if (cb && app.settings.shiftStyle !== cb.shiftStyle) app.settings.shiftStyle = cb.shiftStyle;
   ls.set('settings', app.settings);
   ls.set('settingsBase', r.base);
   ls.set('settingsPending', r.pending);
@@ -1924,11 +1928,20 @@ const isLeft = (b) => b.endsWith('L');
  *  Shimano: right shift-up = harder, right shift-down = easier (rear);
  *           left shift-up = big ring, left shift-down = small ring (2x);
  *           paddles: right harder / left easier. On 1x the left buttons also shift the rear.
+ *  MTB:     everything on the right, like a 1x mountain bike: right shift-up and right paddle = harder,
+ *           right shift-down = easier. Left side does nothing (2x: left shift-up / down = big / small ring).
  */
 function shiftFor(b) {
   const s = app.session;
   const style = app.settings.shiftStyle || 'sram';
   const double = s?.gb.isDouble;
+  if (style === 'mtb') {
+    if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
+    if (b === 'shiftDnR') return ['rear', -1];
+    if (double && b === 'shiftUpL') return ['front', +1];
+    if (double && b === 'shiftDnL') return ['front', -1];
+    return null;
+  }
   if (style === 'shimano') {
     if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
     if (b === 'shiftDnR' || b === 'paddleL') return ['rear', -1];
@@ -1951,7 +1964,7 @@ function onShiftButton(b) {
     return;
   }
   const sramFront = (app.settings.shiftStyle || 'sram') === 'sram' && s.gb.isDouble;
-  if (!sramFront) { const [kind, dir] = shiftFor(b); doShift(kind, dir); return; }
+  if (!sramFront) { const sh = shiftFor(b); if (sh) doShift(...sh); return; }
   if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
     clearTimeout(pendingShift.t); pendingShift = null;
     doShift('toggle', 0);
@@ -3204,8 +3217,8 @@ function garageHtml() {
         ${fld('set-cogs', 'Cogs (teeth)', '<input id="set-cogs" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="11-12-13-14-15-17-19-21-24-27-30-34">', '', 'full')}
       </div>
       <div class="help" id="dt-sum"></div>
-      ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM</option><option value="shimano">Shimano</option></select>')}
-      <div class="help">SRAM: right = harder, left = easier, both together = front shift. Shimano: right buttons = rear harder/easier, left buttons = big/small ring.</div>
+      ${fld('set-style', 'Shifting style', '<select id="set-style"><option value="sram">SRAM road</option><option value="shimano">Shimano road</option><option value="mtb">Mountain bike (all on the right)</option></select>', '', 'full')}
+      <div class="help">SRAM road: right = harder, left = easier, both together = front shift. Shimano road: right buttons = rear harder/easier, left buttons = big/small ring. Mountain bike: right shift-up or paddle = harder, right shift-down = easier; the left side doesn't shift.</div>
       <div class="section">Weight</div>
       ${bikeHtml()}
       <div class="help gar-remove"><a href="#" id="gar-remove">Remove this bike</a></div>
@@ -3253,7 +3266,7 @@ function renderGarage() {
     }
     else if (el.id === 'set-dt') pickDrivetrain(el.value);
     else if (['set-rings', 'set-cogs', 'set-wheel'].includes(el.id)) { if (!editDrivetrain()) return; }
-    else if (el.id === 'set-style') app.settings.shiftStyle = el.value;
+    else if (el.id === 'set-style') { app.settings.shiftStyle = el.value; app.settings.garage = garageOf(app.settings).map((b) => (b.id === app.settings.bike ? { ...b, shiftPicked: true } : b)); }
     else if (el.id === 'set-bike') pickBike(el.value);
     else if (['set-btype', 'set-bmat', 'set-bfront', 'set-brear', 'set-bbuild'].includes(el.id)) { if (!editBike(el)) return; }
     else if (el.id === 'set-bikeKg') {
@@ -3399,9 +3412,12 @@ function setSetTab(id, animate = false) {
   ls.set('setTab', id);
 }
 
+const SHIFT_NAMES = { sram: 'SRAM road style', shimano: 'Shimano road style', mtb: 'mountain bike style (all on the right)' };
 // ------------------------------------------------------------------ controls (own panel, top-bar gamepad)
 function renderControls() {
-  const sram = (app.settings.shiftStyle || 'sram') === 'sram';
+  const style = SHIFT_NAMES[app.settings.shiftStyle] ? app.settings.shiftStyle : 'sram';
+  const rear = { sram: 'Left side / right side', shimano: 'Right shift-down / shift-up', mtb: 'Right shift-down / right shift-up or paddle' }[style];
+  const front = { sram: 'Left + right together', shimano: 'Left shift-up / shift-down', mtb: 'Left shift-up / shift-down' }[style];
   const rows = [
     ['Riding'],
     ['Start / pause', 'A', 'Space'],
@@ -3409,8 +3425,8 @@ function renderControls() {
     ['Skip interval (hold 3 s)', 'Hold Y', 'Hold S'],
     ['Lap (free ride; workouts lap every interval)', 'Z', 'L'],
     ['Slope'],
-    ['Rear: easier / harder', sram ? 'Left side / right side' : 'Right shift-down / shift-up', '&larr; / &rarr;'],
-    ['Front shift (2x)', sram ? 'Left + right together' : 'Left shift-up / shift-down', 'F'],
+    ['Rear: easier / harder', rear, '&larr; / &rarr;'],
+    ['Front shift (2x)', front, 'F'],
     ['Grade &plusmn;1%', 'D-pad up / down', '&uarr; / &darr;'],
     ['ERG'],
     ['Effort &plusmn;1% (hold to repeat)', 'Left shifters &minus; / right shifters + (also D-pad)', '&larr; / &rarr; or &darr; / &uarr;'],
@@ -3420,7 +3436,7 @@ function renderControls() {
     ['Switch home tabs', 'D-pad left / right', '&larr; / &rarr;'],
   ];
   $('#controls-body').innerHTML =
-    `<p class="muted ctl-style">Shifting: ${sram ? 'SRAM' : 'Shimano'} style, from the bike in the Garage. <a href="#" data-open-garage>Change</a></p>
+    `<p class="muted ctl-style">Shifting: ${SHIFT_NAMES[style]}, from the bike in the Garage. <a href="#" data-open-garage>Change</a></p>
      <table class="keys"><tr><th></th><th>Zwift Ride</th><th>Keyboard</th></tr>${rows.map(([a, b, c]) => b === undefined
       ? `<tr class="keys-group"><td colspan="3">${a}</td></tr>`
       : `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`).join('')}</table>`;

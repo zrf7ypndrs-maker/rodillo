@@ -376,7 +376,10 @@ import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
   st = { ...st, ...selectBike(st, 'canyon-aeroad-cf-slx-7-di2') };
   assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1); assert.equal(st.shiftStyle, 'shimano');
   st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
-  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'sram');
+  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'mtb');
+  // the Lux Trail saved with SRAM road style before the MTB style existed moves to MTB; a style picked by hand stays
+  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'sram' }).shiftStyle, 'mtb');
+  assert.equal(cleanBike({ ...DEFAULT_GARAGE[0], shiftStyle: 'sram', shiftPicked: true }).shiftStyle, 'sram');
   // bikes saved before shifting was per bike get their model's style (or SRAM)
   assert.equal(cleanBike({ id: 'a', model: 'canyon-aeroad-cf-slx-7-di2', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'shimano');
   assert.equal(cleanBike({ id: 'b', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'sram');
