@@ -3425,7 +3425,7 @@ async function loadBikePhoto(model) {
     if (!r?.content) return;
     garPhotos[model] = `data:image/webp;base64,${r.content.replace(/\s/g, '')}`;
     try { ls.set('garagePhotos', garPhotos); } catch { /* storage full: keep it for this visit */ }
-    if (!$('#garage').classList.contains('hidden') && garView.mode !== 'custom') renderGarage(garView);
+    if (!$('#garage').classList.contains('hidden') && garTab === 'bikes' && garView.mode !== 'custom') renderGarage(garView);
   } catch (e) { logMsg('app', `bike photo ${model}: ${e.message}`); }
   finally { photoLoading.delete(model); }
 }
@@ -3454,7 +3454,7 @@ function garListHtml() {
   if (!full) tiles.push('<button type="button" class="gar-add" id="gar-custom" aria-label="Custom bike"><span class="gar-plus" aria-hidden="true">+</span><span class="gar-name">Custom bike</span><span class="gar-line">Your own weight and wheel</span></button>');
   return `<div class="gar-grid" role="radiogroup" aria-label="Bikes">${tiles.join('')}</div>
     <div class="help">${cur ? `Riding the ${esc(cur.name)}.` : 'Pick the bike you are riding.'} Slope mode uses its weight and wheel; ERG ignores them.
-      Gearing is separate: <a href="#" data-open-gearing>${esc(gearingName(st))}</a>.</div>`;
+      Gearing is its own tab: <a href="#" data-open-gearing>${esc(gearingName(st))}</a>.</div>`;
 }
 function garDetailsHtml(b) {
   const on = app.settings.bike === b.id, m = BIKE_MODELS[b.model];
@@ -3558,7 +3558,7 @@ async function removeGarageBike(id) {
   };
 }
 
-// ---- gearing (own centered panel, like the garage): what the shifters shift through. Its own choice since
+// ---- gearing (the Garage's second tab, Nov 12): what the shifters shift through. Its own choice since
 // Nov 12 (Agustín: "the user might want to switch gearing mid ride"), so it opens from the pause screen too and
 // applies at once: mid-ride you land on the gear closest to the one you were in. Two views: the list (tiles for
 // the built-ins and your own gearings, every preset in a menu, shifting for the one in use) and "New gearing".
@@ -3622,15 +3622,32 @@ function renderGearing(view = gearView) {
     $('#gear-all').value = gearOptions().find((o) => o.on)?.v || '';
     if ($('#gear-style')) $('#gear-style').value = shiftStyleFor(app.settings.shiftStyle, $('#gear-style').options[0].value === 'right');
   }
-  $('#gearing').scrollTop = 0;
+  $('#garage').scrollTop = 0;
 }
-function openGearing() {
+// The Garage popup has two tabs (Agustín, Nov 12: gearing had no way in from home): Bikes and Gearing.
+// The top-bar bike opens Bikes; the pause screen and [data-open-gearing] links open Gearing.
+let garTab = 'bikes';
+function setGarTab(id, animate = false) {
+  if (!['bikes', 'gearing'].includes(id)) id = 'bikes';
+  const prev = garTab;
+  garTab = id;
+  draft = null; // leaving a half-made bike or gearing discards it, like Cancel
+  $$('#gar-tabs button').forEach((b) => { const on = b.dataset.gtab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+  $('#garage-form').classList.toggle('hidden', id !== 'bikes');
+  $('#gearing-form').classList.toggle('hidden', id !== 'gearing');
+  if (id === 'bikes') renderGarage({ mode: 'list' }); else renderGearing('list');
+  placeInk($('#gar-tabs'), $(`#gar-tabs [data-gtab="${id}"]`));
+  if (animate && prev !== id) slideIn($(id === 'bikes' ? '#garage-form' : '#gearing-form'), id === 'gearing' ? 1 : -1);
+}
+function openGarage(tab = 'bikes') {
   setDevPop(false);
   $$('.panel').forEach((p) => p.classList.add('hidden'));
-  draft = null;
-  renderGearing('list');
-  $('#gearing').classList.remove('hidden');
+  $('#garage').classList.remove('hidden');
+  setGarTab(tab);
 }
+const openGearing = () => openGarage('gearing');
+$$('#gar-tabs button').forEach((b) => (b.onclick = () => setGarTab(b.dataset.gtab, true)));
+if (inkObserver) inkObserver.observe($('#gar-tabs'));
 function startGearing() {
   const n = myGearings(app.settings).length;
   draft = { name: `My gearing${n ? ` ${n + 1}` : ''}`, drivetrain: app.settings.drivetrain, customDrivetrain: app.settings.customDrivetrain || null, shiftStyle: app.settings.shiftStyle || 'sram' };
@@ -3864,13 +3881,7 @@ document.addEventListener('click', (e) => {
 $$('#set-tabs button').forEach((b) => (b.onclick = () => setSetTab(b.dataset.stab, true)));
 if (inkObserver) inkObserver.observe($('#set-tabs'));
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
-$('#btn-garage').onclick = () => {
-  setDevPop(false);
-  $$('.panel').forEach((p) => p.classList.add('hidden'));
-  draft = null;
-  renderGarage({ mode: 'list' });
-  $('#garage').classList.remove('hidden');
-};
+$('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {
   setDevPop(false);
   $('#settings').classList.add('hidden');

@@ -419,10 +419,11 @@ table.ints { margin-bottom: 14px; }
 .settings-form > .help, .settings-form .dt-fields > .help, .settings-form .bike-fields > .help { margin-top: -6px; }
 /* Garage: a centered popup (not a side drawer) with a square tile per bike and a "+" tile (Nov 12, Agustín).
    It keeps the .panel class so the scrim, Close, Esc / B and the pause screen work as for the other panels. */
-#garage.panel, #gearing.panel { top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 18px 44px var(--shadow); }
-#garage.panel:not(.hidden), #gearing.panel:not(.hidden) { animation: modal-fade .18s ease-out, gar-pop .24s cubic-bezier(.2, .7, .2, 1); }
+#garage.panel { top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 18px 44px var(--shadow); }
+#garage.panel:not(.hidden) { animation: modal-fade .18s ease-out, gar-pop .24s cubic-bezier(.2, .7, .2, 1); }
 @keyframes gar-pop { from { transform: translate(-50%, -50%) scale(.95); } }
-@media (prefers-reduced-motion: reduce) { #garage.panel:not(.hidden), #gearing.panel:not(.hidden) { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #garage.panel:not(.hidden) { animation: none; } }
+.gar-tabs { margin-bottom: 18px; }
 .settings-form .gar-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .gar-tile, .gar-add { aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); overflow: hidden; transition: transform .4s cubic-bezier(.3, 1.6, .5, 1), background .2s ease; }
 .gar-pick, .gar-add { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 14px 12px 6px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: center; cursor: pointer; }
@@ -1366,7 +1367,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .card { padding: 14px; }
   .ride-table { overflow-x: auto; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }
-  #garage.panel, #gearing.panel { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); padding: 14px; }
+  #garage.panel { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); padding: 14px; }
   .settings-form .gar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .gar-name { font-size: 13px; } .gar-plus { font-size: 48px; margin-bottom: 4px; }
   .gar-pick, .gar-add { padding: 10px 8px 4px; gap: 2px; }
