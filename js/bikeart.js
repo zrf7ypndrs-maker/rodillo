@@ -20,8 +20,9 @@ function wheel(x, k) {
   return s + `<circle cx="${x}" cy="${RY}" r="1.8" stroke-width="2"/>`;
 }
 
-/** SVG markup for a bike kind (unknown kinds draw a road bike). */
-export function bikeArt(kind = 'road', cls = 'bike-art') {
+/** SVG markup for a bike kind (unknown kinds draw a road bike). paint: a CSS color for the frame (drawn with an
+ *  ink outline so a white frame still shows on a light background); none = ink like the rest. */
+export function bikeArt(kind = 'road', cls = 'bike-art', paint = '') {
   const k = KINDS[kind] || KINDS.road;
   const mtb = k.flat;
   const bb = mtb ? [97, 88] : [99, 87];
@@ -32,22 +33,20 @@ export function bikeArt(kind = 'road', cls = 'bike-art') {
   const tube = k.aero ? 3.6 : mtb ? 3.2 : 2.6;
   const P = (a) => a.join(' ');
   let s = wheel(RX, k) + wheel(FX, k);
+  const frame = []; // [path d, width]: tubes, stays, rigid fork, rocker; painted when there's a paint
   // rear triangle: chainstay and seatstay (low on aero bikes; to a rocker link on the full-suspension)
   const stayTop = k.rear === 'drop' ? [92, 59] : k.rear === 'fs' ? [83, 56] : [seatTop[0] + 1.5, seatTop[1] + 9];
-  s += `<path d="M${P(bb)}L${RX} ${RY}L${P(stayTop)}" stroke-width="${tube - 0.6}"/>`;
+  frame.push([`M${P(bb)}L${RX} ${RY}L${P(stayTop)}`, tube - 0.6]);
   // main frame
-  s += `<path d="M${P(bb)}L${P(seatTop)}" stroke-width="${tube}"/>`;
-  s += `<path d="M${P(ttSeat)}L${P(htTop)}" stroke-width="${tube}"/>`;
-  s += `<path d="M${P(htTop)}L${P(htBot)}" stroke-width="${tube + 1.4}"/>`;
-  s += `<path d="M${P(bb)}L${P(htBot)}" stroke-width="${tube + (k.aero ? 1.6 : 0.8)}"/>`;
+  frame.push([`M${P(bb)}L${P(seatTop)}`, tube], [`M${P(ttSeat)}L${P(htTop)}`, tube], [`M${P(htTop)}L${P(htBot)}`, tube + 1.4], [`M${P(bb)}L${P(htBot)}`, tube + (k.aero ? 1.6 : 0.8)]);
   if (k.rear === 'fs') {
-    // rocker on the seat tube, shock from the rocker down to the down tube
-    s += `<path d="M${P(stayTop)}L95 52" stroke-width="2.6"/>`;
+    // rocker on the seat tube (frame), shock from the rocker down to the down tube (ink)
+    frame.push([`M${P(stayTop)}L95 52`, 2.6]);
     s += `<path d="M95 52L112 70" stroke-width="2.4"/><path d="M95 52L103 60.5" stroke-width="5.2"/>`;
   }
   // fork
   if (k.fork === 'sus') s += `<path d="M${P(htBot)}L${htBot[0] + 4} ${htBot[1] + 12}" stroke-width="4.6"/><path d="M${htBot[0] + 3.5} ${htBot[1] + 10}L${FX} ${RY}" stroke-width="2.8"/>`;
-  else s += `<path d="M${P(htBot)}Q${htBot[0] + 3} ${htBot[1] + 16} ${FX} ${RY}" stroke-width="${k.aero ? 3.4 : 2.6}"/>`;
+  else frame.push([`M${P(htBot)}Q${htBot[0] + 3} ${htBot[1] + 16} ${FX} ${RY}`, k.aero ? 3.4 : 2.6]);
   // seatpost and saddle
   const post = [seatTop[0] - 2.5, seatTop[1] - (k.dropper ? 14 : 11)];
   s += `<path d="M${P(seatTop)}L${P(post)}" stroke-width="${k.dropper ? 3 : 2.4}"/>`;
@@ -62,7 +61,9 @@ export function bikeArt(kind = 'road', cls = 'bike-art') {
   // crank and chainring
   s += `<circle cx="${bb[0]}" cy="${bb[1]}" r="${mtb ? 6 : 8}" stroke-width="1.8"/>`;
   s += `<path d="M${bb[0]} ${bb[1]}L${bb[0] + 6} ${bb[1] + 13}" stroke-width="2.8"/>`;
-  return `<svg class="${cls}" viewBox="0 0 200 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${s}</g></svg>`;
+  const tubes = (w0, attrs) => `<g${attrs}>${frame.map(([d, w]) => `<path d="${d}" stroke-width="${w + w0}"/>`).join('')}</g>`;
+  const painted = paint ? tubes(2.2, '') + tubes(0, ` style="stroke:${paint}"`) : tubes(0, '');
+  return `<svg class="${cls}" viewBox="0 0 200 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${s}${painted}</g></svg>`;
 }
 
 /** The drawing for a garage bike: its model's, else from its weight spec or gearing. */

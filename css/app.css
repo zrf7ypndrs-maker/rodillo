@@ -59,6 +59,8 @@
   --dim: rgba(247, 249, 246, .72); /* ride page: everything outside the selected interval */
   /* today's card: the zone color fades into this, and this is its lift shadow */
   --today-end: #ffffff; --today-shadow: rgba(22, 24, 27, .28);
+  /* frame paint in the Garage drawings (the real bikes' colors, Agustín Nov 12): the same in both themes */
+  --paint-grove: #5f7b47; --paint-white: #ffffff;
 
   /* zones (kept in sync with ZC in js/app.js) */
   --z1: #a3a9ae; --z2: #2d7ff9; --z3: #1fa855; --z4: #f4be1a; --z5: #f47b20; --z6: #e23b44;
@@ -73,6 +75,7 @@
 /* Dark: same system, lights off. "Now" stays inverted, so today and the
    current interval become light cards. Zone colors are unchanged. */
 :root[data-theme="dark"] {
+  --paint-grove: #5f7b47; --paint-white: #ffffff; /* frame paint: same as light */
   --paper: #0c0e0d;
   --sheet: #181b19;
   --sheet2: #1f2320;

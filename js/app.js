@@ -3334,7 +3334,7 @@ function weightText(b) {
   return `${b.bikeKg.toFixed(1)} kg, estimated: ${MATERIALS[s.material].name.toLowerCase()} ${t.name.toLowerCase()}${travel}, ${BUILDS[s.build].name.split(' (')[0].toLowerCase()} build`;
 }
 const bikeSpecOf = (b) => (b.drivetrain === CUSTOM ? b.customDrivetrain : DRIVETRAINS[b.drivetrain]);
-const artFor = (b) => bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)));
+const artFor = (b) => bikeArt(BIKE_MODELS[b.model]?.art || bikeKind(b, bikeSpecOf(b)), 'bike-art', BIKE_MODELS[b.model]?.paint);
 function garListHtml() {
   const st = app.settings, g = garageOf(st), cur = currentBike(st);
   const tiles = g.map((b) => {
