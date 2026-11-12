@@ -344,7 +344,7 @@ import { BIKE_PRESETS, BIKE_TYPES, presetSpec, cleanSpec, estimateBikeKg, bikePr
   console.log('ok - bike weight presets and estimate');
 }
 
-import { BIKE_MODELS, DEFAULT_GARAGE, garageOf, currentBike, selectBike, storeSetup, cleanBike, newBikeId, bikeLine, bikeFromModel } from '../js/engine/garage.js';
+import { BIKE_MODELS, DEFAULT_GARAGE, garageOf, currentBike, selectBike, storeSetup, cleanBike, newBikeId, bikeLine, bikeFromModel, bikeFromSettings } from '../js/engine/garage.js';
 import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
 {
   // built-in bikes: real drivetrains and maker's weights
@@ -374,9 +374,15 @@ import { DRIVETRAINS as DTS, Gearbox as GB } from '../js/engine/drivetrain.js';
   assert.equal(st.garage[0].bikeKg, 13.4); assert.equal(st.garage[0].drivetrain, 'mtb-1x12-sram-t-34');
   assert.equal(st.garage[1].bikeKg, 8.1);
   st = { ...st, ...selectBike(st, 'canyon-aeroad-cf-slx-7-di2') };
-  assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1);
+  assert.equal(st.drivetrain, 'road-2x12-shimano-52-36-1134'); assert.equal(st.bikeKg, 8.1); assert.equal(st.shiftStyle, 'shimano');
   st = { ...st, ...selectBike(st, 'canyon-lux-trail-cf-7') };
-  assert.equal(st.bikeKg, 13.4);
+  assert.equal(st.bikeKg, 13.4); assert.equal(st.shiftStyle, 'sram');
+  // bikes saved before shifting was per bike get their model's style (or SRAM)
+  assert.equal(cleanBike({ id: 'a', model: 'canyon-aeroad-cf-slx-7-di2', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'shimano');
+  assert.equal(cleanBike({ id: 'b', drivetrain: 'road-2x12-shimano-52-36-1134' }).shiftStyle, 'sram');
+  // a custom bike starts from the current setup
+  const cb = bikeFromSettings({ drivetrain: 'custom', customDrivetrain: { rings: [40], cogs: [10, 12, 14, 16, 18, 21, 24, 28, 32, 36, 40, 44], wheel: 2.2 }, shiftStyle: 'shimano', bikeKg: 9.6 }, 'bike', 'Gravel');
+  assert.equal(cb.drivetrain, 'custom'); assert.equal(cb.shiftStyle, 'shimano'); assert.equal(bikeLine(cb), '1x12, 40 + 10-44 \u00b7 9.6 kg');
   assert.deepEqual(storeSetup({ ...st, bike: '' }), garageOf(st));
   // ids
   assert.equal(newBikeId(DEFAULT_GARAGE), 'bike');

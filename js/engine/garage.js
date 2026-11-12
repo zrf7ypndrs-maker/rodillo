@@ -1,9 +1,10 @@
 // Bike garage (Settings > Garage): saved bikes, each with its own gearing and weight.
 // Picking a bike copies its setup into the settings the ride uses (drivetrain, customDrivetrain, bikeKg, bikeSpec),
-// so the engine needs nothing new. While a bike is selected, edits in Gearing and Rider > Bike save back to it.
+// so the engine needs nothing new. The Garage panel edits the bike in use (gearing, shifting style, weight) and
+// every edit saves back to it.
 //
 // settings.garage = [bike], settings.bike = id of the bike in use ('' = none, the loose settings as before).
-// bike = { id, name, model?, drivetrain, customDrivetrain, bikeKg, bikeSpec }
+// bike = { id, name, model?, drivetrain, customDrivetrain, shiftStyle, bikeKg, bikeSpec }
 
 import { DRIVETRAINS, CUSTOM, checkSpec } from './drivetrain.js?v=202611102147';
 import { cleanSpec } from './bikes.js?v=202611102147';
@@ -14,23 +15,24 @@ export const BIKE_MODELS = {
   'canyon-lux-trail-cf-7': {
     name: 'Canyon Lux Trail CF 7',
     // 2027: SRAM Eagle 90 Transmission, 32T + XS-1275 10-52, Maxxis 29 x 2.4, 12.8 kg (M) + Shimano XT M8100 pedals 0.34 kg
-    drivetrain: 'mtb-1x12-sram-t-32', bikeKg: 13.1,
+    drivetrain: 'mtb-1x12-sram-t-32', shiftStyle: 'sram', bikeKg: 13.1,
   },
   'canyon-aeroad-cf-slx-7-di2': {
     name: 'Canyon Aeroad CF SLX 7 Di2',
     // Shimano 105 Di2 12s, 52/36 + 11-34, 700 x 26-28c, 7.84 kg (M) + road pedals ~0.25 kg
-    drivetrain: 'road-2x12-shimano-52-36-1134', bikeKg: 8.1,
+    drivetrain: 'road-2x12-shimano-52-36-1134', shiftStyle: 'shimano', bikeKg: 8.1,
   },
 };
 
 export const MAX_BIKES = 12;
+export const SHIFT_STYLES = ['sram', 'shimano'];
 const r1 = (x) => Math.round(x * 10) / 10;
 
 /** A garage bike from a known model. */
 export function bikeFromModel(model, id = model) {
   const m = BIKE_MODELS[model];
   if (!m) return null;
-  return { id, name: m.name, model, drivetrain: m.drivetrain, customDrivetrain: null, bikeKg: m.bikeKg, bikeSpec: null };
+  return { id, name: m.name, model, drivetrain: m.drivetrain, customDrivetrain: null, shiftStyle: m.shiftStyle, bikeKg: m.bikeKg, bikeSpec: null };
 }
 
 export const DEFAULT_GARAGE = Object.keys(BIKE_MODELS).map((m) => bikeFromModel(m));
@@ -48,6 +50,7 @@ export function cleanBike(b) {
     ...(BIKE_MODELS[b.model] ? { model: b.model } : {}),
     drivetrain,
     customDrivetrain: custom,
+    shiftStyle: SHIFT_STYLES.includes(b.shiftStyle) ? b.shiftStyle : BIKE_MODELS[b.model]?.shiftStyle || 'sram',
     bikeKg: kg > 0 && kg < 40 ? r1(kg) : BIKE_MODELS[b.model]?.bikeKg ?? 9,
     bikeSpec: b.bikeSpec ? cleanSpec(b.bikeSpec) : null,
   };
@@ -65,9 +68,14 @@ export function currentBike(settings = {}) {
   return garageOf(settings).find((b) => b.id === settings.bike) || null;
 }
 
+/** A new bike named `name` with the current setup (gearing, shifting, weight). */
+export function bikeFromSettings(st, id, name) {
+  return cleanBike({ id, name, drivetrain: st.drivetrain, customDrivetrain: st.customDrivetrain, shiftStyle: st.shiftStyle, bikeKg: st.bikeKg, bikeSpec: st.bikeSpec });
+}
+
 /** The settings a bike sets. */
 export function bikeSetup(b) {
-  return { drivetrain: b.drivetrain, customDrivetrain: b.customDrivetrain || null, bikeKg: b.bikeKg, bikeSpec: b.bikeSpec || null };
+  return { drivetrain: b.drivetrain, customDrivetrain: b.customDrivetrain || null, shiftStyle: b.shiftStyle, bikeKg: b.bikeKg, bikeSpec: b.bikeSpec || null };
 }
 
 /** Settings changes that put a bike in use ('' = no bike: keep the current setup). */
