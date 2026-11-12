@@ -71,6 +71,7 @@ export class Session extends Emitter {
     this.segD0 = 0;            // distance when it started
     this.segAgg = [];          // running per-segment stats
     this.grade = 0;            // smoothed virtual grade being ridden
+    this.climbed = 0;          // metres climbed in slope mode
     this.altitude = 100;
     this.samples = [];
     this.laps = [];
@@ -345,7 +346,9 @@ export class Session extends Emitter {
       this.lastSentGrade = gs;
       this.trainer.setGrade(gs);
     }
-    this.altitude += this.bike.v * dt * Math.sin(Math.atan(this.grade));
+    const dh = this.bike.v * dt * Math.sin(Math.atan(this.grade));
+    this.altitude += dh;
+    if (this.mode === 'sim' && dh > 0) this.climbed += dh; // ride screen "Climbed" tile (UX roadmap item 7)
     this._messages();
 
     // ---- record at 1 Hz ----

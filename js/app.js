@@ -43,6 +43,18 @@ function readTokens() {
 readTokens();
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
 const zoneHex = (f) => ZC[ZONES[zoneOf(f)].color]; // Coggan zones from zones.js
+/** A ramp as hard color stops [[t 0..1, hex], ...]: each stretch in the zone its target is in at that moment
+ *  (UX roadmap item 7: charts show a ramp's zones along it, the live card and current row its zone right now). */
+function rampStops(from, to) {
+  const cuts = ZONES.slice(0, 6).map((z) => z.max).filter((b) => (b - from) * (b - to) < 0).map((b) => (b - from) / (to - from)).sort((a, b) => a - b);
+  const edges = [0, ...cuts, 1], out = [];
+  for (let k = 0; k < edges.length - 1; k++) {
+    const c = zoneHex(from + (to - from) * (edges[k] + edges[k + 1]) / 2);
+    out.push([edges[k], c], [edges[k + 1], c]);
+  }
+  return out;
+}
+let rampN = 0;
 /** Fill an interval card / phone hero; the darkest grade (12%+) needs light text. */
 const setZc = (el, c) => { el.style.setProperty('--zc', c); el.style.setProperty('--on-zone', c === GRADE[5] ? 'var(--on-zone-inv)' : ''); };
 const gradeHex = (g) => GRADE[g < 0 ? 0 : g < 0.03 ? 1 : g < 0.06 ? 2 : g < 0.09 ? 3 : g < 0.12 ? 4 : 5];
@@ -485,7 +497,13 @@ function profileSvg(w, width = 340, height = 54) {
     const x = (s.start / T) * width, wd = Math.max(0.5, (s.dur / T) * width);
     if (s.kind === 'erg') {
       const y0 = height - (Math.min(s.from, maxF) / maxF) * height, y1 = height - (Math.min(s.to, maxF) / maxF) * height;
-      out += `<polygon data-i="${i}" points="${x},${height} ${x},${y0} ${x + wd},${y1} ${x + wd},${height}" fill="${zoneHex((s.from + s.to) / 2)}" opacity=".9"/>`;
+      let fill = zoneHex(s.from);
+      if (s.from !== s.to) {
+        const id = `rmp${++rampN}`;
+        out += `<defs><linearGradient id="${id}">${rampStops(s.from, s.to).map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient></defs>`;
+        fill = `url(#${id})`;
+      }
+      out += `<polygon data-i="${i}" points="${x},${height} ${x},${y0} ${x + wd},${y1} ${x + wd},${height}" fill="${fill}" opacity=".9"/>`;
     } else {
       const g = s.grade;
       const h = Math.max(4, ((g + 0.03) / 0.15) * height);
@@ -2134,7 +2152,7 @@ function renderNextCard(s, next, setHTML) {
   if (none) return;
   el.classList.toggle('finish', !next);
   if (!next) { el.style.setProperty('--nc', 'var(--rule)'); setHTML(el, '<div class="rt-k">Next</div><div class="amt">Finish</div>'); return; }
-  el.style.setProperty('--nc', next.kind === 'erg' ? zoneHex((next.from + next.to) / 2) : gradeHex(next.grade));
+  el.style.setProperty('--nc', next.kind === 'erg' ? zoneHex(next.from) : gradeHex(next.grade)); // a ramp: the zone it starts in, so the hand-off doesn't change color
   const w = (f) => Math.round(f * app.settings.ftp * s.intensity);
   const tgt = next.kind === 'erg'
     ? `<span class="num">${next.from === next.to ? w(next.from) : `${w(next.from)}-${w(next.to)}`}</span><span class="u">W</span>`
@@ -2203,7 +2221,8 @@ function segRows(s) {
   const doneN = Math.min(cur, s.segs.length);
   const rows = s.segs.map((g, i) => {
     const state = i < cur ? 'done' : i === cur ? 'current' : 'todo';
-    const color = g.kind === 'erg' ? zoneHex((g.from + g.to) / 2) : gradeHex(g.grade);
+    // ramps: the current row follows the live target like the interval card; other rows show the ramp's average
+    const color = g.kind !== 'erg' ? gradeHex(g.grade) : zoneHex(state === 'current' ? segTarget(g, s.segProgress) : (g.from + g.to) / 2);
     const tgtW = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * ftp * s.intensity)} W` : `${Math.round(g.from * ftp * s.intensity)}-${Math.round(g.to * ftp * s.intensity)} W`) : `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`;
     const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
     const a = s.segAgg[i];
@@ -2289,10 +2308,10 @@ function renderRide() {
   } else {
     $('#r-target').textContent = `${(p / app.settings.riderKg).toFixed(1)} W/kg`;
   }
-  const pctEl = $('#r-pct');
-  pctEl.classList.toggle('hidden', s.mode !== 'erg');
-  pctEl.textContent = `${Math.round(s.intensity * 100)}%`;
-  pctEl.className = `t-pct ${s.mode !== 'erg' ? 'hidden' : s.intensity > 1.001 ? 'up' : s.intensity < 0.999 ? 'down' : ''}`;
+  const pctEl = $('#r-pct'); // effort: only when it isn't 100%
+  pctEl.classList.toggle('hidden', s.mode !== 'erg' || Math.abs(s.intensity - 1) < 0.001);
+  const effHtml = `${Math.round(s.intensity * 100)}%`;
+  if (pctEl.innerHTML !== effHtml) pctEl.innerHTML = effHtml;
   $('#r-hr').textContent = hr || '--';
   const hrs = s.samples.filter((x) => x.hr).slice(-600);
   $('#r-hrzone').textContent = hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '';
@@ -2306,8 +2325,17 @@ function renderRide() {
   $('#r-gear').textContent = s.gb.seq ? s.gb.label : s.gb.label.replace('x', '\u00d7');
   $('#r-gear').classList.toggle('combo', !s.gb.seq);
   $('#r-ratio').innerHTML = s.mode === 'erg' ? 'ERG: gears not used' : gearViz(s.gb);
-  $('#r-grade').innerHTML = `${(s.mode === 'sim' ? s.grade * 100 : 0).toFixed(1)}<span class="unit">%</span>`;
-  $('#r-gradesub').textContent = s.mode !== 'sim' ? '' : !s.seg ? 'up/down to change' : s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}%` : '';
+  // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
+  // Real climbs say what's left (the chart header already counts what's done).
+  let up = s.climbed || 0, upSub = '', upLabel = 'Climbed';
+  if (s.segs && isTrack(s.segs)) {
+    const tr = rideTrack(s), d = trackDist(tr, s.segs, s.chartPos);
+    up = Math.max(0, tr.ascent - trackClimbed(tr, d)); upLabel = 'To the top';
+    upSub = `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`;
+  }
+  $('#r-climb-label').textContent = upLabel;
+  $('#r-climb').innerHTML = `${Math.round(up)}<span class="unit">m</span>`;
+  $('#r-climbsub').textContent = upSub;
   $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
   $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
   $('#r-trip').innerHTML = `<b>${(s.bike.dist / 1000).toFixed(1)}</b> km \u00b7 <b>${(s.bike.v * 3.6).toFixed(1)}</b> km/h`;
@@ -2342,7 +2370,9 @@ function renderRide() {
       sub = `use your gears${cad}`;
     }
     setHTML($('#r-int-label'), `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`);
-    setHTML($('#r-int-text'), seg.text ? `${esc(seg.text)}${cad}` : sub);
+    // slope profile moved with up/down: said here now that the Grade tile is gone (UX roadmap item 7)
+    const off = seg.kind !== 'erg' && s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}% &middot; ` : '';
+    setHTML($('#r-int-text'), off + (seg.text ? `${esc(seg.text)}${cad}` : sub));
     setHTML($('#r-int-big'), big);
     bar.classList.remove('hidden');
     bar.firstElementChild.style.width = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
@@ -2407,7 +2437,13 @@ function drawChart() {
     const X = (t) => (t / T) * W;
     for (const g of s.segs) {
       if (g.kind === 'erg') {
-        ctx.fillStyle = zoneHex((g.from + g.to) / 2) + (g.end <= s.chartPos ? '66' : 'cc');
+        const a = g.end <= s.chartPos ? '66' : 'cc';
+        if (g.from === g.to) ctx.fillStyle = zoneHex(g.from) + a;
+        else {
+          const gr = ctx.createLinearGradient(X(g.start), 0, X(g.end), 0);
+          for (const [o, c] of rampStops(g.from, g.to)) gr.addColorStop(o, c + a);
+          ctx.fillStyle = gr;
+        }
         ctx.beginPath(); ctx.moveTo(X(g.start), H - pad);
         ctx.lineTo(X(g.start), Yp(g.from * ftp * s.intensity)); ctx.lineTo(X(g.end), Yp(g.to * ftp * s.intensity));
         ctx.lineTo(X(g.end), H - pad); ctx.closePath(); ctx.fill();
@@ -2711,7 +2747,7 @@ function renderPhone(s) {
 
   const next = s.segs && s.segIndex >= 0 ? s.segs[s.segIndex + 1] : null;
   set('rp-next', next
-    ? `Next <span class="sw" style="background:${segColor(next, s)}"></span><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`
+    ? `Next <span class="sw" style="background:${segColor(next, s, 0)}"></span><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`
     : seg ? 'Last interval' : `${(s.bike.v * 3.6).toFixed(1)} km/h &middot; ${fmtDist(s.bike.dist)}`);
 
   // buttons
