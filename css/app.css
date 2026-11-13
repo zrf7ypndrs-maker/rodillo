@@ -1558,3 +1558,182 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topnav button:hover { color: var(--muted); }
   .topnav button.active:hover { color: var(--sheet); }
 }
+
+/* =====================================================================
+   PREMIUM LOOK, phone home screens only (Nov 12, Agustín; mocks: project doc claude/rodillo-premium-look.md).
+   Desktop never sees any of this: the extra markup (.hero-nums, .rec-card, .ride-list) is hidden outside the phone query,
+   and the tokens change only while the home screen is up (the ride screen keeps its own look).
+   ===================================================================== */
+.hero-nums, .rec-card, .ride-list { display: none; }
+@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  /* tokens: lighter paper, near-black dark, soft card shadows, glass */
+  html:not([data-theme="dark"]):has(#home.active) {
+    --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa;
+    --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
+    --card-drop: drop-shadow(0 6px 16px rgba(22, 24, 27, .07));
+    --seg-on: #ffffff; --seg-shadow: 0 1px 2px rgba(22, 24, 27, .08), 0 2px 8px rgba(22, 24, 27, .08);
+    --glass: linear-gradient(180deg, rgba(255, 255, 255, .52) 0%, rgba(255, 255, 255, .26) 100%);
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 12px 32px rgba(22, 24, 27, .14), 0 1px 3px rgba(22, 24, 27, .1);
+    --glass-sheen: rgba(255, 255, 255, .6);
+    --lens: linear-gradient(180deg, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .55) 100%);
+    --lens-edge: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(22, 24, 27, .05), 0 2px 10px rgba(22, 24, 27, .12);
+    --nav-text: #3c4247;
+  }
+  html[data-theme="dark"]:has(#home.active) {
+    --paper: #050606; --sheet: #111413; --sheet2: #1b1f1d; --rule: #202523; --hi: #1f2422; --underlay: #1c201e; --today-end: #111413;
+    --card-shadow: none; --card-drop: none;
+    --seg-on: #2a302d; --seg-shadow: none;
+    --glass: linear-gradient(180deg, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, .05) 100%);
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .08), inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 12px 32px rgba(0, 0, 0, .5);
+    --glass-sheen: rgba(255, 255, 255, .14);
+    --lens: linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, .1) 100%);
+    --lens-edge: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(0, 0, 0, .2), 0 2px 10px rgba(0, 0, 0, .35);
+    --nav-text: #c3c9c4;
+  }
+
+  /* numbers: wide and semibold on the home screens (the ride screen keeps its heavy condensed numbers) */
+  #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rl-s .v, .rc-v) {
+    font-family: var(--num); font-stretch: 100%; font-weight: 620; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+
+  /* liquid glass nav pill; the active section is a brighter glass lens */
+  .topbar .topnav { border: none; background: var(--glass); box-shadow: var(--glass-edge);
+    -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
+  .topbar .topnav::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .7;
+    background: radial-gradient(70% 120% at 18% -30%, var(--glass-sheen) 0%, transparent 55%), radial-gradient(60% 90% at 90% 140%, var(--glass-sheen) 0%, transparent 60%); }
+  .topbar .topnav::after { background: var(--lens); box-shadow: var(--lens-edge); }
+  .topnav button { color: var(--nav-text); }
+  .topnav button:hover { color: var(--nav-text); }
+  .topnav button.active, .topnav button.active:hover { color: var(--ink); }
+
+  /* today: the dome on a rounder card, the main set as big numbers */
+  .hero { border-radius: 28px; padding: 20px 20px 18px; }
+  .hero-top { font-size: 13px; }
+  .hero-name { font-size: 27px; font-weight: 650; letter-spacing: -0.022em; line-height: 1.12; }
+  .hero.has-nums .hero-meta { display: none; }
+  .hero-nums { display: flex; align-items: flex-end; gap: 22px; margin-top: 14px; }
+  .hn { display: flex; flex-direction: column; gap: 2px; flex: none; min-width: 0; }
+  .hn.main { flex: 0 1 auto; }
+  .hn .v { font-size: 30px; line-height: .95; color: var(--on-zone); }
+  .hn.main .v { font-size: 60px; line-height: .9; }
+  .hn .v small { font-family: Archivo, system-ui, sans-serif; font-size: 13px; font-weight: 500; letter-spacing: 0; margin-left: 3px; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
+  .hn.main .v small { font-size: 17px; margin-left: 4px; }
+  .hn .l { font-size: 12.5px; font-weight: 500; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
+  .hero-desc { font-size: 14.5px; }
+  .hero .hero-rec { display: none; } /* the call lives in the recovery card */
+  .hero-prof .profile { -webkit-mask-image: linear-gradient(180deg, #000 35%, rgba(0, 0, 0, .55) 100%); mask-image: linear-gradient(180deg, #000 35%, rgba(0, 0, 0, .55) 100%); }
+  .hero-btns button { height: 54px; }
+  .hero-start { font-size: 17px; white-space: nowrap; padding: 0 16px; min-width: 0; }
+  .hero-free { white-space: nowrap; }
+  .hero:not(.nowo):not(.done) .ghost, .hero.done .ghost { background: var(--sheet2); border-color: transparent; color: var(--ink); }
+  .hero.done { border-radius: 28px; }
+
+  /* overview: recovery card with a ring, then This week / Form / FTP as one card */
+  .overview.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: transparent; border: none; border-radius: 0; margin-bottom: 18px; filter: var(--card-drop); } /* one shadow for the joined tiles, no seams */
+  .overview > .rec-card { order: -1; grid-column: 1 / -1; margin-bottom: 12px; }
+  .overview > .stat.rec-tile { display: none; }
+  .overview.stats > .stat:nth-child(n) { border: none; background: var(--sheet); padding: 16px 8px 16px 12px; }
+  .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; padding-left: 18px; }
+  .overview.stats > .stat:nth-child(4) { border-radius: 0 24px 24px 0; }
+  .overview .stat .v { font-size: 25px; }
+  .overview .stat .v .of { font-size: 14px; font-weight: 500; }
+  .overview .stat .l { font-size: 12.5px; margin-top: 3px; }
+  .overview .stat .l b { font-weight: 550; }
+  .overview .info { top: 12px; right: 8px; }
+  .rec-card { display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: var(--sheet); border-radius: 24px; }
+  .rc-ring { position: relative; width: 64px; height: 64px; flex: none; }
+  .rec-ring { width: 64px; height: 64px; transform: rotate(-90deg); overflow: visible; display: block; }
+  .rec-ring circle { fill: none; stroke-width: 5; }
+  .rec-ring .trk { stroke: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .rec-ring .arc { stroke: var(--good); stroke-linecap: round; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 55%, transparent)); }
+  .rec-ring.yellow .arc { stroke: var(--warn); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 55%, transparent)); }
+  .rec-ring.red .arc { stroke: var(--bad); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--bad) 55%, transparent)); }
+  .rc-v { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 21px; }
+  .rc-v small { font-size: 11px; font-weight: 500; color: var(--muted); margin: 3px 0 0 1px; }
+  .rc-v .none { font-family: Archivo, system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+  .rc-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .rc-l, .rc-sub { font-size: 12.5px; color: var(--muted); }
+  .rc-sub:empty { display: none; }
+  .rc-call { display: flex; flex-direction: column; gap: 8px; font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+  .rc-call .rdot { display: none; }
+  .rc-call .coach-call { margin: 0; font-weight: 500; }
+  .rc-call .row-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* next days: rounder cards, a soft glow in the day's color instead of the top bar */
+  .day { border-radius: 20px; box-shadow: var(--card-shadow); padding: 12px 14px; gap: 3px;
+    background: radial-gradient(80% 70% at 0% 0%, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%), var(--sheet); }
+  .day.nowo { background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; }
+  .d-meta { color: var(--muted); }
+  .d-meta .n { font-size: 16px; color: var(--ink); }
+  #home .eyebrow { font-size: 15px; font-weight: 650; }
+
+  /* workouts: raised segment switch, round group cards without lines */
+  .seg-tg { background: var(--sheet2); padding: 4px; border-radius: 22px; }
+  .seg-tg::before { top: 4px; bottom: 4px; background: var(--seg-on); box-shadow: var(--seg-shadow); }
+  .seg-tg button { padding: 9px 10px; font-size: 14.5px; }
+  .seg-tg button.on, .seg-tg button.on:hover { color: var(--ink); }
+  .wo-sheet { border-radius: 24px; box-shadow: var(--card-shadow); }
+  .wo-sheet .wo { border-top: none; }
+  .wo-sheet .wo:first-child { border-radius: 24px 24px 0 0; }
+  .wo-sheet .wo:last-child { border-radius: 0 0 24px 24px; }
+  .wo-sheet .wo:only-child { border-radius: 24px; }
+  .wo { grid-template-columns: minmax(0, 1fr) 104px; padding: 11px 16px 11px 18px; row-gap: 3px; }
+  .wo-name { font-weight: 620; }
+  .wo-meta { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 500; font-size: 12.5px; color: var(--muted); }
+  .wo-meta .n { font-size: 14px; color: var(--ink); }
+  .wo .profile { height: 30px; }
+  .wo-gh { margin-left: 4px; }
+  .import-row button, .import-row .btn, .import-row label { border-color: transparent; background: var(--sheet2); }
+
+  /* calendar: one month card, glowing capsules, today as a circle */
+  .cal-head { gap: 8px; }
+  .cal-head h3 { order: -1; flex: 1; text-align: left; font-size: 25px; font-weight: 650; letter-spacing: -0.022em; }
+  .cal-head button { width: 38px; height: 38px; padding: 0; border: none; background: var(--sheet2); font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
+  .cal-head #cal-today { width: auto; padding: 0 15px; font-size: 14px; }
+  .cal-grid { background: var(--sheet); border-radius: 24px; padding: 12px 8px 10px; gap: 2px 0; box-shadow: var(--card-shadow); }
+  .cal-dow { padding-bottom: 6px; font-weight: 600; }
+  .cal-cell { background: transparent; min-height: 52px; padding: 5px 0 4px; align-items: center; gap: 5px; border-radius: 14px; }
+  .cal-cell:hover { background: transparent; }
+  .cal-cell.sel { box-shadow: none; background: var(--sheet2); }
+  .cal-num { font-size: 15px; height: 26px; min-width: 26px; display: flex; align-items: center; justify-content: center; }
+  .cal-cell.today .cal-num { border-radius: 13px; padding: 0; align-self: center; }
+  .cal-chip { width: 22px; height: 5px; border-radius: 3px; align-self: center; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 70%, transparent); }
+  .cal-detail { border-radius: 24px; padding: 18px; box-shadow: var(--card-shadow);
+    background: radial-gradient(80% 45% at 0% 0%, color-mix(in srgb, var(--c, transparent) 18%, transparent), transparent 70%), var(--sheet); }
+  .cal-detail h3 { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .cal-detail .wo-name { font-size: 21px; font-weight: 650; letter-spacing: -0.02em; }
+  .cal-detail .wo-meta .n { font-size: 15px; }
+
+  /* training: one stats card, round cards, phone rides list */
+  .stats.tcards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; padding: 18px; border-radius: 24px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  .stats.tcards > .stat:nth-child(n) { border: none; padding: 0 16px 0 0; }
+  .stats.tcards .stat .v { font-size: 26px; }
+  .stats.tcards .stat .l { font-size: 12.5px; color: var(--ink); font-weight: 550; margin-top: 3px; }
+  .stats.tcards .stat .sub { font-size: 11.5px; }
+  .stats.tcards .info { top: 0; right: 0; }
+  .stats.tcards > .stat:nth-child(n) .tip { left: -8px; right: auto; }
+  .stats.tcards > .stat:nth-child(3n + 2) .tip { left: -110px; }
+  .stats.tcards > .stat:nth-child(3n) .tip { left: auto; right: -8px; }
+  #home .card { border-radius: 24px; padding: 18px; box-shadow: var(--card-shadow); }
+  #home .zb-bar { height: 8px; border-radius: 4px; background: var(--sheet2); }
+  #home .zb-bar i { border-radius: 4px; }
+  .pc-legend { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .pc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .pc-legend i { display: inline-block; width: 12px; }
+  .pc-legend i.solid { height: 2.5px; border-radius: 2px; background: var(--ink); }
+  .pc-legend i.dash { border-top: 2px dashed var(--faint); }
+  .ride-table table { display: none; }
+  .ride-list { display: flex; flex-direction: column; gap: 4px; }
+  .rl { padding: 10px 0; cursor: pointer; }
+  .rl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  .rl-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
+  .rl-date { font-size: 11.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .rl-right { flex: none; font-size: 12px; }
+  .rl-right b { font-family: var(--num); font-stretch: 100%; font-weight: 620; color: var(--ink); }
+  .rl-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+  .rl-s { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .rl-s .v { font-size: 16px; }
+  .rl-s .v small { font-family: Archivo, system-ui, sans-serif; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .rl-s .l { font-size: 10.5px; color: var(--muted); }
+  .rl-btns { display: flex; gap: 8px; margin-top: 8px; }
+}

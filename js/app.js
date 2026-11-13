@@ -538,10 +538,14 @@ function woMeta(w) {
   const segs = flatten(w);
   const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
   const mins = Math.round(totalDuration(w) / 60);
-  if (isTrack(segs)) return `${dist ? '~' : ''}${mins} min &middot; ${ascentText(track(segs).ascent)}`; // short: library meta column
-  if (dist) return `~${mins} min &middot; ${+(dist / 1000).toFixed(1)} km`; // short: must fit the library's meta column
+  // phone: numbers wrapped for their own style (desktop text untouched). Same query as PHONE_MQ, read here directly
+  // because woMeta can run before PHONE_MQ is defined further down.
+  const ph = matchMedia('(pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches;
+  const n = (x) => (ph ? `<span class="n">${x}</span>` : x);
+  if (isTrack(segs)) return `${n(`${dist ? '~' : ''}${mins}`)} min &middot; ${ascentText(track(segs).ascent)}`; // short: library meta column
+  if (dist) return `${n(`~${mins}`)} min &middot; ${n(+(dist / 1000).toFixed(1))} km`; // short: must fit the library's meta column
   const tss = estimateTSS(w);
-  return `${mins} min${isSim(w) ? '' : ` &middot; TSS ~${tss}`}`;
+  return `${n(mins)} min${isSim(w) ? '' : ` &middot; TSS ${n(`~${tss}`)}`}`;
 }
 
 const isSlopeOnly = (w) => flatten(w).every((x) => x.kind === 'sim');
@@ -714,13 +718,23 @@ function renderOverview() {
   // Planned = this week's plan workouts, optional days left out.
   const planned = weekKeys.map(dayInfo).filter((d) => d.workout && !d.optional);
   const planSec = planned.reduce((a, d) => a + totalDuration(d.workout), 0);
-  const tile = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l"><b>${l}</b>${sub ? `<span class="sub">${sub}</span>` : ''}</div></div>`;
+  const tile = (v, l, sub = '', info = '', cls = '') => `<div class="stat${cls ? ` ${cls}` : ''}">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l"><b>${l}</b>${sub ? `<span class="sub">${sub}</span>` : ''}</div></div>`;
 
   // One slim row under the hero: value big, label + short context on one line.
   const w = whoopDay(dkey(new Date()));
   const rec = w?.recovery != null
-    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', `${w.hrv ? `HRV ${Math.round(w.hrv)}` : ''}${w.sleepHours ? `<span class="wide-only">${w.hrv ? ' &middot; ' : ''}${w.sleepHours} h sleep</span>` : ''}`)
-    : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP');
+    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', `${w.hrv ? `HRV ${Math.round(w.hrv)}` : ''}${w.sleepHours ? `<span class="wide-only">${w.hrv ? ' &middot; ' : ''}${w.sleepHours} h sleep</span>` : ''}`, '', 'rec-tile')
+    : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP', '', 'rec-tile');
+  // Phone: recovery gets its own card (ring, the call from the hero line, HRV); the hero line and the tile hide there.
+  const today = dayInfo(dkey(new Date()));
+  const pct = w?.recovery != null ? w.recovery : null, z = pct != null ? recZone(pct) : '';
+  const C = 2 * Math.PI * 27;
+  const ring = `<svg class="rec-ring ${z}" viewBox="0 0 64 64" aria-hidden="true"><circle class="trk" cx="32" cy="32" r="27"/>${pct != null ? `<circle class="arc" cx="32" cy="32" r="27" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}"/>` : ''}</svg>`;
+  const call = heroRecovery(today).replace('class="hero-rec"', 'class="rc-call"');
+  const recCard = `<div class="rec-card">
+      <div class="rc-ring">${ring}<span class="rc-v">${pct != null ? `${pct}<small>%</small>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`}</span></div>
+      <div class="rc-text"><div class="rc-l">Recovery</div>${call}<div class="rc-sub">${pct != null ? (w.hrv ? `HRV ${Math.round(w.hrv)}` : '') : app.whoop ? 'not scored yet' : 'no WHOOP'}</div></div>
+    </div>`;
   const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
     `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
   const ld = loadNow(t);
@@ -728,7 +742,8 @@ function renderOverview() {
     `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`);
   const est = ftpEstimate(real);
   const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
-  el.innerHTML = rec + week + fat + ftp;
+  el.innerHTML = rec + week + fat + ftp + recCard; // recCard last: the desktop tile borders count children (it's hidden there)
+  bindRecoveryAdvice(el);
 }
 
 // ------------------------------------------------------------------ plan: week carousel + calendar
@@ -849,6 +864,22 @@ function heroDoneBody(w, r, date) {
     ${same ? `<div class="hero-prof prof-hover">${profileSvg(w, 1000, 100)}</div>` : ''}`;
 }
 
+/** Phone hero numbers (premium look, Nov 12): the main set's watts big with the set under it, then time and TSS.
+ *  Desktop hides .hero-nums and keeps the one-line .hero-meta. Real climbs keep .hero-meta (ascent) on the phone too. */
+function heroNums(w, work) {
+  const segs = flatten(w);
+  if (isTrack(segs)) return '';
+  const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
+  const mins = Math.round(totalDuration(w) / 60);
+  const m = work && work.match(/\sat\s([\d/]+)\sW/);
+  const items = [];
+  if (m) items.push([m[1], 'W', work.replace(m[0], '').trim(), 'main']);
+  items.push([`${dist ? '~' : ''}${mins}`, 'min', 'Time']);
+  if (dist) items.push([+(dist / 1000).toFixed(1), 'km', 'Distance']);
+  else if (!isSim(w)) items.push([`~${estimateTSS(w)}`, '', 'TSS']);
+  return `<div class="hero-nums">${items.map(([v, u, l, c]) => `<div class="hn${c ? ` ${c}` : ''}"><div class="v">${v}${u ? `<small>${u}</small>` : ''}</div><div class="l">${l}</div></div>`).join('')}</div>`;
+}
+
 /** Today: a full-width card in the color of the day's main effort, with Start up front and Free ride as the second choice. */
 function renderHero() {
   const el = $('#today');
@@ -880,7 +911,7 @@ function renderHero() {
         <div class="hero-text">
           <div class="hero-top"><b>Today</b><span>${date}</span></div>
           <h2 class="hero-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</h2>
-          <div class="hero-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}</div>
+          <div class="hero-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}</div>${heroNums(w, work)}
           ${today.note ? `<p class="hero-desc"><b>Coach:</b> ${esc(today.note)}</p>` : w.description ? `<p class="hero-desc">${esc(w.description)}</p>` : ''}
           ${status}
         </div>
@@ -902,7 +933,7 @@ function renderHero() {
         <div class="hero-btns">${free(true)}</div>
       </div>${heroRecovery(today)}`;
   }
-  el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}" style="--c:${w ? workoutColor(w) : 'transparent'}" aria-label="Today">${body}</section>`;
+  el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}${body.includes('hero-nums') ? ' has-nums' : ''}" style="--c:${w ? workoutColor(w) : 'transparent'}" aria-label="Today">${body}</section>`;
   $('#btn-free').onclick = (e) => startFree(e.currentTarget);
   el.querySelectorAll('.hero-done-see').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   const s = $('#hero-start');
@@ -1071,6 +1102,7 @@ function renderCalendar() {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}<button class="ghost small cal-see" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   }
   $('#cal-detail').innerHTML = html;
+  $('#cal-detail').style.setProperty('--c', info.workout ? workoutColor(info.workout) : 'transparent'); // phone: soft glow in the day's color
   $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
   if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
@@ -1199,7 +1231,14 @@ function svgLoad(series) {
   // legend stacked in the label column, so it can never sit on the lines
   // legend words in ink (muted for the note); only the swatch carries the data color (cyan text is 2.8:1 on the sheet)
   const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill === MUTED ? MUTED : INK}" font-size="${11 * k}">${txt.replace('&#9632;', `<tspan fill="${fill}">&#9632;</tspan>`)}</text>`;
-  const legend = lg(0, FITNESS, '&#9632; Fitness') + lg(1, FATIGUE, '&#9632; Fatigue') + (ph ? '' : lg(2.25, MUTED, 'Form = fitness') + lg(3.25, MUTED, 'minus fatigue'));
+  let legend = lg(0, FITNESS, '&#9632; Fitness') + lg(1, FATIGUE, '&#9632; Fatigue') + (ph ? '' : lg(2.25, MUTED, 'Form = fitness') + lg(3.25, MUTED, 'minus fatigue'));
+  if (ph) {
+    // phone (premium look, Nov 12): today's fitness and fatigue at the line ends, in their colors; the higher one on top
+    const e = loadNow(series.at(-1)), blk = 50, mid = Math.min(Math.max((Y(e.fitness) + Y(e.fatigue)) / 2, blk + 4), top + 20 - blk);
+    const end = (v, col, name, y) => `<text x="${PR + 12}" y="${f(y + 26)}" fill="${col}" font-size="${15 * k}" font-weight="700">${v}</text><text x="${PR + 12}" y="${f(y + 46)}" fill="${MUTED}" font-size="${10.5 * k}">${name}</text>`;
+    const fitTop = e.fitness >= e.fatigue;
+    legend = end(e.fitness, FITNESS, 'Fitness', fitTop ? mid - blk : mid) + end(e.fatigue, FATIGUE, 'Fatigue', fitTop ? mid : mid - blk);
+  }
   const bw = Math.max(1, (PR - 30) / n - 1);
   const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
   const m1 = series.findIndex((d) => d.date.endsWith('-01')), first = m1 < 0 || m1 >= (ph ? 16 : 10); // drop the first date if it would run into the 1st of the month
@@ -1237,7 +1276,7 @@ function svgWeekly(weeks) {
       .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
     const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours} h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
     const cur = i === n - 1, lab = cur ? INK : MUTED, wt = cur ? ' font-weight="700"' : '';
-    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h}" rx="2"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h}" rx="${phone ? 5 : 2}"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
       ${w.tss ? `<text x="${cx}" y="${base - h - 6}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text>` : ''}
       <text x="${cx}" y="${base + 17}" text-anchor="middle" fill="${lab}" font-size="12"${wt}>${fmtDay(w.start)}</text>
       <text x="${cx}" y="${base + 33}" text-anchor="middle" fill="${MUTED}" font-size="12"${wt}>${w.rides ? `${w.hours} h` : '-'}</text>`;
@@ -1249,6 +1288,7 @@ function svgWeekly(weeks) {
 }
 
 function svgCurve(c90, cAll) {
+  if (isPhone()) return svgCurvePhone(c90, cAll);
   const W = 1000, H = 220, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'];
   const max = Math.max(100, ...Object.values(cAll)) * 1.1;
   const X = (i) => 40 + (i / (CURVE_DURS.length - 1)) * (W - 70);
@@ -1260,6 +1300,26 @@ function svgCurve(c90, cAll) {
     <polyline fill="none" stroke="${INK}" stroke-width="2.5" points="${pts(c90)}"/>${dots(c90, INK)}
     ${labels.map((l, i) => `<text x="${X(i)}" y="210" text-anchor="middle" fill="${MUTED}" font-size="12">${l}</text>`).join('')}
     <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="${INK}">&#9632; Last 90 days</tspan> <tspan fill="${MUTED}">- - All time</tspan></text></svg>`;
+}
+
+/** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk, ink line over a soft ink fill. */
+function svgCurvePhone(c90, cAll) {
+  const W = 340, H = 168, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'];
+  const max = Math.max(100, ...Object.values(cAll)) * 1.08;
+  const X = (i) => 12 + (i / (CURVE_DURS.length - 1)) * (W - 24);
+  const Y = (w) => 132 - (w / max) * 104;
+  const P = (c) => CURVE_DURS.map((d, i) => (c[d] ? [X(i), Y(c[d])] : null)).filter(Boolean);
+  const p90 = P(c90), pAll = P(cAll);
+  const pts = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const area = p90.length > 1 ? `<polygon points="${pts(p90)} ${p90.at(-1)[0].toFixed(1)},132 ${p90[0][0].toFixed(1)},132" fill="url(#pc-fill)"/>` : '';
+  const dots = CURVE_DURS.map((d, i) => (c90[d] ? `<circle cx="${X(i)}" cy="${Y(c90[d])}" r="3.2" fill="${INK}" stroke="${TOK.sheet}" stroke-width="1.5"/><text x="${X(i)}" y="${Y(c90[d]) - 9}" text-anchor="middle" fill="${INK}" font-size="11.5" font-weight="650">${c90[d]}</text>` : '')).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart pc-phone">
+    <defs><linearGradient id="pc-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${INK}" stop-opacity=".14"/><stop offset="1" stop-color="${INK}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="0" x2="${W}" y1="132" y2="132" stroke="${RULE}"/>
+    ${area}<polyline fill="none" stroke="${FAINT}" stroke-width="1.6" stroke-dasharray="4 4" points="${pts(pAll)}"/>
+    <polyline fill="none" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round" points="${pts(p90)}"/>${dots}
+    ${labels.map((l, i) => `<text x="${X(i)}" y="152" text-anchor="middle" fill="${MUTED}" font-size="11">${l}</text>`).join('')}</svg>
+    <div class="pc-legend"><span><i class="solid"></i>Last 90 days</span><span><i class="dash"></i>All time</span></div>`;
 }
 
 /** Time-in-zone rows (Z1..Z7). With ftp, ranges are in watts (one ride); without, % of FTP. */
@@ -1339,7 +1399,18 @@ async function renderTraining() {
       <td>${esc(x.name)} ${status}</td><td>${fmtTime(x.durSec)}</td><td>${x.np != null ? `${x.np} W` : '-'}</td><td>${x.if ?? '-'}</td><td>${x.tss}${x.tssFrom === 'hr' ? ' <span class="muted">HR</span>' : ''}</td><td>${x.avgHr ?? '-'}</td>
       <td>${comp}</td><td>${x.decoupling != null ? x.decoupling + '%' : ''}</td>
       <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
-    }).join('')}</table>` : '<p class="muted">No rides yet.</p>';
+    }).join('')}</table>
+    <div class="ride-list">${rows.map((r) => {
+      const x = r.summary;
+      const status = r.demo ? ' <span class="tag">demo</span>' : r.interrupted ? ' <span class="tag">interrupted</span>' : r.synced ? '' : ' <span class="tag warn">not synced</span>';
+      const right = x.compliance ? `<span class="rl-right"><span class="pct ${x.compliance.min < 95 ? 'low' : 'ok'}">${x.compliance.avg}%</span> <span class="muted">min ${x.compliance.min}%</span></span>`
+        : x.decoupling != null ? `<span class="rl-right muted">Drift <b>${x.decoupling}%</b></span>` : '';
+      const st = (l, v, u = '') => `<span class="rl-s"><span class="v">${v}${u ? `<small>${u}</small>` : ''}</span><span class="l">${l}</span></span>`;
+      return `<div class="rl" data-ride="${esc(x.id)}"><div class="rl-head"><span class="rl-name"><span class="rl-date">${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span>${esc(x.name)}${status}</span>${right}</div>
+        <div class="rl-stats">${st('Time', fmtTime(x.durSec))}${st('NP', x.np != null ? x.np : '-', x.np != null ? ' W' : '')}${st('IF', x.if ?? '-')}${st(x.tssFrom === 'hr' ? 'TSS (HR)' : 'TSS', x.tss)}${st('HR', x.avgHr ?? '-')}</div>
+        ${r.local ? `<div class="rl-btns"><button class="ghost small" data-fit="${r.local.id}">.FIT</button><button class="ghost small" data-del="${r.local.id}">Delete</button></div>` : ''}</div>`;
+    }).join('')}</div>` : '<p class="muted">No rides yet.</p>';
+  $$('#ride-table .rl').forEach((el) => (el.onclick = (e) => { if (!e.target.closest('button')) openRide(el.dataset.ride); }));
   // a row opens its ride page (the .FIT / Delete buttons keep their own job)
   $$('#ride-table tr[data-ride]').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('button')) openRide(tr.dataset.ride); }));
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
