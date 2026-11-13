@@ -1819,7 +1819,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   html:has(#home.active) .b-pal-row .b-kind { background: var(--track); }
   html:has(#home.active) .b-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
   html:has(#home.active) .b-trash { border-radius: 14px; }
-  html:has(#home.active) .b-tl { border-bottom: none; border-radius: 20px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  html:has(#home.active) .b-tl { border-bottom: none; border-radius: 0; background: var(--sheet); box-shadow: var(--card-shadow); } /* square corners: Agustín, Nov 13 */
   html:has(#home.active) :is(.b-step, .b-rep) { border: none; border-radius: 18px; background: var(--sheet); box-shadow: var(--card-shadow); }
   html:has(#home.active) :is(.b-step, .b-rep).sel { box-shadow: 0 0 0 2px var(--ink); }
   html:has(#home.active) .brep-body { border-left-color: color-mix(in srgb, var(--rule) 70%, transparent); }
