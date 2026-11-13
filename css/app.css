@@ -1741,3 +1741,60 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rl-s .l { font-size: 10.5px; color: var(--muted); }
   .rl-btns { display: flex; gap: 8px; margin-top: 8px; }
 }
+
+/* Panels join the phone look (Nov 13, Agustín, mocked on the canvas page "Panels"): Settings, Garage, Connections, Controls.
+   Phone only, and only while the home screen is up (`html:has(#home.active)`): Connections, Settings, Controls and Gearing
+   also open from the ride pause screen, which keeps the ride look. Builder and Log are not restyled here. */
+@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  html:not([data-theme="dark"]):has(#home.active) { --track: #e2e6e1; }
+  html[data-theme="dark"]:has(#home.active) { --track: #111413; }
+
+  /* panels: paper ground, content on round sheets, no hairlines */
+  html:has(#home.active) :is(#settings, #controls, #garage).panel { background: var(--paper); border-left: none; }
+  html:has(#home.active) :is(#settings, #controls, #garage) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  html:has(#home.active) :is(#settings, #controls, #garage) .panel-head button, html:has(#home.active) .devpop-head button { border-color: transparent; background: var(--sheet); }
+
+  /* tabs become the raised segment switch from Workouts */
+  html:has(#home.active) .tabs.set-tabs, html:has(#home.active) .tabs.gar-tabs { border-bottom: none; background: var(--track); border-radius: 22px; padding: 4px; gap: 0; margin: 0 0 14px; }
+  html:has(#home.active) .set-tabs button, html:has(#home.active) .gar-tabs button { position: relative; z-index: 1; flex: 1 0 auto; padding: 8px 12px; font-size: 14px; }
+  html:has(#home.active) .set-tabs::after, html:has(#home.active) .gar-tabs::after { top: 4px; bottom: 4px; height: auto; border-radius: 18px; background: var(--seg-on); box-shadow: var(--seg-shadow); z-index: 0; }
+
+  /* settings fields on one round sheet; filled inputs, no outlines */
+  html:has(#home.active) #settings .settings-form { background: var(--sheet); border-radius: 24px; padding: 18px 16px; box-shadow: var(--card-shadow); }
+  html:has(#home.active) .settings-form input, html:has(#home.active) .settings-form select { border: none; border-radius: 12px; background: var(--sheet2); height: 46px; }
+  html:has(#home.active) #garage .settings-form input, html:has(#home.active) #garage .settings-form select { background: var(--sheet); }
+  html:has(#home.active) .settings-form input:focus, html:has(#home.active) .settings-form select:focus { box-shadow: 0 0 0 2px var(--ink); }
+  html:has(#home.active) .settings-form .fld > label { font-weight: 600; }
+  html:has(#home.active) .panel .settings-form button.ghost, html:has(#home.active) .panel .settings-form .ghost { border-color: transparent; background: var(--sheet2); }
+  html:has(#home.active) #garage .settings-form button.ghost { background: var(--sheet); }
+
+  /* garage: round popup, tiles as soft cards */
+  html:has(#home.active) #garage.panel { border: none; border-radius: 28px; }
+  html:has(#home.active) .gar-tile { border: none; border-radius: 22px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  html:has(#home.active) .gar-tile.on { background: var(--ink); }
+  html:has(#home.active) .gar-add { border-radius: 22px; border: 1.5px dashed color-mix(in srgb, var(--faint) 70%, transparent); }
+  html:has(#home.active) .gar-more { text-decoration: none; font-weight: 600; }
+  html:has(#home.active) .gar-riding { background: var(--seg-on); }
+  html:has(#home.active) .settings-form .gar-dl { border-top: none; background: var(--sheet); border-radius: 20px; padding: 6px 16px; }
+  html:has(#home.active) .gar-dl dt, html:has(#home.active) .gar-dl dd { border-bottom: none; padding: 8px 0; }
+
+  /* connections: frosted glass popover, rows as soft inner cards */
+  html:has(#home.active) .devpop { border: none; border-radius: 26px; background: color-mix(in srgb, var(--sheet) 88%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+    box-shadow: var(--glass-edge), 0 24px 60px var(--shadow); padding: 4px 0 8px; }
+  html:has(#home.active) .devpop-head { border-bottom: none; padding: 12px 14px 8px 18px; }
+  html:has(#home.active) .devpop-head h3 { font-size: 18px; font-weight: 650; }
+  html:has(#home.active) .devices { gap: 6px; padding: 0 8px; }
+  html:has(#home.active) .device { border-top: none; border-radius: 18px; background: color-mix(in srgb, var(--sheet2) 75%, transparent); padding: 12px 14px; }
+  html:has(#home.active) .devpop :is(button.ghost, button:not(.primary)) { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  html:has(#home.active) .devpop-foot { border-top: none; margin: 6px 8px 0; padding: 8px 6px 4px 10px; }
+
+  /* controls: one round sheet, rows without lines, groups as headings */
+  html:has(#home.active) .ctl-style a { color: var(--ink); font-weight: 600; }
+  html:has(#home.active) .keys { background: var(--sheet); border-radius: 24px; border-collapse: separate; border-spacing: 0; overflow: hidden; box-shadow: var(--card-shadow); font-size: 14px; }
+  html:has(#home.active) .keys td, html:has(#home.active) .keys th { border-bottom: none; padding: 8px 16px; }
+  html:has(#home.active) .keys th { padding-top: 14px; font-size: 12.5px; }
+  html:has(#home.active) .keys td:first-child { color: var(--muted); }
+  html:has(#home.active) .keys td:nth-child(2) { font-weight: 600; }
+  html:has(#home.active) .keys-group td { padding-top: 18px; font-size: 15px; font-weight: 650; color: var(--ink) !important; }
+}
