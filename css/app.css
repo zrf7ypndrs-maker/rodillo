@@ -1622,7 +1622,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .hn .l { font-size: 12.5px; font-weight: 500; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
   .hero-desc { font-size: 14.5px; }
   .hero .hero-rec { display: none; } /* the call lives in the recovery card */
-  .hero-prof .profile { -webkit-mask-image: linear-gradient(180deg, #000 35%, rgba(0, 0, 0, .55) 100%); mask-image: linear-gradient(180deg, #000 35%, rgba(0, 0, 0, .55) 100%); }
   .hero-btns button { height: 54px; }
   .hero-start { font-size: 17px; white-space: nowrap; padding: 0 16px; min-width: 0; }
   .hero-free { white-space: nowrap; }
