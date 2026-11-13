@@ -1276,14 +1276,16 @@ function svgWeekly(weeks) {
       .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
     const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours} h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
     const cur = i === n - 1, lab = cur ? INK : MUTED, wt = cur ? ' font-weight="700"' : '';
-    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h}" rx="${phone ? 5 : 2}"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${phone ? h + 8 : h}" rx="${phone ? 6 : 2}"/></clipPath><g${phone ? ' filter="url(#wk-glow)"' : ''}><g clip-path="url(#wk-c${i})">${segs}</g></g></g>
       ${w.tss ? `<text x="${cx}" y="${base - h - 6}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text>` : ''}
       <text x="${cx}" y="${base + 17}" text-anchor="middle" fill="${lab}" font-size="12"${wt}>${fmtDay(w.start)}</text>
       <text x="${cx}" y="${base + 33}" text-anchor="middle" fill="${MUTED}" font-size="12"${wt}>${w.rides ? `${w.hours} h` : '-'}</text>`;
   }).join('');
   const hrOnly = weeks.some((w) => w.otherTss > 0);
   const legend = `<div class="wk-legend"><span class="wk-key">Number on bar = training stress (TSS). Below: week starting, hours ridden.</span>${ZONES.slice(0, 6).map((z) => `<span><i style="background:var(--${z.color})"></i>Z${z.z}</span>`).join('')}${hrOnly ? '<span><i class="hr"></i>HR only (no power)</span>' : ''}</div>`;
-  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs><pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
+  // phone (premium look): each bar glows in its own zone colors
+  const glow = phone ? '<filter id="wk-glow" x="-40%" y="-20%" width="180%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".45"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' : '';
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs>${glow}<pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
     <line x1="4" x2="${W - 4}" y1="${base}" y2="${base}" stroke="${RULE}"/>${bars}</svg>${legend}`;
 }
 
@@ -1302,9 +1304,11 @@ function svgCurve(c90, cAll) {
     <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="${INK}">&#9632; Last 90 days</tspan> <tspan fill="${MUTED}">- - All time</tspan></text></svg>`;
 }
 
-/** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk, ink line over a soft ink fill. */
+/** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk. Orange line with a glow and a soft
+ *  orange fill, as in the mock. Agustín's call (Nov 12, 11:06 pm, "I actually liked the orange"): an exception to the
+ *  zone-colors-only-on-zone-data rule, phone only; desktop keeps the ink curve. */
 function svgCurvePhone(c90, cAll) {
-  const W = 340, H = 168, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'];
+  const W = 340, H = 160, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'], C = zoneHex(1.1);
   const max = Math.max(100, ...Object.values(cAll)) * 1.08;
   const X = (i) => 12 + (i / (CURVE_DURS.length - 1)) * (W - 24);
   const Y = (w) => 132 - (w / max) * 104;
@@ -1312,14 +1316,14 @@ function svgCurvePhone(c90, cAll) {
   const p90 = P(c90), pAll = P(cAll);
   const pts = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const area = p90.length > 1 ? `<polygon points="${pts(p90)} ${p90.at(-1)[0].toFixed(1)},132 ${p90[0][0].toFixed(1)},132" fill="url(#pc-fill)"/>` : '';
-  const dots = CURVE_DURS.map((d, i) => (c90[d] ? `<circle cx="${X(i)}" cy="${Y(c90[d])}" r="3.2" fill="${INK}" stroke="${TOK.sheet}" stroke-width="1.5"/><text x="${X(i)}" y="${Y(c90[d]) - 9}" text-anchor="middle" fill="${INK}" font-size="11.5" font-weight="650">${c90[d]}</text>` : '')).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart pc-phone">
-    <defs><linearGradient id="pc-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${INK}" stop-opacity=".14"/><stop offset="1" stop-color="${INK}" stop-opacity="0"/></linearGradient></defs>
-    <line x1="0" x2="${W}" y1="132" y2="132" stroke="${RULE}"/>
-    ${area}<polyline fill="none" stroke="${FAINT}" stroke-width="1.6" stroke-dasharray="4 4" points="${pts(pAll)}"/>
-    <polyline fill="none" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round" points="${pts(p90)}"/>${dots}
-    ${labels.map((l, i) => `<text x="${X(i)}" y="152" text-anchor="middle" fill="${MUTED}" font-size="11">${l}</text>`).join('')}</svg>
-    <div class="pc-legend"><span><i class="solid"></i>Last 90 days</span><span><i class="dash"></i>All time</span></div>`;
+  const dots = CURVE_DURS.map((d, i) => (c90[d] ? `<circle cx="${X(i)}" cy="${Y(c90[d])}" r="3.2" fill="${C}" stroke="${TOK.sheet}" stroke-width="1.5"/><text x="${X(i)}" y="${Y(c90[d]) - 9}" text-anchor="middle" fill="${INK}" font-size="11.5" font-weight="650">${c90[d]}</text>` : '')).join('');
+  return `<div class="pc-legend"><span><i class="solid"></i>Last 90 days</span><span><i class="dash"></i>All time</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="svgchart pc-phone">
+    <defs><linearGradient id="pc-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C}" stop-opacity=".30"/><stop offset="1" stop-color="${C}" stop-opacity="0"/></linearGradient>
+      <filter id="pc-glow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".6"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    ${area}<polyline fill="none" stroke="${MUTED}" stroke-width="1.5" stroke-dasharray="3 4" points="${pts(pAll)}"/>
+    <polyline fill="none" stroke="${C}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" filter="url(#pc-glow)" points="${pts(p90)}"/>${dots}
+    ${labels.map((l, i) => `<text x="${X(i)}" y="152" text-anchor="middle" fill="${MUTED}" font-size="11">${l}</text>`).join('')}</svg>`;
 }
 
 /** Time-in-zone rows (Z1..Z7). With ftp, ranges are in watts (one ride); without, % of FTP. */
@@ -1331,7 +1335,7 @@ function zoneBars(secs, ftp) {
   return `<div class="zbars">${ZONES.map((z, i) => {
     const sec = secs[i] || 0;
     return `<div class="zb-z">Z${z.z}</div><div class="zb-n">${z.name}<span>${zoneRange(i, ftp)}</span></div>
-      <div class="zb-bar"><i style="width:${(sec / max) * 100}%;background:var(--${z.color})"></i></div>
+      <div class="zb-bar"><i style="width:${(sec / max) * 100}%;background:var(--${z.color});color:var(--${z.color})"></i></div>
       <div class="zb-t">${sec ? fmtLong(sec) : '-'}</div><div class="zb-p">${sec ? Math.round((sec / total) * 100) + '%' : ''}</div>`;
   }).join('')}</div>`;
 }
