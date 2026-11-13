@@ -13,7 +13,7 @@ import { withDetail, profileSteps, defaultDetail, DETAIL_MAX } from '../js/engin
 import { steepestGrade } from '../js/engine/trainers.js';
 import { gearList } from '../js/engine/drivetrain.js';
 import fs from 'node:fs';
-import { buildRide } from '../js/stats.js';
+import { buildRide, loadSeries, loadNow, formLabel } from '../js/stats.js';
 import { cleanWorkout } from '../js/mine.js';
 
 const require = createRequire(import.meta.url);
@@ -734,6 +734,20 @@ import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../
   assert.equal(slope.mode, 'sim');
   console.log('ok - mode known before start');
 }
+
+test('Load: start-of-day fitness, fatigue and form that add up; today counts from midnight', () => {
+  const rides = [{ id: '2026-11-10T1918', tss: 30 }, { id: '2026-11-11T1920', tss: 100 }];
+  const s = loadSeries(rides, new Date(2026, 10, 12, 0, 5)); // 12:05 am
+  assert.equal(s.at(-1).date, '2026-11-12');
+  assert.deepEqual(s.map((d) => d.date), ['2026-11-10', '2026-11-11', '2026-11-12']);
+  assert.equal(s[0].ctl, 0); assert.equal(s[0].atl, 0); // a ride day starts before its ride
+  assert.ok(s[2].tsb < s[1].tsb); // the day after a hard ride, form is lower
+  for (const d of s) assert.ok(Math.abs(d.tsb - (d.ctl - d.atl)) <= 0.11);
+  const n = loadNow(s.at(-1));
+  assert.equal(n.form, n.fitness - n.fatigue);
+  assert.equal(loadSeries([], new Date(2026, 10, 12, 9)).length, 1);
+  assert.equal(formLabel(5), 'Balanced'); assert.equal(formLabel(6), 'Fresh'); assert.equal(formLabel(40), 'Very fresh');
+});
 
 test('Main set phrase: sets, over-unders, Zone 2 rides with pickups', () => {
   const wo = (id) => JSON.parse(fs.readFileSync(new URL(`../workouts/${id}.json`, import.meta.url)));

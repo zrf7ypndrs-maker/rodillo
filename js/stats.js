@@ -178,22 +178,32 @@ export function buildRide(samples, meta) {
 
 const dayKey = (d) => d.toLocaleDateString('en-CA');
 
-/** Daily CTL (42 d), ATL (7 d), TSB from ride summaries. */
+/**
+ * Daily CTL (42 d), ATL (7 d), TSB from ride summaries, as of the START of each day:
+ * a day's ride moves fitness, fatigue and form the next morning, and tsb = ctl - atl on every row.
+ * Days are calendar days (compared by key), so today's row exists from midnight.
+ */
 export function loadSeries(rides, until = new Date(), days = 120) {
   const byDay = {};
-  for (const r of rides) byDay[r.id.slice(0, 10)] = (byDay[r.id.slice(0, 10)] || 0) + (r.tss || 0);
-  const first = rides.length ? new Date(Math.min(...rides.map((r) => Date.parse(r.id.slice(0, 10) + 'T12:00:00')))) : until;
+  for (const r of rides) { const k = r.id.slice(0, 10); byDay[k] = (byDay[k] || 0) + (r.tss || 0); }
+  const end = dayKey(until);
+  const first = Object.keys(byDay).sort()[0] || end;
   const out = [];
   let ctl = 0, atl = 0;
-  for (let d = new Date(first); d <= until; d.setDate(d.getDate() + 1)) {
-    const k = dayKey(d);
-    const tsb = ctl - atl;
-    const tss = byDay[k] || 0;
+  // noon local so DST never skips or repeats a day
+  for (let d = new Date(first + 'T12:00:00'); dayKey(d) <= end; d.setDate(d.getDate() + 1)) {
+    const k = dayKey(d), tss = byDay[k] || 0;
+    out.push({ date: k, tss, ctl: r1(ctl), atl: r1(atl), tsb: r1(ctl - atl) });
     ctl += (tss - ctl) / 42;
     atl += (tss - atl) / 7;
-    out.push({ date: k, tss, ctl: r1(ctl), atl: r1(atl), tsb: r1(tsb) });
   }
   return out.slice(-days);
+}
+
+/** What the cards show: rounded fitness and fatigue, form = their difference, so the three always add up. */
+export function loadNow(row) {
+  const fitness = Math.round(row?.ctl || 0), fatigue = Math.round(row?.atl || 0);
+  return { fitness, fatigue, form: fitness - fatigue };
 }
 
 // Typical intensity (fraction of FTP) inside each zone, used to weight time in zone into TSS.
@@ -261,6 +271,7 @@ export function ftpEstimate(rides, now = Date.now()) {
   return { from20min: b20 ? Math.round(b20 * 0.95) : null, fromRamp: ramp ? Math.round(ramp * 0.75) : null };
 }
 
+/** Form state; the same cutoffs as FORM_BANDS in js/app.js. */
 export function formLabel(tsb) {
   if (tsb > 15) return 'Very fresh';
   if (tsb > 5) return 'Fresh';

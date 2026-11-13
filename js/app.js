@@ -11,7 +11,7 @@ import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanR
 import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
-import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
+import { buildRide, loadSeries, weekly, powerCurve, ftpEstimate, ftpFromRide, formLabel, loadNow, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
 import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
 import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
@@ -723,9 +723,9 @@ function renderOverview() {
     : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP');
   const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
     `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
-  const tsb = Math.round(t.tsb);
-  const fat = tile(`${tsb > 0 ? '+' : ''}${tsb}`, 'Form', `${formLabel(t.tsb).toLowerCase()}<span class="wide-only"> &middot; fitness ${Math.round(t.ctl)}</span>`,
-    `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${Math.round(t.atl)}.`);
+  const ld = loadNow(t);
+  const fat = tile(`${ld.form > 0 ? '+' : ''}${ld.form}`, 'Form', `${formLabel(ld.form).toLowerCase()}<span class="wide-only"> &middot; fitness ${ld.fitness}</span>`,
+    `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`);
   const est = ftpEstimate(real);
   const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
   el.innerHTML = rec + week + fat + ftp;
@@ -1192,9 +1192,10 @@ function svgLoad(series) {
       gap += quad(X(i), a.ctl, a.atl, xm, vm, vm, da > 0 ? FITNESS : FATIGUE) + quad(xm, vm, vm, X(i + 1), b.ctl, b.atl, db > 0 ? FITNESS : FATIGUE);
     } else gap += quad(X(i), a.ctl, a.atl, X(i + 1), b.ctl, b.atl, da + db >= 0 ? FITNESS : FATIGUE);
   }
-  const now = series.at(-1).tsb, cur = FORM_BANDS.find(([l, h]) => now > l && now <= h) || FORM_BANDS.at(-1);
+  const now = loadNow(series.at(-1)).form;
+  const cur = FORM_BANDS.find(([l, h]) => now > l && now <= h) || (now > 0 ? FORM_BANDS[0] : FORM_BANDS.at(-1));
   const bands = FORM_BANDS.map(([l, h, name], j) => `<rect x="30" y="${f(B(h))}" width="${W - 40}" height="${f(B(l) - B(h))}" fill="${INK}" opacity="${j % 2 ? 0.045 : 0.0}"/>`
-    + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${l < now && now <= h ? INK : MUTED}" font-size="${11 * k}" font-weight="${l < now && now <= h ? 700 : 400}">${name}</text>`).join('');
+    + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${name === cur[2] ? INK : MUTED}" font-size="${11 * k}" font-weight="${name === cur[2] ? 700 : 400}">${name}</text>`).join('');
   // legend stacked in the label column, so it can never sit on the lines
   // legend words in ink (muted for the note); only the swatch carries the data color (cyan text is 2.8:1 on the sheet)
   const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill === MUTED ? MUTED : INK}" font-size="${11 * k}">${txt.replace('&#9632;', `<tspan fill="${fill}">&#9632;</tspan>`)}</text>`;
@@ -1206,7 +1207,7 @@ function svgLoad(series) {
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
     <text x="0" y="${14 * k}" fill="${MUTED}" font-size="${12 * k}">${Math.round(maxL)}</text>
     ${gap}${line('atl', FATIGUE)}${line('ctl', FITNESS)}
-    <text x="30" y="${S0 - 8 * k}" fill="${INK}" font-size="${12 * k}" font-weight="650">Form <tspan fill="${MUTED}" font-weight="400">now ${now > 0 ? '+' : ''}${Math.round(now)}, ${cur[2].toLowerCase()}</tspan></text>
+    <text x="30" y="${S0 - 8 * k}" fill="${INK}" font-size="${12 * k}" font-weight="650">Form <tspan fill="${MUTED}" font-weight="400">now ${now > 0 ? '+' : ''}${now}, ${cur[2].toLowerCase()}</tspan></text>
     ${bands}<line x1="30" x2="${PR}" y1="${f(Z)}" y2="${f(Z)}" stroke="${RULE}"/>${bars}${ticks}
     ${legend}</svg>`;
 }
@@ -1288,7 +1289,7 @@ function renderZones(real, thisWeekStart) {
 const LOAD_INFO = {
   ctl: '<b>Chronic Training Load.</b> Your average daily training stress (TSS) over roughly the last 6 weeks (42-day weighted average, recent days count more). It climbs slowly with consistent training and is the best single number for fitness. A 1-hour ride at FTP is 100 TSS.',
   atl: '<b>Acute Training Load.</b> The same average over roughly the last week (7 days). It jumps after hard days and drops fast with rest, so it tracks fatigue. ATL above CTL means you are training harder than your recent normal.',
-  tsb: '<b>Training Stress Balance</b> = yesterday\'s CTL minus ATL, so today\'s ride shows up tomorrow. Above +5: fresh, good for a test or race. -10 to +5: balanced. -10 to -30: productive fatigue, normal in a build block. Below -30: overreaching, back off.',
+  tsb: '<b>Training Stress Balance</b> = fitness minus fatigue. All three are as of the start of today, so today\'s ride moves them tomorrow morning. Above +5: fresh, good for a test or race. -10 to +5: balanced. -10 to -30: productive fatigue, normal in a build block. Below -30: overreaching, back off.',
 };
 const infoTip = (html, label) => `<span class="info"><button type="button" class="info-btn" aria-label="What is ${esc(label)}?"><svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="3.6" r="1.25"/><rect x="5.95" y="5.9" width="2.1" height="5.5" rx=".6"/></svg></button><span class="tip" role="tooltip">${html}</span></span>`;
 // Touch screens have no hover: tap (i) to toggle the tip, tap anywhere else to close it.
@@ -1303,6 +1304,7 @@ async function renderTraining() {
   const real = rows.filter((r) => !r.demo).map((r) => r.summary);
   const series = loadSeries(real, new Date(), 90);
   const today = series.at(-1) || { ctl: 0, atl: 0, tsb: 0 };
+  const ld = loadNow(today);
   const wk = weekly(real, isPhone() ? 8 : 12);
   const thisWeek = wk.at(-1);
   const est = ftpEstimate(real);
@@ -1314,8 +1316,8 @@ async function renderTraining() {
     : `History is only on this device. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.`;
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
-    card(Math.round(today.ctl), 'Fitness (CTL)', '', LOAD_INFO.ctl), card(Math.round(today.atl), 'Fatigue (ATL)', '', LOAD_INFO.atl),
-    card(`${today.tsb > 0 ? '+' : ''}${Math.round(today.tsb)}`, 'Form (TSB)', formLabel(today.tsb), LOAD_INFO.tsb),
+    card(ld.fitness, 'Fitness (CTL)', '', LOAD_INFO.ctl), card(ld.fatigue, 'Fatigue (ATL)', '', LOAD_INFO.atl),
+    card(`${ld.form > 0 ? '+' : ''}${ld.form}`, 'Form (TSB)', formLabel(ld.form), LOAD_INFO.tsb),
     card(`${thisWeek.hours}h`, 'This week', `${thisWeek.tss} TSS &middot; ${thisWeek.rides} rides`),
     (() => {
       const days = Object.entries(app.whoop || {}).slice(-7).map(([, v]) => v).filter((v) => v.hrv);
