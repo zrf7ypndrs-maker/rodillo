@@ -1591,9 +1591,10 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
     --nav-text: #c3c9c4;
   }
 
-  /* numbers: wide and semibold on the home screens (the ride screen keeps its heavy condensed numbers) */
+  /* numbers on the home screens: halfway between the ride screen's heavy condensed voice and a wide semibold
+     (Nov 12, 11:18 pm, Agustín picked 80% / 720 from a side-by-side of 100/620, 80/720 and 68/800) */
   #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rl-s .v, .rc-v) {
-    font-family: var(--num); font-stretch: 100%; font-weight: 620; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
   }
 
   /* liquid glass nav pill; the active section is a brighter glass lens */
@@ -1733,7 +1734,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rl-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
   .rl-date { font-size: 11.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .rl-right { flex: none; font-size: 12px; }
-  .rl-right b { font-family: var(--num); font-stretch: 100%; font-weight: 620; color: var(--ink); }
+  .rl-right b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); }
   .rl-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
   .rl-s { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .rl-s .v { font-size: 16px; }
