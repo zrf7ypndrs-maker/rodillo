@@ -723,7 +723,7 @@ function renderOverview() {
   // One slim row under the hero: value big, label + short context on one line.
   const w = whoopDay(dkey(new Date()));
   const rec = w?.recovery != null
-    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', `${w.hrv ? `HRV ${Math.round(w.hrv)}` : ''}${w.sleepHours ? `<span class="wide-only">${w.hrv ? ' &middot; ' : ''}${w.sleepHours} h sleep</span>` : ''}`, '', 'rec-tile')
+    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', '', '', 'rec-tile') // only recovery: HRV / RHR / sleep live in the WHOOP app (Agustín, Nov 13)
     : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP', '', 'rec-tile');
   // Phone: recovery gets its own card (ring, the call from the hero line, HRV); the hero line and the tile hide there.
   const today = dayInfo(dkey(new Date()));
@@ -733,7 +733,7 @@ function renderOverview() {
   const call = heroRecovery(today).replace('class="hero-rec"', 'class="rc-call"');
   const recCard = `<div class="rec-card">
       <div class="rc-ring">${ring}<span class="rc-v">${pct != null ? `${pct}<small>%</small>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`}</span></div>
-      <div class="rc-text"><div class="rc-l">Recovery</div>${call}<div class="rc-sub">${pct != null ? (w.hrv ? `HRV ${Math.round(w.hrv)}` : '') : app.whoop ? 'not scored yet' : 'no WHOOP'}</div></div>
+      <div class="rc-text"><div class="rc-l">Recovery</div>${call}${pct != null ? '' : `<div class="rc-sub">${app.whoop ? 'not scored yet' : 'no WHOOP'}</div>`}</div>
     </div>`;
   const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
     `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
@@ -1097,7 +1097,7 @@ function renderCalendar() {
   } else html += `<p class="muted">${info.kind === 'strength' ? 'Strength day: no ride planned.' : info.kind === 'rest' ? 'Rest day.' : 'Nothing planned.'}</p>`;
   html += coachDecision(sel);
   const wd = whoopDay(sel);
-  if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b>${wd.hrv ? ` &middot; HRV ${Math.round(wd.hrv)} ms` : ''}${wd.rhr ? ` &middot; RHR ${wd.rhr}` : ''}${wd.sleepHours ? ` &middot; sleep ${wd.sleepHours} h` : ''}</div>`;
+  if (wd?.recovery != null) html += `<div class="cal-ride" style="color:var(--muted)">WHOOP: recovery <b class="rz ${recZone(wd.recovery)}">${wd.recovery}%</b></div>`; // recovery only (Agustín, Nov 13)
   for (const r of info.ridden.filter((x) => x !== doneRide)) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}<button class="ghost small cal-see" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   }
@@ -1384,9 +1384,8 @@ async function renderTraining() {
     card(`${ld.form > 0 ? '+' : ''}${ld.form}`, 'Form (TSB)', formLabel(ld.form), LOAD_INFO.tsb),
     card(`${thisWeek.hours}h`, 'This week', `${thisWeek.tss} TSS &middot; ${thisWeek.rides} rides`),
     (() => {
-      const days = Object.entries(app.whoop || {}).slice(-7).map(([, v]) => v).filter((v) => v.hrv);
       const t = whoopDay(dkey(new Date())) || Object.values(app.whoop || {}).at(-1);
-      return t?.recovery != null ? card(`<span class="rz ${recZone(t.recovery)}">${t.recovery}%</span>`, 'Recovery (WHOOP)', days.length ? `HRV 7-day avg ${Math.round(days.reduce((a, v) => a + v.hrv, 0) / days.length)} ms` : '') : card('-', 'Recovery (WHOOP)', 'not connected');
+      return t?.recovery != null ? card(`<span class="rz ${recZone(t.recovery)}">${t.recovery}%</span>`, 'Recovery (WHOOP)', '') : card('-', 'Recovery (WHOOP)', 'not connected');
     })(),
     card(`${app.settings.ftp} W`, 'FTP', [est.from20min && `20-min est ${est.from20min}`, est.fromRamp && `ramp ${est.fromRamp}`].filter(Boolean).join(' &middot; ') || 'no estimate yet'),
   ].join('');
