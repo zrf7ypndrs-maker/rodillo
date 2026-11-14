@@ -1642,14 +1642,15 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .overview .ov2 .v { font-size: 25px; line-height: 1; white-space: nowrap; }
   .overview .ov2 .v .of { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .ov2 .os { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ov-week { display: flex; justify-content: space-between; margin-top: 3px; }
-  .wd { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .wd i { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; }
-  .wd.plan i { border: 1.5px solid var(--c); }
+  /* week: just the seven dots, no day letters (too crowded at this width, Agustín); today = a short ink tick under its dot */
+  .ov-week { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 6px; padding-right: 4px; }
+  .wd { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 10px; }
+  .wd i { width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+  .wd.plan i { border: 2px solid var(--c); }
   .wd.done i { background: var(--c); }
-  .wd.off i { width: 4px; height: 4px; margin: 2.5px 0; background: var(--faint); }
-  .wd em { font-style: normal; font-size: 9.5px; font-weight: 600; color: var(--muted); }
-  .wd.today em { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1.5px; }
+  .wd.off i { width: 4px; height: 4px; margin: 3px 0; background: var(--faint); }
+  .wd em { display: none; }
+  .wd.today::after { content: ""; width: 10px; height: 2px; border-radius: 1px; background: var(--ink); }
   .ov-form { position: relative; height: 5px; border-radius: 3px; background: var(--sheet2); margin: 8px 0 5px; }
   .ov-form .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 10%, transparent); }
   .ov-form .zero { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--muted); }
