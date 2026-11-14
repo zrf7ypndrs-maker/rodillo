@@ -1494,7 +1494,6 @@ async function startWorkout(w, intensity = 1, btn = null) {
   const go = () => { if (!app.session) beginSession({ workout: w, intensity }); };
   const ready = app.demo || app.trainer?.state === 'connected';
   if (!(btn && ready) && !await canRide()) return;
-  if (isSim(w) && !await confirmBike()) return; // slope steps ride the bike's gearing and weight; ERG doesn't care
   if (btn && ready) return launchFrom(btn, go);
   go();
 }
@@ -1659,68 +1658,13 @@ async function startFree(btn = null) {
   const go = () => { if (!app.session) beginSession({}); };
   const ready = app.demo || app.trainer?.state === 'connected';
   if (!(btn && ready) && !await canRide()) return;
-  if (!await confirmBike()) return;
   if (btn && ready) return launchFrom(btn, go, 'free');
   go();
 }
 
-/** Bike check before a slope workout or a free ride (asked for by Agustín, Nov 12): shows the bike in use
-   with the rest of the garage beside it; a tap (or the controller's left / right) picks another one, and
-   the main button starts the ride on the picked bike. Under the bikes, the gearing to start in (its own
-   choice since Nov 12; the controller's up / down cycles it). Cancel / B doesn't start. Nothing changes
-   until the ride is confirmed. Without bikes it still asks for the gearing. Resolves true to ride. */
-async function confirmBike() {
-  const g = garageOf(app.settings);
-  let pick = currentBike(app.settings)?.id || '';
-  const gears = gearOptions();
-  let gear = gears.find((o) => o.on)?.v || gears[0].v;
-  const tile = (b) => `<button type="button" class="bk-tile gar-tile${b.id === pick ? ' on' : ''}" data-bk="${esc(b.id)}" role="radio" aria-checked="${b.id === pick}">
-      <span class="gar-pick">${artFor(b)}<span class="gar-name">${esc(b.name)}</span><span class="gar-line">${esc(bikeLine(b))}</span></span>${b.id === pick ? '<span class="gar-riding">Selected</span>' : ''}</button>`;
-  const paint = () => {
-    const box = $('#bk-grid');
-    if (box) box.innerHTML = g.map(tile).join('');
-    const b = g.find((x) => x.id === pick);
-    $('#modal-title').textContent = !g.length ? 'Which gearing?' : b ? `Riding the ${b.name}?` : 'Which bike are you riding?';
-    $('#modal-ok').disabled = !!g.length && !b;
-    $('#bk-gear').value = gear;
-  };
-  const move = (d) => {
-    const i = g.findIndex((x) => x.id === pick);
-    pick = g[i < 0 ? 0 : (i + d + g.length) % g.length].id;
-    paint();
-  };
-  const cycle = (d) => {
-    const i = gears.findIndex((o) => o.v === gear);
-    gear = gears[(i + d + gears.length) % gears.length].v;
-    paint();
-  };
-  const nav = (a) => {
-    if (g.length && ['left', 'easier'].includes(a)) { move(-1); return true; }
-    if (g.length && ['right', 'harder'].includes(a)) { move(1); return true; }
-    if (a === 'up' || a === 'down') { cycle(a === 'down' ? 1 : -1); return true; }
-    if (a === 'select' && g.length && !g.some((x) => x.id === pick)) return true;
-    return false;
-  };
-  const body = `${g.length ? '<div class="bk-grid" id="bk-grid" role="radiogroup" aria-label="Bikes"></div>' : ''}
-    <div class="bk-gear settings-form">${fld('bk-gear', 'Gearing', `<select id="bk-gear">${gearOptionsHtml(gears)}</select>`, 'You can switch gearing mid-ride from the pause screen.', 'full')}</div>`;
-  const onTap = (e) => { const t = e.target.closest('[data-bk]'); if (t) { pick = t.dataset.bk; paint(); } };
-  const onGear = (e) => { if (e.target.id === 'bk-gear') gear = e.target.value; };
-  $('#modal-body').addEventListener('click', onTap);
-  $('#modal-body').addEventListener('change', onGear);
-  const done = ask(g.length ? 'Slope mode uses its weight and wheel. Pick another bike to switch.' : 'Slope mode shifts with this gearing.',
-    { title: ' ', ok: g.length ? 'Ride this bike' : 'Ride', body, nav, wide: true });
-  paint();
-  const ok = await done;
-  $('#modal-body').removeEventListener('click', onTap);
-  $('#modal-body').removeEventListener('change', onGear);
-  $('#modal-ok').disabled = false;
-  if (!ok) return false;
-  let changed = false;
-  if (pick && pick !== app.settings.bike) { Object.assign(app.settings, selectBike(app.settings, pick)); changed = true; }
-  if (!gears.find((o) => o.v === gear)?.on) { applyGearOption(gear); changed = true; }
-  if (changed) saveSettings();
-  return true;
-}
+// No bike check before a ride (Agustín, Nov 14: it cost the Start / Free ride launch animation, and picking every
+// time was a chore). Rides start on the bike in use; the pause / Ready screen's Bike button opens the Garage and a
+// pick applies to the ride at once (saveSettings -> session.applySettings).
 
 let wakeLock = null;
 // keep the screen on during a ride; the browser drops the lock when the page is hidden,
@@ -3673,13 +3617,13 @@ async function removeGarageBike(id) {
   f.onclick = (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.classList.contains('gar-pick') && t.dataset.bike) { Object.assign(app.settings, selectBike(app.settings, t.dataset.bike)); saveSettings(); renderGarage({ mode: 'list' }); }
+    if (t.classList.contains('gar-pick') && t.dataset.bike) useBike(t.dataset.bike);
     else if (t.dataset.details) renderGarage({ mode: 'details', id: t.dataset.details });
     else if (t.id === 'gar-back') { draft = null; renderGarage({ mode: 'list' }); }
     else if (t.id === 'gar-custom') startCustom();
     else if (t.dataset.copy) startCustom(garageOf(app.settings).find((x) => x.id === t.dataset.copy));
     else if (t.id === 'gar-save') saveCustom();
-    else if (t.dataset.ride) { Object.assign(app.settings, selectBike(app.settings, t.dataset.ride)); saveSettings(); renderGarage({ mode: 'list' }); }
+    else if (t.dataset.ride) useBike(t.dataset.ride);
     else if (t.dataset.remove) removeGarageBike(t.dataset.remove);
     else if (t.dataset.addmodel) {
       const g = garageOf(app.settings), b = bikeFromModel(t.dataset.addmodel, newBikeId(g, t.dataset.addmodel));
@@ -3768,6 +3712,14 @@ function setGarTab(id, animate = false) {
   if (id === 'bikes') renderGarage({ mode: 'list' }); else renderGearing('list');
   placeInk($('#gar-tabs'), $(`#gar-tabs [data-gtab="${id}"]`));
   if (animate && prev !== id) slideIn($(id === 'bikes' ? '#garage-form' : '#gearing-form'), id === 'gearing' ? 1 : -1);
+}
+/** A bike picked in the Garage; during a ride it applies at once (weight and wheel), with a toast. */
+function useBike(id) {
+  Object.assign(app.settings, selectBike(app.settings, id));
+  saveSettings();
+  renderGarage({ mode: 'list' });
+  const s = app.session, b = currentBike(app.settings);
+  if (s && !s.finished && app.screen === 'ride' && b) toast(`Riding the ${b.name}`);
 }
 function openGarage(tab = 'bikes') {
   setDevPop(false);
@@ -3973,6 +3925,7 @@ document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closes
 // pause screen of a ride: the same panels as the home top bar
 $('#pz-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!(devPopOpen() && $('#devpop').classList.contains('on-ride')), 'ride'); };
 $('#pz-controls').onclick = () => $('#btn-controls').click();
+$('#pz-bike').onclick = () => openGarage('bikes');
 $('#pz-gearing').onclick = () => openGearing();
 $('#pz-settings').onclick = () => $('#btn-settings').click();
 setWoKind(app.woKind);

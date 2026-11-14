@@ -388,12 +388,6 @@ table.ints { margin-bottom: 14px; }
 /* bike check before a slope workout or free ride: the garage's tiles inside the modal */
 .modal-box.wide { width: 560px; }
 .modal-body { margin: 0 0 18px; }
-.bk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; max-height: 52vh; overflow-y: auto; padding: 4px; margin: -4px; }
-.bk-grid .bk-tile { aspect-ratio: auto; padding: 0; font: inherit; text-align: center; cursor: pointer; }
-.bk-tile .gar-pick { padding: 26px 10px 14px; }
-.bk-grid .bk-tile .bike-photo { width: 82%; }
-.bk-tile .gar-line { white-space: normal; overflow: visible; }
-.bk-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .modal-btns button:disabled { opacity: .4; cursor: default; }
 .modal-btns button.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -465,7 +459,6 @@ table.ints { margin-bottom: 14px; }
 .gar-add.gear-tile .gar-plus { font-size: 34px; margin: 0; }
 .gar-add.gear-tile .gar-name { text-align: left; }
 .gar-add.gear-tile .gar-line { display: none; }
-.settings-form.bk-gear { margin: 14px 0 0; text-align: left; }
 .gar-empty { padding: 12px; color: var(--muted); border-bottom: 1px solid var(--rule); }
 .settings-form .section { grid-column: 1 / -1; font-size: 15px; color: var(--ink); margin-top: 14px; font-weight: 700; padding-top: 12px; border-top: 1px solid var(--rule); }
 /* settings: one tab per section (same sliding underline as the home tabs); scrolls sideways if it doesn't fit */
@@ -1401,9 +1394,10 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .paused-overlay { bottom: calc(76px + env(safe-area-inset-bottom)); }
   .paused-overlay .big { font-size: 56px; }
   .pz { width: 100%; padding: 0 12px; }
-  .pz-acts { gap: 8px; margin-top: 20px; }
-  .pz-btn { flex: 1 1 0; min-width: 0; max-width: 96px; padding: 12px 4px 9px; font-size: 12.5px; }
+  .pz-acts { gap: 6px; margin-top: 20px; }
+  .pz-btn { flex: 1 1 0; min-width: 0; max-width: 96px; padding: 12px 2px 9px; font-size: 12px; }
   .pz-ico svg { width: 24px; height: 24px; }
+  .pz-l { font-stretch: 78%; } /* five buttons: "Connections" fits at 360 px */
 
   .rp {
     display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0;
