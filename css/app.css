@@ -1673,10 +1673,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rec-ring { width: 64px; height: 64px; transform: rotate(-90deg); overflow: visible; display: block; }
   .rec-ring circle { fill: none; stroke-width: 5; }
   .rec-ring .trk { stroke: color-mix(in srgb, var(--ink) 8%, transparent); }
-  .rec-ring { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 55%, transparent)); }
-  .rec-ring.yellow { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 55%, transparent)); }
-  .rec-ring.red { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--bad) 55%, transparent)); }
-  .rec-ring:not(.green):not(.yellow):not(.red) { filter: none; }
+  /* no glow on the ring (Agustín, Nov 13: phone glow only on the hero and the calendar day detail) */
   .rec-ring .arc { stroke: var(--good); stroke-linecap: round; }
   .rec-ring.yellow .arc { stroke: var(--warn); }
   .rec-ring.red .arc { stroke: var(--bad); }
@@ -1718,7 +1715,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .wo-gh { margin-left: 4px; }
   .import-row button, .import-row .btn, .import-row label { border-color: transparent; background: var(--sheet2); }
 
-  /* calendar: one month card, glowing capsules, today as a circle */
+  /* calendar: one month card, zone capsules (no glow since Nov 13), today as a circle */
   .cal-head { gap: 8px; }
   .cal-head h3 { order: -1; flex: 1; text-align: left; font-size: 25px; font-weight: 650; letter-spacing: -0.022em; }
   .cal-head button { width: 38px; height: 38px; padding: 0; border: none; background: var(--sheet2); font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
@@ -1730,7 +1727,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .cal-cell.sel { box-shadow: none; background: var(--sheet2); }
   .cal-num { font-size: 15px; height: 26px; min-width: 26px; display: flex; align-items: center; justify-content: center; }
   .cal-cell.today .cal-num { border-radius: 13px; padding: 0; align-self: center; }
-  .cal-chip { width: 22px; height: 5px; border-radius: 3px; align-self: center; box-shadow: 0 0 8px color-mix(in srgb, var(--c) 70%, transparent); }
+  .cal-chip { width: 22px; height: 5px; border-radius: 3px; align-self: center; } /* no glow (Nov 13) */
   .cal-detail { border-radius: 24px; padding: 18px; box-shadow: var(--card-shadow);
     background: radial-gradient(80% 45% at 0% 0%, color-mix(in srgb, var(--c, transparent) 18%, transparent), transparent 70%), var(--sheet); }
   .cal-detail h3 { font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -1749,7 +1746,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .stats.tcards > .stat:nth-child(3n) .tip { left: auto; right: -8px; }
   #home .card { border-radius: 24px; padding: 18px; box-shadow: var(--card-shadow); }
   #home .zb-bar { height: 8px; border-radius: 4px; background: var(--sheet2); overflow: visible; }
-  #home .zb-bar i { border-radius: 4px; box-shadow: 0 0 8px color-mix(in srgb, currentColor 50%, transparent); }
+  #home .zb-bar i { border-radius: 4px; } /* no glow (Nov 13) */
   .pc-legend { display: flex; justify-content: flex-end; gap: 12px; margin: -30px 0 18px; font-size: 11px; color: var(--muted); } /* on the title row */
   .pc-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .pc-legend i { display: inline-block; width: 12px; }
