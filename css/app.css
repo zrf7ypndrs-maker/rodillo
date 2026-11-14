@@ -1636,7 +1636,10 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .overview.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: transparent; border: none; border-radius: 0; margin-bottom: 18px; filter: var(--card-drop); } /* one shadow for the joined tiles, no seams */
   .overview > .rec-card { order: -1; grid-column: 1 / -1; margin-bottom: 12px; }
   .overview > .stat.rec-tile { display: none; }
-  .overview.stats > .stat:nth-child(n) { border: none; background: var(--sheet); padding: 16px 10px; text-align: center; } /* centered (Agustín, Nov 13) */
+  /* label top left, number and its line centered under it (Agustín, Nov 13) */
+  .overview.stats > .stat:not(.rec-tile):nth-child(n) { border: none; background: var(--sheet); padding: 12px 10px 14px 14px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .overview.stats > .stat:not(.rec-tile) .l { display: contents; }
+  .overview.stats > .stat:not(.rec-tile) .l b { order: -1; align-self: flex-start; text-align: left; margin-bottom: 8px; font-size: 12.5px; }
   .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; }
   .overview.stats > .stat:nth-child(4) { border-radius: 0 24px 24px 0; }
   .overview .stat .v { font-size: 25px; }
