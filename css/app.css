@@ -1636,8 +1636,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .overview.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: transparent; border: none; border-radius: 0; margin-bottom: 18px; filter: var(--card-drop); } /* one shadow for the joined tiles, no seams */
   .overview > .rec-card { order: -1; grid-column: 1 / -1; margin-bottom: 12px; }
   .overview > .stat.rec-tile { display: none; }
-  .overview.stats > .stat:nth-child(n) { border: none; background: var(--sheet); padding: 16px 8px 16px 12px; }
-  .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; padding-left: 18px; }
+  .overview.stats > .stat:nth-child(n) { border: none; background: var(--sheet); padding: 16px 10px; text-align: center; } /* centered (Agustín, Nov 13) */
+  .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; }
   .overview.stats > .stat:nth-child(4) { border-radius: 0 24px 24px 0; }
   .overview .stat .v { font-size: 25px; }
   .overview .stat .v .of { font-size: 14px; font-weight: 500; }
@@ -1667,10 +1667,11 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rc-call .coach-call { margin: 0; font-weight: 500; }
   .rc-call .row-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 
-  /* next days: rounder cards, a soft glow in the day's color instead of the top bar */
-  .day { border-radius: 20px; box-shadow: var(--card-shadow); padding: 12px 14px; gap: 3px;
-    background: radial-gradient(80% 70% at 0% 0%, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%), var(--sheet); }
-  .day.nowo { background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; }
+  /* next days: rounder cards with the zone bar on the left (Agustín, Nov 13: like the calendar chips; was a corner glow) */
+  .day { position: relative; border-radius: 20px; box-shadow: var(--card-shadow); padding: 12px 14px 12px 24px; gap: 3px; background: var(--sheet); }
+  .day::before { content: ""; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background: var(--c); }
+  .day.nowo { background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; padding-left: 14px; }
+  .day.nowo::before { display: none; }
   .d-meta { color: var(--muted); }
   .d-meta .n { font-size: 16px; color: var(--ink); }
   #home .eyebrow { font-size: 15px; font-weight: 650; }
@@ -1836,4 +1837,261 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
     -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
   html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
+}
+
+
+/* =====================================================================
+   PREMIUM LOOK, DESKTOP (Nov 13, Agustín; mocks: canvas pages "Desktop: ..." and project doc claude/rodillo-premium-look.md).
+   The phone look carried over where it fits a wide screen. Not carried over (Agustín agreed): the recovery card (the call stays
+   in the hero line), the glass nav pill (text tabs stay), glows under calendar chips, 24-28 px corners (16 here).
+   Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
+   ===================================================================== */
+@media (pointer: fine), (min-width: 761px) and (min-height: 521px) {
+  html:not([data-theme="dark"]):has(#home.active) {
+    --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa;
+    --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
+    --card-drop: drop-shadow(0 6px 16px rgba(22, 24, 27, .07));
+    --seg-on: #ffffff; --seg-shadow: 0 1px 2px rgba(22, 24, 27, .08), 0 2px 8px rgba(22, 24, 27, .08);
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 12px 32px rgba(22, 24, 27, .14), 0 1px 3px rgba(22, 24, 27, .1);
+    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
+  }
+  html[data-theme="dark"]:has(#home.active) {
+    --paper: #050606; --sheet: #111413; --sheet2: #1b1f1d; --rule: #202523; --hi: #1f2422; --underlay: #1c201e; --today-end: #111413;
+    --card-shadow: none; --card-drop: none; --seg-on: #2a302d; --seg-shadow: none;
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .08), inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 12px 32px rgba(0, 0, 0, .5);
+    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+  }
+  html:not([data-theme="dark"]):has(#home.active) { --track: #e2e6e1; }
+  html[data-theme="dark"]:has(#home.active) { --track: #111413; }
+
+  #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rc-v, #ride-table td) {
+    font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+  }
+  #home #ride-table td:nth-child(2) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; }
+  #home #ride-table td:nth-child(1) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 500; color: var(--muted); }
+
+  /* today: dome on a rounder card, no lift shadow, main set as big numbers */
+  .hero { border-radius: 16px; padding: 26px 30px 22px; box-shadow: var(--hero-shadow); }
+  :root[data-theme="dark"] .hero:not(.nowo):not(.done) { box-shadow: var(--hero-shadow); }
+  .hero-name { font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
+  .hero.has-nums .hero-meta { display: none; }
+  .hero-nums { display: flex; align-items: flex-end; gap: 34px; margin-top: 16px; }
+  .hn { display: flex; flex-direction: column; gap: 3px; }
+  .hn .v { font-size: 32px; line-height: .95; color: var(--on-zone); }
+  .hn.main .v { font-size: 56px; line-height: .9; }
+  .hn .v small { font-family: Archivo, system-ui, sans-serif; font-size: 15px; font-weight: 500; letter-spacing: 0; margin-left: 4px; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
+  .hn.main .v small { font-size: 18px; }
+  .hn .l { font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--on-zone), transparent 28%); }
+  .hero-desc { margin-top: 14px; }
+  .hero-start.primary { box-shadow: none; }
+  .hero:not(.nowo):not(.done) .ghost, .hero.done .ghost { background: var(--sheet2); border-color: transparent; color: var(--ink); }
+  .hero:not(.nowo):not(.done) .ghost:hover { background: var(--sheet); border-color: transparent; }
+  .hero-btns button { border-radius: 999px; }
+  .hero.done { border-radius: 16px; }
+
+  /* overview: one slim card of four tiles (recovery stays in the hero line on desktop) */
+  .overview.stats { gap: 0; background: var(--sheet); border: none; border-radius: 16px; margin: 16px 0 28px; box-shadow: var(--card-shadow); }
+  .overview.stats > .stat:nth-child(n) { border: none; padding: 16px 18px 15px; }
+  .overview.stats > .stat:nth-child(n + 2) { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--rule) 70%, transparent); }
+  .overview .stat .v { font-size: 32px; }
+  .overview .stat .v .of { font-size: 17px; font-weight: 500; }
+  .overview .stat .l b { font-weight: 600; }
+  .overview .info { top: 12px; right: 12px; }
+  .hero-rec button { border-color: transparent; background: color-mix(in srgb, var(--sheet) 70%, transparent); }
+
+  /* next days: rounder cards, zone bar on the left (Agustín, like the calendar chips); no bar on strength / rest */
+  .day { position: relative; border-radius: 14px; box-shadow: var(--card-shadow); padding: 13px 15px 13px 26px; gap: 3px; min-height: 96px; background: var(--sheet); }
+  .day:hover { background: var(--hi); }
+  .day::before { content: ""; position: absolute; left: 12px; top: 13px; bottom: 13px; width: 4px; border-radius: 2px; background: var(--c); }
+  .day.nowo, .day.nowo:hover { padding-left: 15px; background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; }
+  .day.nowo::before { display: none; }
+  .d-meta { color: var(--muted); }
+  .d-meta .n { font-size: 16px; color: var(--ink); }
+  #home .eyebrow { font-size: 17px; font-weight: 650; }
+  .week-head button { border: none; background: var(--sheet2); }
+
+  /* workouts: raised segment switch, round group cards without lines */
+  .seg-tg { background: var(--track); padding: 4px; border-radius: 22px; }
+  .seg-tg::before { top: 4px; bottom: 4px; background: var(--seg-on); box-shadow: var(--seg-shadow); }
+  .seg-tg button { padding: 8px 22px; font-size: 14.5px; }
+  .seg-tg button.on, .seg-tg button.on:hover { color: var(--ink); }
+  .wo-sheet { border-radius: 16px; box-shadow: var(--card-shadow); }
+  .wo-sheet .wo { border-top: none; }
+  .wo-sheet .wo:first-child { border-radius: 16px 16px 0 0; }
+  .wo-sheet .wo:last-child { border-radius: 0 0 16px 16px; }
+  .wo-sheet .wo:only-child { border-radius: 16px; }
+  .wo { padding-left: 22px; padding-right: 22px; }
+  .wo-name { font-weight: 620; }
+  .wo-meta { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 500; font-size: 13px; color: var(--muted); }
+  .wo-meta .n { font-size: 15px; color: var(--ink); }
+  .wo-gh { margin-left: 6px; font-size: 15px; font-weight: 650; color: var(--ink); }
+  .wo.open { background: var(--sheet); }
+  .wo .start-row button[data-start] { border-radius: 999px; padding: 8px 20px; }
+  .import-row button, .import-row .btn, .import-row label { border-color: transparent; background: var(--sheet2); }
+
+  /* calendar: one month card, round title row, the usual zone-bar chips, today as a circle, selected day as an ink ring */
+  .cal-head { gap: 8px; }
+  .cal-head h3 { order: -1; flex: 0 0 auto; min-width: 0; text-align: left; font-size: 28px; font-weight: 650; letter-spacing: -0.022em; margin-right: auto; }
+  .cal-head button { width: 38px; height: 38px; padding: 0; border: none; background: var(--sheet2); font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
+  .cal-head #cal-today { width: auto; padding: 0 16px; font-size: 14px; }
+  .cal-layout { gap: 18px; grid-template-columns: 1fr 360px; }
+  .cal-grid { background: var(--sheet); border-radius: 16px; padding: 14px 12px 12px; gap: 4px; box-shadow: var(--card-shadow); }
+  .cal-dow { padding: 0 8px 8px; }
+  .cal-cell { background: transparent; border-radius: 14px; min-height: 100px; padding: 7px; }
+  .cal-cell:hover { background: var(--sheet2); }
+  .cal-cell.sel { background: transparent; box-shadow: inset 0 0 0 2px var(--ink); }
+  .cal-cell.sel:hover { background: var(--sheet2); }
+  .cal-num { font-size: 16px; height: 28px; min-width: 28px; display: flex; align-items: center; justify-content: center; align-self: flex-start; }
+  .cal-cell.today .cal-num { border-radius: 14px; padding: 0; }
+  .cal-detail { border-radius: 16px; padding: 22px; box-shadow: var(--card-shadow);
+    background: radial-gradient(80% 45% at 0% 0%, color-mix(in srgb, var(--c, transparent) 18%, transparent), transparent 70%), var(--sheet); }
+  .cal-detail h3 { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .cal-detail .wo-name { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
+  .cal-detail .wo-meta .n { font-size: 16px; }
+  .cal-detail button { border-radius: 999px; }
+
+  /* training: one stats card, round cards, glowing bars, table without hairlines */
+  .stats.tcards { padding: 20px 8px; border-radius: 16px; background: var(--sheet); box-shadow: var(--card-shadow); margin-bottom: 18px; }
+  .stats.tcards > .stat:nth-child(n) { border: none; padding: 0 18px 0 20px; }
+  .stats.tcards .stat .v { font-size: 36px; }
+  .stats.tcards .stat .l { font-size: 13px; color: var(--ink); font-weight: 600; margin-top: 4px; }
+  .stats.tcards .info { top: 0; right: 14px; }
+  #home .card { border-radius: 16px; padding: 22px 24px; box-shadow: var(--card-shadow); }
+  #home .zb-bar { height: 10px; border-radius: 5px; background: var(--sheet2); overflow: visible; }
+  #home .zb-bar i { border-radius: 5px; box-shadow: 0 0 9px color-mix(in srgb, currentColor 50%, transparent); }
+  .pc-legend { display: flex; justify-content: flex-end; gap: 14px; margin: -30px 0 18px; font-size: 12px; color: var(--muted); }
+  .pc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .pc-legend i { display: inline-block; width: 14px; }
+  .pc-legend i.solid { height: 2.5px; border-radius: 2px; background: var(--z5); }
+  .pc-legend i.dash { border-top: 2px dashed var(--muted); }
+  .ride-table td, .ride-table th { border-bottom: none; padding: 10px 10px; }
+  .ride-table th { font-size: 12.5px; font-weight: 600; }
+  .ride-table tr[data-ride] td:first-child { border-radius: 12px 0 0 12px; }
+  .ride-table tr[data-ride] td:last-child { border-radius: 0 12px 12px 0; }
+  .ride-table tr[data-ride]:nth-child(odd) td { background: color-mix(in srgb, var(--sheet2) 55%, transparent); }
+}
+
+/* Desktop panels (Settings, Garage, Connections, Controls): same as the phone block, 16 px corners, Garage keeps plain tabs.
+   Only while the home screen is up, so the panels opened from the ride pause screen keep the ride look. */
+@media (pointer: fine), (min-width: 761px) and (min-height: 521px) {
+  /* panels: paper ground, content on round sheets, no hairlines */
+  html:has(#home.active) :is(#settings, #controls, #garage).panel { background: var(--paper); border-left: none; }
+  html:has(#home.active) :is(#settings, #controls, #garage) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  html:has(#home.active) :is(#settings, #controls, #garage) .panel-head button, html:has(#home.active) .devpop-head button { border-color: transparent; background: var(--sheet); }
+
+  /* tabs become the raised segment switch from Workouts */
+  html:has(#home.active) .tabs.set-tabs { border-bottom: none; background: var(--track); border-radius: 22px; padding: 4px; gap: 0; margin: 0 0 14px; }
+  html:has(#home.active) .set-tabs button { position: relative; z-index: 1; flex: 1 0 auto; padding: 8px 12px; font-size: 14px; }
+  html:has(#home.active) .set-tabs::after { top: 4px; bottom: 4px; height: auto; border-radius: 18px; background: var(--seg-on); box-shadow: var(--seg-shadow); z-index: 0; }
+
+  /* settings fields on one round sheet; filled inputs, no outlines */
+  html:has(#home.active) #settings .settings-form { background: var(--sheet); border-radius: 16px; padding: 18px 16px; box-shadow: var(--card-shadow); }
+  html:has(#home.active) .settings-form input, html:has(#home.active) .settings-form select { border: none; border-radius: 12px; background: var(--sheet2); height: 46px; }
+  html:has(#home.active) #garage .settings-form input, html:has(#home.active) #garage .settings-form select { background: var(--sheet); }
+  html:has(#home.active) .settings-form input:focus, html:has(#home.active) .settings-form select:focus { box-shadow: 0 0 0 2px var(--ink); }
+  html:has(#home.active) .settings-form .fld > label { font-weight: 600; }
+  html:has(#home.active) .panel .settings-form button.ghost, html:has(#home.active) .panel .settings-form .ghost { border-color: transparent; background: var(--sheet2); }
+  html:has(#home.active) #garage .settings-form button.ghost { background: var(--sheet); }
+
+  /* garage: round popup, tiles as soft cards */
+  html:has(#home.active) #garage.panel { border: none; border-radius: 16px; }
+  html:has(#home.active) .gar-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  html:has(#home.active) .gar-tile.on { background: var(--ink); }
+  html:has(#home.active) .gar-add { border-radius: 14px; border: 1.5px dashed color-mix(in srgb, var(--faint) 70%, transparent); }
+  html:has(#home.active) .gar-more { text-decoration: none; font-weight: 600; }
+  html:has(#home.active) .gar-riding { background: var(--seg-on); }
+  html:has(#home.active) .settings-form .gar-dl { border-top: none; background: var(--sheet); border-radius: 14px; padding: 6px 16px; }
+  html:has(#home.active) .gar-dl dt, html:has(#home.active) .gar-dl dd { border-bottom: none; padding: 8px 0; }
+
+  /* connections: frosted glass popover, rows as soft inner cards */
+  html:has(#home.active) .devpop { border: none; border-radius: 16px; background: color-mix(in srgb, var(--sheet) 88%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+    box-shadow: var(--glass-edge), 0 24px 60px var(--shadow); padding: 4px 0 8px; }
+  html:has(#home.active) .devpop-head { border-bottom: none; padding: 12px 14px 8px 18px; }
+  html:has(#home.active) .devpop-head h3 { font-size: 18px; font-weight: 650; }
+  html:has(#home.active) .devices { gap: 6px; padding: 0 8px; }
+  html:has(#home.active) .device { border-top: none; border-radius: 12px; background: color-mix(in srgb, var(--sheet2) 75%, transparent); padding: 12px 14px; }
+  html:has(#home.active) .devpop :is(button.ghost, button:not(.primary)) { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  html:has(#home.active) .devpop-foot { border-top: none; margin: 6px 8px 0; padding: 8px 6px 4px 10px; }
+
+  /* controls: one round sheet, rows without lines, groups as headings */
+  html:has(#home.active) .ctl-style a { color: var(--ink); font-weight: 600; }
+  html:has(#home.active) .keys { background: var(--sheet); border-radius: 16px; border-collapse: separate; border-spacing: 0; overflow: hidden; box-shadow: var(--card-shadow); font-size: 14px; }
+  html:has(#home.active) .keys td, html:has(#home.active) .keys th { border-bottom: none; padding: 8px 16px; }
+  html:has(#home.active) .keys th { padding-top: 14px; font-size: 12.5px; }
+  html:has(#home.active) .keys td:first-child { color: var(--muted); }
+  html:has(#home.active) .keys td:nth-child(2) { font-weight: 600; }
+  html:has(#home.active) .keys-group td { padding-top: 18px; font-size: 15px; font-weight: 650; color: var(--ink) !important; }
+}
+
+/* Desktop builder and Log: same as the phone block, home screen only. */
+@media (pointer: fine), (min-width: 761px) and (min-height: 521px) {
+  html:has(#home.active) :is(#builder, #log).panel { background: var(--paper); border-left: none; }
+  html:has(#home.active) :is(#builder, #log) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  html:has(#home.active) :is(#builder, #log) .panel-head button { border-color: transparent; background: var(--sheet); }
+
+  /* log: the text on one round sheet */
+  html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px; padding: 14px 16px; margin: 0; box-shadow: var(--card-shadow); }
+
+  /* builder: name as a filled field, palette tiles and steps as soft cards, filled inputs, no lines */
+  html:has(#home.active) .b-name { background: var(--sheet); border: none; border-radius: 16px; padding: 10px 14px; font-weight: 700; }
+  html:has(#home.active) .b-name:focus { box-shadow: 0 0 0 2px var(--ink); }
+  html:has(#home.active) .b-pal-row .b-kind { background: var(--track); }
+  html:has(#home.active) .b-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  html:has(#home.active) .b-trash { border-radius: 14px; }
+  html:has(#home.active) .b-tl { border-bottom: none; border-radius: 0; background: var(--sheet); box-shadow: var(--card-shadow); } /* square corners: Agustín, Nov 13 */
+  html:has(#home.active) :is(.b-step, .b-rep) { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
+  html:has(#home.active) :is(.b-step, .b-rep).sel { box-shadow: 0 0 0 2px var(--ink); }
+  html:has(#home.active) .brep-body { border-left-color: color-mix(in srgb, var(--rule) 70%, transparent); }
+  html:has(#home.active) .brep-body .b-step { background: var(--sheet2); box-shadow: none; }
+  html:has(#home.active) :is(.b-in, .b-desc) { border: none; border-radius: 10px; background: var(--sheet2); }
+  html:has(#home.active) .b-desc { background: var(--sheet); border-radius: 16px; padding: 10px 12px; }
+  html:has(#home.active) :is(.b-in, .b-desc):focus { box-shadow: 0 0 0 2px var(--ink); }
+  html:has(#home.active) .b-in.bad, html:has(#home.active) .b-in.bad:focus { background: var(--bad-bg); box-shadow: 0 0 0 2px var(--bad); }
+  html:has(#home.active) .b-dur { border-radius: 10px 0 0 10px; }
+  html:has(#home.active) .b-unit { border-radius: 0 10px 10px 0; margin-left: 1px; }
+  html:has(#home.active) .b-line2 .b-in { border-bottom: none; border-radius: 10px; background: var(--sheet2); }
+  html:has(#home.active) .b-problems { border-radius: 16px; }
+  html:has(#home.active) :is(.b-tot, .b-dur, .b-n, .b-sum) { font-stretch: 80%; font-weight: 720; }
+  html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
+  html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
+}
+
+/* Today's four metrics (Agustín, Nov 13): label on top, number, one small visual each (recovery bar, week dots, form scale, FTP trend).
+   Markup from renderOverview()'s desktop branch (.ov2 tiles). */
+@media (pointer: fine), (min-width: 761px) and (min-height: 521px) {
+  .overview.stats > .stat.ov2 { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px 16px; }
+  .ov2 .ol { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .overview .ov2 .v { font-size: 34px; line-height: 1; }
+  .overview .ov2 .v .of { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .ov2 .os { font-size: 12.5px; color: var(--muted); }
+  .ov2 .none { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 22px; font-weight: 600; color: var(--muted); }
+  .ov-bar { height: 6px; border-radius: 3px; background: var(--sheet2); overflow: hidden; margin-top: 4px; }
+  .ov-bar i { display: block; height: 100%; border-radius: 3px; background: var(--good); }
+  .ov-bar.yellow i { background: var(--warn); }
+  .ov-bar.red i { background: var(--bad); }
+  .ov-week { display: flex; gap: 0; justify-content: space-between; margin-top: 2px; max-width: 220px; }
+  .wd { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .wd i { width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; }
+  .wd.plan i { border: 2px solid var(--c); }
+  .wd.done i { background: var(--c); }
+  .wd.off i { width: 5px; height: 5px; margin: 3.5px 0; background: var(--faint); }
+  .wd em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+  .wd.today em { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  .ov-form { position: relative; height: 6px; border-radius: 3px; background: var(--sheet2); margin: 7px 0 4px; }
+  .ov-form .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .ov-form .zero { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--muted); }
+  .ov-form .mk { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--sheet); }
+  .ov-form .mk.fit { background: var(--fitness); }
+  .ov-form .mk.fat { background: var(--fatigue); }
+  .ov2 .v .of b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); font-size: 17px; }
+  .ov2 .os b { font-family: var(--num); font-stretch: 80%; font-weight: 720; font-size: 14px; color: var(--ink); }
+  .ov2 .os b.up { color: var(--good); }
+  .ov-ftp { position: relative; height: 24px; margin-top: 6px; }
+  .ov-ftp svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .ov-ftp path { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+  .ov-ftp path.ar { fill: color-mix(in srgb, var(--ink) 7%, transparent); stroke: none; }
+  .ov-ftp i { position: absolute; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--ink); transform: translateY(-50%); box-shadow: 0 0 0 2px var(--sheet); }
+
 }

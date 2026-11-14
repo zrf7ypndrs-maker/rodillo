@@ -555,10 +555,8 @@ function woMeta(w) {
   const segs = flatten(w);
   const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
   const mins = Math.round(totalDuration(w) / 60);
-  // phone: numbers wrapped for their own style (desktop text untouched). Same query as PHONE_MQ, read here directly
-  // because woMeta can run before PHONE_MQ is defined further down.
-  const ph = matchMedia('(pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches;
-  const n = (x) => (ph ? `<span class="n">${x}</span>` : x);
+  // numbers wrapped for their own style (premium look: phone Nov 12, desktop Nov 13)
+  const n = (x) => `<span class="n">${x}</span>`;
   if (isTrack(segs)) return `${n(`${dist ? '~' : ''}${mins}`)} min &middot; ${ascentText(track(segs).ascent)}`; // short: library meta column
   if (dist) return `${n(`~${mins}`)} min &middot; ${n(+(dist / 1000).toFixed(1))} km`; // short: must fit the library's meta column
   const tss = estimateTSS(w);
@@ -759,6 +757,43 @@ function renderOverview() {
     `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`);
   const est = ftpEstimate(real);
   const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
+  if (!isPhone()) {
+    // Desktop (premium look, Nov 13, Agustín): label on top, number, then one small visual per tile. The recovery call stays
+    // in the hero line here (the phone moves it into .rec-card).
+    const dTile = (cls, label, v, viz, sub, info = '') => `<div class="stat ov2 ${cls}">${info ? infoTip(info, label) : ''}<div class="ol">${label}</div><div class="v">${v}</div>${viz}${sub ? `<div class="os">${sub}</div>` : ''}</div>`;
+    const recViz = `<div class="ov-bar ${z}">${pct != null ? `<i style="width:${pct}%"></i>` : ''}</div>`;
+    // this week, Monday to Sunday: ring in the planned workout's zone color, filled once ridden; strength / rest = small dot
+    const dayDots = weekKeys.map((k, i) => {
+      const d = dayInfo(k);
+      const st = d.workout ? (d.done ? 'done' : 'plan') : d.done ? 'done' : 'off';
+      return `<span class="wd ${st}${d.isToday ? ' today' : ''}" style="--c:${d.workout ? workoutColor(d.workout) : 'var(--ink)'}"><i></i><em>${'MTWTFSS'[i]}</em></span>`;
+    }).join('');
+    // form on the same fixed -45..+25 scale as the Training strip; marker in whichever of fitness / fatigue is ahead
+    const lo = -45, hi = 25, pos = (v) => ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * 100;
+    const formViz = `<div class="ov-form"><span class="band" style="left:${pos(-10)}%;width:${pos(5) - pos(-10)}%"></span><span class="zero" style="left:${pos(0)}%"></span><span class="mk ${ld.form >= 0 ? 'fit' : 'fat'}" style="left:${pos(ld.form)}%"></span></div>`;
+    // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
+    const wkg = (app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1);
+    const since = dkey(addDays(new Date(), -90));
+    const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [Date.parse(r.id.slice(0, 10) + 'T12:00'), r.ftp]);
+    fp.push([Date.now(), app.settings.ftp]);
+    let ftpViz = '', ftpSub = '';
+    if (fp.length > 1) {
+      const t0 = fp[0][0], t1 = Date.now(), vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
+      const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
+      let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
+      for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
+      ftpViz = `<div class="ov-ftp"><svg viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${d} V28 H0 Z"/><path d="${d}" vector-effect="non-scaling-stroke"/></svg><i style="top:${((Y(app.settings.ftp) / 28) * 100).toFixed(1)}%"></i></div>`;
+      const dW = app.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
+    } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
+    el.innerHTML =
+      dTile('rec-tile', 'Recovery', pct != null ? `<span class="rz ${z}">${pct}%</span>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, recViz, pct != null ? '' : (app.whoop ? 'not scored yet' : 'no WHOOP'))
+      + dTile('', 'This week', `${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, `<div class="ov-week">${dayDots}</div>`, '')
+      + dTile('', 'Form', `${ld.form > 0 ? '+' : ''}${ld.form} <span class="of">${formLabel(ld.form).toLowerCase()}</span>`, formViz, `fitness ${ld.fitness} &middot; fatigue ${ld.fatigue}`, `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`)
+      + dTile('', 'FTP', `${app.settings.ftp} <span class="of">W &middot; <b>${wkg}</b> W/kg</span>`, ftpViz, ftpSub);
+    bindRecoveryAdvice(el);
+    return;
+  }
   el.innerHTML = rec + week + fat + ftp + recCard; // recCard last: the desktop tile borders count children (it's hidden there)
   bindRecoveryAdvice(el);
 }
@@ -1246,17 +1281,11 @@ function svgLoad(series) {
   const cur = FORM_BANDS.find(([l, h]) => now > l && now <= h) || (now > 0 ? FORM_BANDS[0] : FORM_BANDS.at(-1));
   const bands = FORM_BANDS.map(([l, h, name], j) => `<rect x="30" y="${f(B(h))}" width="${W - 40}" height="${f(B(l) - B(h))}" fill="${INK}" opacity="${j % 2 ? 0.045 : 0.0}"/>`
     + `<text x="${PR + 10}" y="${f((B(l) + B(h)) / 2 + 4)}" fill="${name === cur[2] ? INK : MUTED}" font-size="${11 * k}" font-weight="${name === cur[2] ? 700 : 400}">${name}</text>`).join('');
-  // legend stacked in the label column, so it can never sit on the lines
-  // legend words in ink (muted for the note); only the swatch carries the data color (cyan text is 2.8:1 on the sheet)
-  const lg = (i, fill, txt) => `<text x="${PR + 10}" y="${f((14 + 16 * i) * k)}" fill="${fill === MUTED ? MUTED : INK}" font-size="${11 * k}">${txt.replace('&#9632;', `<tspan fill="${fill}">&#9632;</tspan>`)}</text>`;
-  let legend = lg(0, FITNESS, '&#9632; Fitness') + lg(1, FATIGUE, '&#9632; Fatigue') + (ph ? '' : lg(2.25, MUTED, 'Form = fitness') + lg(3.25, MUTED, 'minus fatigue'));
-  if (ph) {
-    // phone (premium look, Nov 12): today's fitness and fatigue at the line ends, in their colors; the higher one on top
-    const e = loadNow(series.at(-1)), blk = 50, mid = Math.min(Math.max((Y(e.fitness) + Y(e.fatigue)) / 2, blk + 4), top + 20 - blk);
-    const end = (v, col, name, y) => `<text x="${PR + 12}" y="${f(y + 26)}" fill="${col}" font-size="${15 * k}" font-weight="700">${v}</text><text x="${PR + 12}" y="${f(y + 46)}" fill="${MUTED}" font-size="${10.5 * k}">${name}</text>`;
-    const fitTop = e.fitness >= e.fatigue;
-    legend = end(e.fitness, FITNESS, 'Fitness', fitTop ? mid - blk : mid) + end(e.fatigue, FATIGUE, 'Fatigue', fitTop ? mid : mid - blk);
-  }
+  // premium look (phone Nov 12, desktop Nov 13): today's fitness and fatigue at the line ends, in their colors; the higher one on top
+  const e = loadNow(series.at(-1)), blk = ph ? 50 : 44, mid = Math.min(Math.max((Y(e.fitness) + Y(e.fatigue)) / 2, blk + 4), top + 20 - blk);
+  const end = (v, col, name, y) => `<text x="${PR + 12}" y="${f(y + (ph ? 26 : 24))}" fill="${col}" font-size="${(ph ? 15 : 24) * k}" font-weight="700">${v}</text><text x="${PR + 12}" y="${f(y + (ph ? 46 : 40))}" fill="${MUTED}" font-size="${(ph ? 10.5 : 12.5) * k}">${name}</text>`;
+  const fitTop = e.fitness >= e.fatigue;
+  const legend = end(e.fitness, FITNESS, 'Fitness', fitTop ? mid - blk : mid) + end(e.fatigue, FATIGUE, 'Fatigue', fitTop ? mid : mid - blk);
   const bw = Math.max(1, (PR - 30) / n - 1);
   const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
   const m1 = series.findIndex((d) => d.date.endsWith('-01')), first = m1 < 0 || m1 >= (ph ? 16 : 10); // drop the first date if it would run into the 1st of the month
@@ -1294,37 +1323,42 @@ function svgWeekly(weeks) {
       .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
     const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours} h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
     const cur = i === n - 1, lab = cur ? INK : MUTED, wt = cur ? ' font-weight="700"' : '';
-    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${phone ? h + 8 : h}" rx="${phone ? 6 : 2}"/></clipPath><g${phone ? ' filter="url(#wk-glow)"' : ''}><g clip-path="url(#wk-c${i})">${segs}</g></g></g>
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h + 8}" rx="6"/></clipPath><g filter="url(#wk-glow)"><g clip-path="url(#wk-c${i})">${segs}</g></g></g>
       ${w.tss ? `<text x="${cx}" y="${base - h - 6}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text>` : ''}
       <text x="${cx}" y="${base + 17}" text-anchor="middle" fill="${lab}" font-size="12"${wt}>${fmtDay(w.start)}</text>
       <text x="${cx}" y="${base + 33}" text-anchor="middle" fill="${MUTED}" font-size="12"${wt}>${w.rides ? `${w.hours} h` : '-'}</text>`;
   }).join('');
   const hrOnly = weeks.some((w) => w.otherTss > 0);
   const legend = `<div class="wk-legend"><span class="wk-key">Number on bar = training stress (TSS). Below: week starting, hours ridden.</span>${ZONES.slice(0, 6).map((z) => `<span><i style="background:var(--${z.color})"></i>Z${z.z}</span>`).join('')}${hrOnly ? '<span><i class="hr"></i>HR only (no power)</span>' : ''}</div>`;
-  // phone (premium look): each bar glows in its own zone colors
-  const glow = phone ? '<filter id="wk-glow" x="-40%" y="-20%" width="180%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".45"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' : '';
+  // premium look (phone and desktop): each bar glows in its own zone colors, round tops
+  const glow = '<filter id="wk-glow" x="-40%" y="-20%" width="180%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".45"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs>${glow}<pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
     <line x1="4" x2="${W - 4}" y1="${base}" y2="${base}" stroke="${RULE}"/>${bars}</svg>${legend}`;
 }
 
+/** Power curve (premium look): orange line with a glow and a soft orange fill. Agustín's call (Nov 12, "I actually liked
+ *  the orange"; Nov 13, "keep the curve orange" on desktop too): the one exception to the zone-colors-only-on-zone-data rule. */
 function svgCurve(c90, cAll) {
   if (isPhone()) return svgCurvePhone(c90, cAll);
-  const W = 1000, H = 220, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'];
+  const W = 1000, H = 230, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'], C = zoneHex(1.1);
   const max = Math.max(100, ...Object.values(cAll)) * 1.1;
-  const X = (i) => 40 + (i / (CURVE_DURS.length - 1)) * (W - 70);
-  const Y = (w) => 185 - (w / max) * 170;
-  const pts = (c) => CURVE_DURS.map((d, i) => (c[d] ? `${X(i)},${Y(c[d])}` : null)).filter(Boolean).join(' ');
-  const dots = (c, col) => CURVE_DURS.map((d, i) => (c[d] ? `<circle cx="${X(i)}" cy="${Y(c[d])}" r="4" fill="${col}"/><text x="${X(i)}" y="${Y(c[d]) - 9}" text-anchor="middle" fill="${col}" font-size="12">${c[d]}</text>` : '')).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
-    <polyline fill="none" stroke="${FAINT}" stroke-width="2" stroke-dasharray="5 5" points="${pts(cAll)}"/>
-    <polyline fill="none" stroke="${INK}" stroke-width="2.5" points="${pts(c90)}"/>${dots(c90, INK)}
-    ${labels.map((l, i) => `<text x="${X(i)}" y="210" text-anchor="middle" fill="${MUTED}" font-size="12">${l}</text>`).join('')}
-    <text x="${W - 10}" y="14" text-anchor="end" font-size="12"><tspan fill="${INK}">&#9632; Last 90 days</tspan> <tspan fill="${MUTED}">- - All time</tspan></text></svg>`;
+  const X = (i) => 40 + (i / (CURVE_DURS.length - 1)) * (W - 80);
+  const Y = (w) => 195 - (w / max) * 170;
+  const P = (c) => CURVE_DURS.map((d, i) => (c[d] ? [X(i), Y(c[d])] : null)).filter(Boolean);
+  const p90 = P(c90), pAll = P(cAll);
+  const pts = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const area = p90.length > 1 ? `<polygon points="${pts(p90)} ${p90.at(-1)[0].toFixed(1)},195 ${p90[0][0].toFixed(1)},195" fill="url(#pcd-fill)"/>` : '';
+  const dots = CURVE_DURS.map((d, i) => (c90[d] ? `<circle cx="${X(i)}" cy="${Y(c90[d])}" r="4.5" fill="${C}" stroke="${TOK.sheet}" stroke-width="2"/><text x="${X(i)}" y="${Y(c90[d]) - 12}" text-anchor="middle" fill="${INK}" font-size="13.5" font-weight="650">${c90[d]}</text>` : '')).join('');
+  return `<div class="pc-legend"><span><i class="solid"></i>Last 90 days</span><span><i class="dash"></i>All time</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="svgchart">
+    <defs><linearGradient id="pcd-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C}" stop-opacity=".28"/><stop offset="1" stop-color="${C}" stop-opacity="0"/></linearGradient>
+      <filter id="pcd-glow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".6"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    ${area}<polyline fill="none" stroke="${MUTED}" stroke-width="1.5" stroke-dasharray="4 5" points="${pts(pAll)}"/>
+    <polyline fill="none" stroke="${C}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#pcd-glow)" points="${pts(p90)}"/>${dots}
+    ${labels.map((l, i) => `<text x="${X(i)}" y="222" text-anchor="middle" fill="${MUTED}" font-size="12.5">${l}</text>`).join('')}</svg>`;
 }
 
-/** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk. Orange line with a glow and a soft
- *  orange fill, as in the mock. Agustín's call (Nov 12, 11:06 pm, "I actually liked the orange"): an exception to the
- *  zone-colors-only-on-zone-data rule, phone only; desktop keeps the ink curve. */
+/** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk. Same orange as the desktop curve above. */
 function svgCurvePhone(c90, cAll) {
   const W = 340, H = 160, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'], C = zoneHex(1.1);
   const max = Math.max(100, ...Object.values(cAll)) * 1.08;
