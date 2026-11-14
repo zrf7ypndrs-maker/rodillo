@@ -729,18 +729,12 @@ function renderOverview() {
   const weekKeys = Array.from({ length: 7 }, (_, i) => dkey(addDays(monday, i)));
   const ridden = real.filter((r) => weekKeys.includes(r.id.slice(0, 10)));
   const doneSec = ridden.reduce((a, r) => a + (r.durSec || 0), 0);
-  const weekTss = ridden.reduce((a, r) => a + (r.tss || 0), 0);
   // Planned = this week's plan workouts, optional days left out.
   const planned = weekKeys.map(dayInfo).filter((d) => d.workout && !d.optional);
   const planSec = planned.reduce((a, d) => a + totalDuration(d.workout), 0);
-  const tile = (v, l, sub = '', info = '', cls = '') => `<div class="stat${cls ? ` ${cls}` : ''}">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l"><b>${l}</b>${sub ? `<span class="sub">${sub}</span>` : ''}</div></div>`;
-
-  // One slim row under the hero: value big, label + short context on one line.
+  // Recovery: only the % (HRV / RHR / sleep live in the WHOOP app, Agustín, Nov 13). Phone: its own card (ring + the call from
+  // the hero line); the hero line and the tile hide there.
   const w = whoopDay(dkey(new Date()));
-  const rec = w?.recovery != null
-    ? tile(`<span class="rz ${recZone(w.recovery)}">${w.recovery}%</span>`, 'Recovery', '', '', 'rec-tile') // only recovery: HRV / RHR / sleep live in the WHOOP app (Agustín, Nov 13)
-    : tile(`<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, 'Recovery', app.whoop ? 'not scored yet' : 'no WHOOP', '', 'rec-tile');
-  // Phone: recovery gets its own card (ring, the call from the hero line, HRV); the hero line and the tile hide there.
   const today = dayInfo(dkey(new Date()));
   const pct = w?.recovery != null ? w.recovery : null, z = pct != null ? recZone(pct) : '';
   const C = 2 * Math.PI * 27;
@@ -750,53 +744,49 @@ function renderOverview() {
       <div class="rc-ring">${ring}<span class="rc-v">${pct != null ? `${pct}<small>%</small>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`}</span></div>
       <div class="rc-text"><div class="rc-l">Recovery</div>${call}${pct != null ? '' : `<div class="rc-sub">${app.whoop ? 'not scored yet' : 'no WHOOP'}</div>`}</div>
     </div>`;
-  const week = tile(`${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, 'This week',
-    `${ridden.length} ride${ridden.length === 1 ? '' : 's'}${weekTss ? ` &middot; ${weekTss} TSS` : ''}`);
   const ld = loadNow(t);
-  const fat = tile(`${ld.form > 0 ? '+' : ''}${ld.form}`, 'Form', `${formLabel(ld.form).toLowerCase()}<span class="wide-only"> &middot; fitness ${ld.fitness}</span>`,
-    `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`);
   const est = ftpEstimate(real);
-  const ftp = tile(`${app.settings.ftp} W`, 'FTP', `${(app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1)} W/kg${est.fromRamp ? ` &middot; ramp ${est.fromRamp}` : ''}`);
-  if (!isPhone()) {
-    // Desktop (premium look, Nov 13, Agustín): label on top, number, then one small visual per tile. The recovery call stays
-    // in the hero line here (the phone moves it into .rec-card).
-    const dTile = (cls, label, v, viz, sub, info = '') => `<div class="stat ov2 ${cls}">${info ? infoTip(info, label) : ''}<div class="ol">${label}</div><div class="v">${v}</div>${viz}${sub ? `<div class="os">${sub}</div>` : ''}</div>`;
-    const recViz = `<div class="ov-bar ${z}">${pct != null ? `<i style="width:${pct}%"></i>` : ''}</div>`;
-    // this week, Monday to Sunday: ring in the planned workout's zone color, filled once ridden; strength / rest = small dot
-    const dayDots = weekKeys.map((k, i) => {
-      const d = dayInfo(k);
-      const st = d.workout ? (d.done ? 'done' : 'plan') : d.done ? 'done' : 'off';
-      return `<span class="wd ${st}${d.isToday ? ' today' : ''}" style="--c:${d.workout ? workoutColor(d.workout) : 'var(--ink)'}"><i></i><em>${'MTWTFSS'[i]}</em></span>`;
-    }).join('');
-    // form on the same fixed -45..+25 scale as the Training strip; marker in whichever of fitness / fatigue is ahead
-    const lo = -45, hi = 25, pos = (v) => ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * 100;
-    const formViz = `<div class="ov-form"><span class="band" style="left:${pos(-10)}%;width:${pos(5) - pos(-10)}%"></span><span class="zero" style="left:${pos(0)}%"></span><span class="mk ${ld.form >= 0 ? 'fit' : 'fat'}" style="left:${pos(ld.form)}%"></span></div>`;
-    // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
-    const wkg = (app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1);
-    const since = dkey(addDays(new Date(), -90));
-    const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [Date.parse(r.id.slice(0, 10) + 'T12:00'), r.ftp]);
-    fp.push([Date.now(), app.settings.ftp]);
-    let ftpViz = '', ftpSub = '';
-    if (fp.length > 1) {
-      const t0 = fp[0][0], t1 = Date.now(), vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
-      const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
-      let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
-      for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
-      ftpViz = `<div class="ov-ftp"><svg viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${d} V28 H0 Z"/><path d="${d}" vector-effect="non-scaling-stroke"/></svg><i style="top:${((Y(app.settings.ftp) / 28) * 100).toFixed(1)}%"></i></div>`;
-      const dW = app.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
-      ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
-    } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
-    el.innerHTML =
-      dTile('rec-tile', 'Recovery', pct != null ? `<span class="rz ${z}">${pct}%</span>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, recViz, pct != null ? '' : (app.whoop ? 'not scored yet' : 'no WHOOP'))
-      + dTile('', 'This week', `${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, `<div class="ov-week">${dayDots}</div>`, '')
-      + dTile('', 'Form', `${ld.form > 0 ? '+' : ''}${ld.form} <span class="of">${formLabel(ld.form).toLowerCase()}</span>`, formViz, `fitness ${ld.fitness} &middot; fatigue ${ld.fatigue}`, `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`)
-      + dTile('', 'FTP', `${app.settings.ftp} <span class="of">W &middot; <b>${wkg}</b> W/kg</span>`, ftpViz, ftpSub);
-    bindRecoveryAdvice(el);
-    return;
-  }
-  el.innerHTML = rec + week + fat + ftp + recCard; // recCard last: the desktop tile borders count children (it's hidden there)
+  // Premium look tiles (desktop Nov 13; phone too since Nov 13, 10:45 pm): label on top, number, then one small visual per
+  // tile. Desktop: four tiles, the recovery call stays in the hero line. Phone: the recovery card above, then three tiles.
+  const ph = isPhone();
+  const dTile = (cls, label, v, viz, sub, info = '') => `<div class="stat ov2 ${cls}">${info ? infoTip(info, label) : ''}<div class="ol">${label}</div><div class="v">${v}</div>${viz}${sub ? `<div class="os">${sub}</div>` : ''}</div>`;
+  const recViz = `<div class="ov-bar ${z}">${pct != null ? `<i style="width:${pct}%"></i>` : ''}</div>`;
+  // this week, Monday to Sunday: ring in the planned workout's zone color, filled once ridden; strength / rest = small dot
+  const dayDots = weekKeys.map((k, i) => {
+    const d = dayInfo(k);
+    const st = d.workout ? (d.done ? 'done' : 'plan') : d.done ? 'done' : 'off';
+    return `<span class="wd ${st}${d.isToday ? ' today' : ''}" style="--c:${d.workout ? workoutColor(d.workout) : 'var(--ink)'}"><i></i><em>${'MTWTFSS'[i]}</em></span>`;
+  }).join('');
+  // form on the same fixed -45..+25 scale as the Training strip; marker in whichever of fitness / fatigue is ahead
+  const lo = -45, hi = 25, pos = (v) => ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * 100;
+  const formViz = `<div class="ov-form"><span class="band" style="left:${pos(-10)}%;width:${pos(5) - pos(-10)}%"></span><span class="zero" style="left:${pos(0)}%"></span><span class="mk ${ld.form >= 0 ? 'fit' : 'fat'}" style="left:${pos(ld.form)}%"></span></div>`;
+  // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
+  const wkg = (app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1);
+  const since = dkey(addDays(new Date(), -90));
+  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [Date.parse(r.id.slice(0, 10) + 'T12:00'), r.ftp]);
+  fp.push([Date.now(), app.settings.ftp]);
+  let ftpViz = '', ftpSub = '';
+  if (fp.length > 1) {
+    const t0 = fp[0][0], t1 = Date.now(), vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
+    const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
+    let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
+    for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
+    ftpViz = `<div class="ov-ftp"><svg viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${d} V28 H0 Z"/><path d="${d}" vector-effect="non-scaling-stroke"/></svg><i style="top:${((Y(app.settings.ftp) / 28) * 100).toFixed(1)}%"></i></div>`;
+    const dW = app.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
+  } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
+  el.innerHTML =
+    dTile('rec-tile', 'Recovery', pct != null ? `<span class="rz ${z}">${pct}%</span>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, recViz, pct != null ? '' : (app.whoop ? 'not scored yet' : 'no WHOOP'))
+    + dTile('', 'This week', `${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, `<div class="ov-week">${dayDots}</div>`, '')
+    + (ph
+      ? dTile('', 'Form', `${ld.form > 0 ? '+' : ''}${ld.form}`, formViz, formLabel(ld.form).toLowerCase(), `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`)
+        + dTile('', 'FTP', `${app.settings.ftp} <span class="of">W</span>`, ftpViz, `${wkg} W/kg`)
+        + recCard // last: the phone pulls it to the top with order: -1
+      : dTile('', 'Form', `${ld.form > 0 ? '+' : ''}${ld.form} <span class="of">${formLabel(ld.form).toLowerCase()}</span>`, formViz, `fitness ${ld.fitness} &middot; fatigue ${ld.fatigue}`, `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`)
+        + dTile('', 'FTP', `${app.settings.ftp} <span class="of">W &middot; <b>${wkg}</b> W/kg</span>`, ftpViz, ftpSub));
   bindRecoveryAdvice(el);
-}
+  return;
+  }
 
 // ------------------------------------------------------------------ plan: week carousel + calendar
 const dkey = (d) => d.toLocaleDateString('en-CA');
