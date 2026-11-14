@@ -249,7 +249,7 @@ async function loadCoachData() {
   if (!gh) return;
   try {
     const [p, w, m] = await Promise.all([gh.getJson(PLAN_PATH), gh.getJson(WORKOUTS_PATH), gh.getJson(MINE_PATH)]);
-    app.coachPlan = p?.json || null;
+    app.coachPlan = p?.json || (await starterPlan(gh));
     app.coachWorkouts = w?.json?.workouts || [];
     app.mineDoc = m?.json || emptyMine();
     ls.set('mineDoc', app.mineDoc);
@@ -258,13 +258,30 @@ async function loadCoachData() {
     ls.set('coachPlan', app.coachPlan);
     ls.set('coachWorkouts', app.coachWorkouts);
     app.coachError = null;
+    app.coachNoRepo = null;
     applyLibrary();
     flushMine(gh);
   } catch (e) {
     app.coachError = e.message;
+    app.coachNoRepo = e.noRepo || null;
     logMsg('coach', `could not load coach data: ${e.message}`);
     renderWeek();
   }
+}
+
+/**
+ * A friend's own data repo (not Agustín's) with no plan yet: create an empty one, so settings sync has
+ * somewhere to go and the home screen doesn't fall back to Agustín's public plan. A repo this sign-in
+ * can't reach (GitHub App not installed on it) is reported instead. Never runs on DEFAULT_REPO.
+ */
+async function starterPlan(gh) {
+  if (gh.repo.toLowerCase() === DEFAULT_REPO.toLowerCase()) return null;
+  if (!(await gh.api(''))) throw Object.assign(new Error(`can't reach ${gh.repo}`), { noRepo: gh.repo });
+  const plan = { name: 'My plan', ftp: app.settings.ftp, days: {} };
+  try { await gh.putJson(PLAN_PATH, plan, 'Start my plan'); }
+  catch (e) { if (e.status !== 409 && e.status !== 422) throw e; return (await gh.getJson(PLAN_PATH))?.json || null; }
+  logMsg('coach', `created ${PLAN_PATH} in ${gh.repo}`);
+  return plan;
 }
 
 /**
@@ -888,6 +905,7 @@ function renderHero() {
   const date = new Date(today.key + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const src = !app.plan ? '' : !syncClient()
     ? `<p class="plan-src">Showing the public copy of the plan. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to get the coach's daily changes on this device.</p>`
+    : app.coachNoRepo ? `<p class="plan-src">Can't reach your data repo <b>${esc(app.coachNoRepo)}</b>. Create it on GitHub (private) and install the Rodillo GitHub App on it, then reload. Another repo name goes in <a href="#" data-open-settings="sync">Settings</a>.</p>`
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check sync in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
   const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free"><span class="hs-label">${primary ? 'Start free ride' : 'Free ride'}</span>${BIKE_ICO}</button>`;
   let body;
@@ -1376,7 +1394,7 @@ async function renderTraining() {
   const cfg = ls.get('sync', {});
   const at = ls.get('remoteIndexAt');
   $('#sync-status').innerHTML = syncClient()
-    ? `Synced with <b>${esc(cfg.repo || DEFAULT_REPO)}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
+    ? `Synced with <b>${esc(dataRepo())}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
     : `History is only on this device. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.`;
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
@@ -1766,9 +1784,21 @@ async function saveRide(status) {
 // GitHub sign-in wins over a pasted token; the token stays as the fallback.
 function syncClient() {
   const cfg = ls.get('sync', {});
-  const repo = cfg.repo || DEFAULT_REPO;
+  const repo = dataRepo();
   if (authEnabled() && authSession()) return new GitHubSync({ token: authToken, repo });
   return cfg.token ? new GitHubSync({ token: cfg.token, repo }) : null;
+}
+/**
+ * The data repo this browser syncs with: the one typed in Settings > Sync, else the signed-in user's own
+ * <login>/rodillo-data (so a friend who signs in gets their own repo with nothing to type), else Agustín's.
+ * A saved DEFAULT_REPO doesn't stick to someone else's sign-in.
+ */
+function dataRepo() {
+  const cfg = ls.get('sync', {});
+  const s = authEnabled() ? authSession() : null;
+  const own = s?.login ? `${s.login}/rodillo-data` : null;
+  if (cfg.repo && !(own && cfg.repo.toLowerCase() === DEFAULT_REPO.toLowerCase())) return cfg.repo;
+  return own || cfg.repo || DEFAULT_REPO;
 }
 const signedIn = () => !!syncClient();
 /** Lost access to rodillo-data: the builder can't save anymore, close it (unsaved edits are dropped). */
@@ -3969,7 +3999,7 @@ $('#btn-settings').onclick = () => {
   renderSettings();
   const cfg = ls.get('sync', {});
   $('#set-token').value = cfg.token || '';
-  $('#set-repo').value = cfg.repo || DEFAULT_REPO;
+  $('#set-repo').value = dataRepo();
   $('#token-status').textContent = cfg.token ? 'Token saved' : '';
   renderSignIn();
   setDevPop(false);
@@ -3980,9 +4010,13 @@ $('#btn-settings').onclick = () => {
 };
 $('#btn-token').onclick = async () => {
   const token = $('#set-token').value.trim();
-  const repo = $('#set-repo').value.trim() || DEFAULT_REPO;
+  const repo = $('#set-repo').value.trim() || dataRepo();
   const st = $('#token-status');
-  if (!token) { ls.set('sync', { repo }); st.textContent = 'Sync turned off'; closeBuilderNow(); applyLibrary(); return; }
+  if (!token) {
+    ls.set('sync', { repo });
+    if (authEnabled() && authSession()) { st.textContent = 'Saved. Loading...'; await loadCoachData(); st.textContent = app.coachError || `Syncing with ${repo}`; renderHero(); return; }
+    st.textContent = 'Sync turned off'; closeBuilderNow(); applyLibrary(); return;
+  }
   st.textContent = 'Testing...';
   try {
     await new GitHubSync({ token, repo }).test();
