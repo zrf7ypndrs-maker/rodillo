@@ -1313,20 +1313,19 @@ function svgWeekly(weeks) {
       .map(([t, z]) => `Z${z + 1} ${Math.round(t)}`).concat(w.otherTss >= 1 ? [`HR only ${Math.round(w.otherTss)}`] : []);
     const tip = `Week of ${fmtDay(w.start)}: ${w.tss} TSS, ${w.hours} h${byZone.length ? `\n${byZone.join(' · ')}` : ''}`;
     const cur = i === n - 1, lab = cur ? INK : MUTED, wt = cur ? ' font-weight="700"' : '';
-    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h + 8}" rx="6"/></clipPath><g${phone ? '' : ' filter="url(#wk-glow)"'}><g clip-path="url(#wk-c${i})">${segs}</g></g></g>
+    return `<g><title>${esc(tip)}</title><clipPath id="wk-c${i}"><rect x="${bx}" y="${base - h}" width="${bwid}" height="${h + 8}" rx="6"/></clipPath><g clip-path="url(#wk-c${i})">${segs}</g></g>
       ${w.tss ? `<text x="${cx}" y="${base - h - 6}" text-anchor="middle" fill="${INK}" font-size="14" font-weight="700">${w.tss}</text>` : ''}
       <text x="${cx}" y="${base + 17}" text-anchor="middle" fill="${lab}" font-size="12"${wt}>${fmtDay(w.start)}</text>
       <text x="${cx}" y="${base + 33}" text-anchor="middle" fill="${MUTED}" font-size="12"${wt}>${w.rides ? `${w.hours} h` : '-'}</text>`;
   }).join('');
   const hrOnly = weeks.some((w) => w.otherTss > 0);
   const legend = `<div class="wk-legend"><span class="wk-key">Number on bar = training stress (TSS). Below: week starting, hours ridden.</span>${ZONES.slice(0, 6).map((z) => `<span><i style="background:var(--${z.color})"></i>Z${z.z}</span>`).join('')}${hrOnly ? '<span><i class="hr"></i>HR only (no power)</span>' : ''}</div>`;
-  // premium look: round tops on both; the zone-color glow is desktop only (phone glow removed, Agustín, Nov 13)
-  const glow = phone ? '' : '<filter id="wk-glow" x="-40%" y="-20%" width="180%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".45"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs>${glow}<pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
+  // premium look: round tops, no glow (phone Nov 13, desktop Nov 16, Agustín)
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgchart"><defs><pattern id="wk-hr" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="${UNDERLAY}"/><line x1="0" y1="0" x2="0" y2="5" stroke="${FAINT}" stroke-width="2"/></pattern></defs>
     <line x1="4" x2="${W - 4}" y1="${base}" y2="${base}" stroke="${RULE}"/>${bars}</svg>${legend}`;
 }
 
-/** Power curve (premium look): orange line with a glow and a soft orange fill. Agustín's call (Nov 12, "I actually liked
+/** Power curve (premium look): orange line and a soft orange fill, no glow (Nov 16). Agustín's call (Nov 12, "I actually liked
  *  the orange"; Nov 13, "keep the curve orange" on desktop too): the one exception to the zone-colors-only-on-zone-data rule. */
 function svgCurve(c90, cAll) {
   if (isPhone()) return svgCurvePhone(c90, cAll);
@@ -1341,15 +1340,14 @@ function svgCurve(c90, cAll) {
   const dots = CURVE_DURS.map((d, i) => (c90[d] ? `<circle cx="${X(i)}" cy="${Y(c90[d])}" r="4.5" fill="${C}" stroke="${TOK.sheet}" stroke-width="2"/><text x="${X(i)}" y="${Y(c90[d]) - 12}" text-anchor="middle" fill="${INK}" font-size="13.5" font-weight="650">${c90[d]}</text>` : '')).join('');
   return `<div class="pc-legend"><span><i class="solid"></i>Last 90 days</span><span><i class="dash"></i>All time</span></div>
     <svg viewBox="0 0 ${W} ${H}" class="svgchart">
-    <defs><linearGradient id="pcd-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C}" stop-opacity=".28"/><stop offset="1" stop-color="${C}" stop-opacity="0"/></linearGradient>
-      <filter id="pcd-glow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".6"/></feComponentTransfer><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <defs><linearGradient id="pcd-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C}" stop-opacity=".28"/><stop offset="1" stop-color="${C}" stop-opacity="0"/></linearGradient></defs>
     ${area}<polyline fill="none" stroke="${MUTED}" stroke-width="1.5" stroke-dasharray="4 5" points="${pts(pAll)}"/>
-    <polyline fill="none" stroke="${C}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#pcd-glow)" points="${pts(p90)}"/>${dots}
+    <polyline fill="none" stroke="${C}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${pts(p90)}"/>${dots}
     ${labels.map((l, i) => `<text x="${X(i)}" y="222" text-anchor="middle" fill="${MUTED}" font-size="12.5">${l}</text>`).join('')}</svg>`;
 }
 
 /** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk. Same orange as the desktop curve above,
- *  no glow on the phone (Agustín, Nov 13). */
+ *  no glow (Agustín, Nov 13). */
 function svgCurvePhone(c90, cAll) {
   const W = 340, H = 160, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'], C = zoneHex(1.1);
   const max = Math.max(100, ...Object.values(cAll)) * 1.08;

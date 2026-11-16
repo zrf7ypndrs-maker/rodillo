@@ -1966,7 +1966,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .cal-detail .wo-meta .n { font-size: 16px; }
   .cal-detail button { border-radius: 999px; }
 
-  /* training: one stats card, round cards, glowing bars, table without hairlines */
+  /* training: one stats card, round cards, bars without glow (Nov 16), table without hairlines */
   .stats.tcards { padding: 20px 8px; border-radius: 16px; background: var(--sheet); box-shadow: var(--card-shadow); margin-bottom: 18px; }
   .stats.tcards > .stat:nth-child(n) { border: none; padding: 0 18px 0 20px; }
   .stats.tcards .stat .v { font-size: 36px; }
@@ -1974,7 +1974,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .stats.tcards .info { top: 0; right: 14px; }
   #home .card { border-radius: 16px; padding: 22px 24px; box-shadow: var(--card-shadow); }
   #home .zb-bar { height: 10px; border-radius: 5px; background: var(--sheet2); overflow: visible; }
-  #home .zb-bar i { border-radius: 5px; box-shadow: 0 0 9px color-mix(in srgb, currentColor 50%, transparent); }
+  #home .zb-bar i { border-radius: 5px; } /* no glow (Nov 16, as on the phone) */
   .pc-legend { display: flex; justify-content: flex-end; gap: 14px; margin: -30px 0 18px; font-size: 12px; color: var(--muted); }
   .pc-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .pc-legend i { display: inline-block; width: 14px; }
