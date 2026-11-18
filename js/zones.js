@@ -34,3 +34,6 @@ export function zoneRange(i, ftp) {
   const lo = i === 0 ? 0 : top(ZONES[i - 1].max) + 1;
   return max === Infinity ? `${lo}+ W` : `${lo}-${top(max)} W`;
 }
+
+/** ERG steps at or above this fraction of FTP (start of Tempo) are work: they count toward interval compliance. */
+export const WORK_FTP = 0.76;

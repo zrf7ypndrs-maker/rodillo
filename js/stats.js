@@ -2,7 +2,7 @@
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
-import { ZONES, zoneOfWatts } from './zones.js?v=202611102147';
+import { ZONES, zoneOfWatts, WORK_FTP } from './zones.js?v=202611102147';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -81,7 +81,7 @@ export function intervalResults(samples, segs, ftp) {
         const eff = Math.round(mean(xs.filter((s) => s.plan).map((s) => s.eff ?? 1)) * 100);
         if (eff !== 100) res.effort = eff; // average effort over the rep, in %
       }
-      res.work = mean([seg.from, seg.to]) >= 0.85;
+      res.work = mean([seg.from, seg.to]) >= WORK_FTP; // tempo and up, same line as mainSet() in engine/workout.js
     } else {
       res.grade = r1(mean(xs.map((s) => s.grade || 0)));
       res.work = seg.grade >= 0.04;

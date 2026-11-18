@@ -14,6 +14,21 @@ assert.equal(b[300], 300); assert.equal(b[60], 300); assert.equal(b[1200], Math.
 assert.ok(normalizedPower(p) > 190 && normalizedPower(p) < 230);
 ok('bests and NP');
 
+// ---- tempo block (80% FTP) is work: a Z2 + tempo ride gets an intervals %
+{
+  const segs2 = [
+    { label: 'Zone 2', kind: 'erg', dur: 600, start: 0, end: 600, from: 0.68, to: 0.68 },
+    { label: 'Steady tempo', kind: 'erg', dur: 1200, start: 600, end: 1800, from: 0.8, to: 0.8 },
+    { label: 'Zone 2', kind: 'erg', dur: 600, start: 1800, end: 2400, from: 0.68, to: 0.68 },
+  ];
+  const t1 = Date.parse('2026-11-17T19:20:00');
+  const sm = Array.from({ length: 2400 }, (_, t) => { const g = segs2.find((s) => t < s.end); const w = Math.round(g.from * 217); return { t: t1 + t * 1000, wt: t, power: w, target: w, hr: 150, cadence: 90, speed: 9, distance: t * 9, grade: 0 }; });
+  const r2 = buildRide(sm, { name: 'Zone 2 + 20 min tempo', ftp: 217, startMs: t1, segs: segs2 });
+  assert.deepEqual(r2.intervals.map((x) => x.work), [false, true, false]);
+  assert.deepEqual(r2.summary.compliance, { avg: 100, min: 100, reps: 1 });
+}
+ok('tempo counts as work');
+
 // ---- decoupling: steady power, HR drifting up 8% in second half
 const N = 3600;
 const pw = Array(N).fill(140), hr = Array.from({ length: N }, (_, i) => (i < 1950 ? 130 : 141));

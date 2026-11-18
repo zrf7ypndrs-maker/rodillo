@@ -6,7 +6,7 @@
 // rides/YYYY/<id>.json): { summary, intervals, streams: { power, hr, cadence, speed (m/s),
 // grade (%), target, gear, seg }, laps }. Imported rides can miss power, grade and target.
 
-import { ZONES, zoneOf, zoneRange } from './zones.js?v=202611102147';
+import { ZONES, zoneOf, zoneRange, WORK_FTP } from './zones.js?v=202611102147';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -55,7 +55,7 @@ export function rideSegs(doc, wsegs = null) {
     if (!w && !r) return null;
     return {
       label: r?.label ?? w?.label ?? '', rep: r?.rep ?? (w?.rep ? `${w.rep.i}/${w.rep.of}` : undefined),
-      kind: w?.kind ?? r?.kind ?? 'erg', work: r ? !!r.work : w?.kind === 'erg' ? (w.from + w.to) / 2 >= 0.85 : (w?.grade || 0) >= 0.04,
+      kind: w?.kind ?? r?.kind ?? 'erg', work: r ? !!r.work : w?.kind === 'erg' ? (w.from + w.to) / 2 >= WORK_FTP : (w?.grade || 0) >= 0.04,
       cad: w?.cad || null, from: w?.from, to: w?.to, grade: w?.grade ?? (r?.grade != null ? r.grade / 100 : undefined), res: r || null,
     };
   };
