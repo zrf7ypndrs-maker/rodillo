@@ -1303,6 +1303,7 @@ function onButton(b, dev) {
   const now = performance.now();
   if (now - (lastPress[b] || 0) < 90) return;
   lastPress[b] = now;
+  app.usedNav = true; // a controller press is navigation like a key: home shows its focus ring
   if (SHIFT_BUTTONS.has(b)) { logMsg('controller', `${dev?.side || ''} ${b}`); return onShiftButton(b); }
   const a = BUTTON_ACTIONS[b];
   logMsg('controller', `${dev?.side || ''} ${b}${a ? ' -> ' + a : ''}`);
