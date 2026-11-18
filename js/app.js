@@ -23,6 +23,7 @@ import { initTraining, renderTraining } from './training.js?v=202611102147';
 import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, previewOf, gradeBand } from './library.js?v=202611102147';
 import { initToday, renderHero, renderWeek, renderCalendar, refreshPlanViews, trainingRows, whoopDay, recZone, BIKE_ICO } from './today.js?v=202611102147';
 import { $, $$, esc, reducedMotion, toast, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
+import { screenOf, actionFor, BUTTON_VERBS, SHIFT_BUTTONS, isLeft, buttonPlan, shiftFor, pairsFront, keyVerb } from './controls.js?v=202611102147';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
@@ -1129,7 +1130,8 @@ function bindRideChart() {
   });
 }
 
-function rideAction(a) {
+/** Controller / keyboard on the ride page: what = back | select | prev | next | up | down (js/controls.js page*). */
+function rideAction(what) {
   const segs = rd.segs.filter((s) => s.res);
   const step = (d) => {
     if (!segs.length) return;
@@ -1137,11 +1139,11 @@ function rideAction(a) {
     const n = k < 0 ? (d > 0 ? 0 : segs.length - 1) : Math.max(0, Math.min(segs.length - 1, k + d));
     selectRideSeg(segs[n].i, true);
   };
-  switch (a) {
+  switch (what) {
     case 'back': if (rd.sel != null) selectRideSeg(null); else closeRide(); break;
     case 'select': if (rd.done) closeRide(); break;
-    case 'left': case 'easier': step(-1); break;
-    case 'right': case 'harder': step(+1); break;
+    case 'prev': step(-1); break;
+    case 'next': step(+1); break;
     case 'up': window.scrollBy({ top: -240, behavior: 'smooth' }); break;
     case 'down': window.scrollBy({ top: 240, behavior: 'smooth' }); break;
   }
@@ -1177,107 +1179,61 @@ let rdResize = 0;
 window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return; cancelAnimationFrame(rdResize); rdResize = requestAnimationFrame(drawRideChart); });
 
 // ------------------------------------------------------------------ actions (controller + keyboard)
-function action(a, src = 'tap') {
-  if (app.launching) return;
-  if (modalOpen()) return modalAction(a);
-  if (builderOpen()) { if (a === 'back') closeBuilder(); return; } // the builder is keyboard/touch only
-  if (app.screen === 'ridepage') return rideAction(a);
-  const s = app.session;
-  // a panel or the connections popover opened from the pause screen: B / Esc closes it, it doesn't end the ride
-  if (app.screen === 'ride' && a === 'back' && (devPopOpen() || $$('.panel').some((p) => !p.classList.contains('hidden')))) {
-    $$('.panel').forEach((p) => p.classList.add('hidden'));
-    setDevPop(false);
-    return;
-  }
-  if (app.screen === 'ride' && s) {
-    switch (a) {
-      case 'easier': if (s.mode === 'erg') return action('down'); s.shift(-1); break;
-      case 'harder': if (s.mode === 'erg') return action('up'); s.shift(+1); break;
-      case 'front': if (s.gb.isDouble) s.toggleFront(); else toast('1x: no front shifting'); break;
-      case 'up': s.bump(+1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
-      case 'down': s.bump(-1); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); break;
-      case 'select': s.togglePause(); break;
-      case 'back': holdStart('end', src); break;
-      case 'skip': holdStart('skip', src); break;
-      case 'lap': if (s.seg) toast('Laps are automatic per interval'); else s.lap(); break;
-      case 'ergToggle': if (s.segs) { s.toggleErg(); toast(s.ergOff ? 'ERG off: slope mode' : 'ERG on'); } break;
-    }
-    renderRide();
-    return;
-  }
-  // home navigation
-  const items = focusables();
-  switch (a) {
-    case 'up': case 'easier': app.focus = Math.max(0, app.focus - 1); applyFocus(); break;
-    case 'down': case 'harder': app.focus = Math.min(items.length - 1, app.focus + 1); applyFocus(); break;
-    case 'left': case 'right': {
-      const i = (TABS.indexOf(app.tab) + (a === 'right' ? 1 : -1) + TABS.length) % TABS.length;
-      setTab(TABS[i]);
-      break;
-    }
-    case 'select': {
-      const el = items[app.focus];
-      if (!el) break;
-      if (el.classList.contains('day')) el.querySelector('[data-startday]')?.click();
-      else if (el.dataset.i !== undefined) startWorkout(app.library[+el.dataset.i]);
-      else el.click();
-      break;
-    }
-    case 'back': $$('.panel').forEach((p) => p.classList.add('hidden')); setDevPop(false); break;
-  }
-}
+// What each Ride button, key and on-screen verb does on each screen is js/controls.js (pure, tested in
+// test/controls.mjs): screenOf() + actionFor() name the action, and this table runs it.
+const controlState = () => ({
+  launching: app.launching, modal: modalOpen(), builder: builderOpen(), screen: app.screen, session: !!app.session,
+  erg: app.session?.mode === 'erg', panel: devPopOpen() || $$('.panel').some((p) => !p.classList.contains('hidden')),
+});
 const fmtGradeSet = (s) => `${(s.gradeOffset * 100).toFixed(0)}%`;
-
-const BUTTON_ACTIONS = {
-  up: 'up', down: 'down', left: 'left', right: 'right',
-  a: 'select', b: 'back', y: 'skip', z: 'lap', // ERG off is on screen only (button / phone sheet / E key)
+// ERG: effort +-1%; slope: grade +-1%
+const bump = (dir) => { const s = app.session; s.bump(dir); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); };
+const DO = {
+  // home: the focus ring moves through the tab's controller list (focusables()), left / right switch tabs
+  focusPrev: () => { app.focus = Math.max(0, app.focus - 1); applyFocus(); },
+  focusNext: () => { app.focus = Math.min(focusables().length - 1, app.focus + 1); applyFocus(); },
+  tabPrev: () => setTab(TABS[(TABS.indexOf(app.tab) - 1 + TABS.length) % TABS.length]),
+  tabNext: () => setTab(TABS[(TABS.indexOf(app.tab) + 1) % TABS.length]),
+  pick: () => {
+    const el = focusables()[app.focus];
+    if (!el) return;
+    if (el.classList.contains('day')) el.querySelector('[data-startday]')?.click();
+    else if (el.dataset.i !== undefined) startWorkout(app.library[+el.dataset.i]);
+    else el.click();
+  },
+  // home, or a panel / Connections opened from the pause screen (it doesn't end the ride)
+  closePanels: () => { $$('.panel').forEach((p) => p.classList.add('hidden')); setDevPop(false); },
+  // the ride
+  effortUp: () => bump(+1), effortDown: () => bump(-1), gradeUp: () => bump(+1), gradeDown: () => bump(-1),
+  shiftEasier: () => app.session.shift(-1), shiftHarder: () => app.session.shift(+1),
+  front: () => { const s = app.session; if (s.gb.isDouble) s.toggleFront(); else toast('1x: no front shifting'); },
+  pause: () => app.session.togglePause(),
+  holdEnd: (src) => holdStart('end', src),
+  holdSkip: (src) => holdStart('skip', src),
+  lap: () => { const s = app.session; if (s.seg) toast('Laps are automatic per interval'); else s.lap(); },
+  ergToggle: () => { const s = app.session; if (s.segs) { s.toggleErg(); toast(s.ergOff ? 'ERG off: slope mode' : 'ERG on'); } },
+  // the ride page, a modal, the builder (keyboard / touch only: B or Esc closes it)
+  pageBack: () => rideAction('back'), pageSelect: () => rideAction('select'), pagePrev: () => rideAction('prev'),
+  pageNext: () => rideAction('next'), pageUp: () => rideAction('up'), pageDown: () => rideAction('down'),
+  modalFirst: (src, a) => modalAction('first', a), modalLast: (src, a) => modalAction('last', a),
+  modalPress: (src, a) => modalAction('press', a), modalCancel: (src, a) => modalAction('cancel', a),
+  closeBuilder: () => closeBuilder(),
 };
-const SHIFT_BUTTONS = new Set(['shiftUpL', 'shiftDnL', 'paddleL', 'shiftUpR', 'shiftDnR', 'paddleR']);
-const isLeft = (b) => b.endsWith('L');
-
-/**
- * Shifting styles on the Zwift Ride:
- *  SRAM:    right side (both buttons + paddle) = harder, left side = easier,
- *           left + right together = front shift (2x only).
- *  Shimano: right shift-up = harder, right shift-down = easier (rear);
- *           left shift-up = big ring, left shift-down = small ring (2x);
- *           paddles: right harder / left easier. On 1x the left buttons also shift the rear.
- *  1x:      the shifter's side only ('right' or 'left', per bike): that side's shift-up and paddle = harder,
- *           its shift-down = easier. The other side doesn't shift. SRAM / Shimano only apply to 2x.
- */
-function shiftFor(b) {
-  const s = app.session;
-  const style = app.settings.shiftStyle || 'sram';
-  const double = s?.gb.isDouble;
-  if (!double && !s?.gb.seq) {
-    const side = style === 'left' ? 'L' : 'R';
-    if (b === `shiftUp${side}` || b === `paddle${side}`) return ['rear', +1];
-    if (b === `shiftDn${side}`) return ['rear', -1];
-    return null;
-  }
-  if (style === 'shimano') {
-    if (b === 'shiftUpR' || b === 'paddleR') return ['rear', +1];
-    if (b === 'shiftDnR' || b === 'paddleL') return ['rear', -1];
-    if (b === 'shiftUpL') return double ? ['front', +1] : ['rear', +1];
-    if (b === 'shiftDnL') return double ? ['front', -1] : ['rear', -1];
-  }
-  return ['rear', isLeft(b) ? -1 : +1];
+/** Run a verb (up, down, left, right, select, back, skip, lap, ergToggle, easier, harder, front) on the screen showing.
+ *  src = 'ctl' (Ride button), 'key' or 'tap' (on screen): skip / end show the hold ring for 'ctl' / 'key'. */
+function action(a, src = 'tap') {
+  const screen = screenOf(controlState());
+  const name = actionFor(screen, a);
+  if (screen === 'modal' && !name) return modalAction(null, a); // still navigation: the modal shows its ring
+  if (name) DO[name](src, a);
+  if (screen.startsWith('ride-') && name !== 'closePanels') renderRide();
 }
 
 let pendingShift = null; // SRAM: wait briefly to see if the other side joins (front shift)
-function onShiftButton(b) {
+/** Slope on the ride screen: a shifter is a gear by the shift style (js/controls.js shiftFor / pairsFront). */
+function shiftGear(b) {
   const s = app.session;
-  if (app.screen !== 'ride' || !s) return action(isLeft(b) ? 'easier' : 'harder'); // menus
-  if (s.mode === 'erg') { // ERG: left side -1%, right side +1% of target watts (hold to repeat)
-    const a = isLeft(b) ? 'down' : 'up';
-    action(a);
-    clearTimeout(holdTimers[b]);
-    const rep = () => { action(a); holdTimers[b] = setTimeout(rep, 120); };
-    holdTimers[b] = setTimeout(rep, 450);
-    return;
-  }
-  const sramFront = shiftStyleFor(app.settings.shiftStyle, false) === 'sram' && s.gb.isDouble;
-  if (!sramFront) { const sh = shiftFor(b); if (sh) doShift(...sh); return; }
+  if (!pairsFront(app.settings.shiftStyle, s.gb)) { const sh = shiftFor(b, app.settings.shiftStyle, s.gb); if (sh) doShift(...sh); return; }
   if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
     clearTimeout(pendingShift.t); pendingShift = null;
     doShift('toggle', 0);
@@ -1295,7 +1251,6 @@ function doShift(kind, dir) {
   renderRide();
 }
 
-const REPEATABLE = new Set(['up', 'down']);
 const holdTimers = {};
 const lastPress = {};
 function onButton(b, dev) {
@@ -1304,20 +1259,20 @@ function onButton(b, dev) {
   if (now - (lastPress[b] || 0) < 90) return;
   lastPress[b] = now;
   app.usedNav = true; // a controller press is navigation like a key: home shows its focus ring
-  if (SHIFT_BUTTONS.has(b)) { logMsg('controller', `${dev?.side || ''} ${b}`); return onShiftButton(b); }
-  const a = BUTTON_ACTIONS[b];
-  logMsg('controller', `${dev?.side || ''} ${b}${a ? ' -> ' + a : ''}`);
-  if (!a) return;
-  action(a, 'ctl');
-  if (REPEATABLE.has(a) && app.screen === 'ride') {
+  const p = buttonPlan(controlState(), b), shifter = SHIFT_BUTTONS.has(b);
+  logMsg('controller', `${dev?.side || ''} ${b}${!shifter && p.verb ? ' -> ' + p.verb : ''}`);
+  if (p.shift) return shiftGear(b);
+  if (!p.verb) return;
+  action(p.verb, shifter ? 'tap' : 'ctl');
+  if (p.repeat) { // held: again after 450 ms, then every 120 ms, until released
     clearTimeout(holdTimers[b]);
-    const rep = () => { action(a); holdTimers[b] = setTimeout(rep, 120); };
+    const rep = () => { action(p.verb); holdTimers[b] = setTimeout(rep, 120); };
     holdTimers[b] = setTimeout(rep, 450);
   }
 }
 function onRelease(b) {
   clearTimeout(holdTimers[b]); delete holdTimers[b];
-  const a = BUTTON_ACTIONS[b];
+  const a = BUTTON_VERBS[b];
   if (a === 'skip') holdEnd('skip');
   else if (a === 'back') holdEnd('end');
 }
@@ -1387,17 +1342,16 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) holdE
 document.addEventListener('keydown', (e) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
   if (builderOpen() && e.key !== 'Escape') return; // Space/Enter press the builder's own buttons
-  const map = { ArrowLeft: app.screen === 'ride' ? 'easier' : 'left', ArrowRight: app.screen === 'ride' ? 'harder' : 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'select', Enter: 'select', Escape: 'back', s: 'skip', l: 'lap', e: 'ergToggle', '[': 'easier', ']': 'harder', f: 'front' };
   if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
     app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
     toast(`Demo rider: ${app.trainer.riderPower} W`);
     return;
   }
-  const a = map[e.key];
-  if (!a) return;
+  const st = controlState();
+  if (!keyVerb(st, e.key)) return; // keys and their verbs: js/controls.js KEY_VERBS
   e.preventDefault();
-  if (e.repeat && (a === 'skip' || a === 'back') && app.screen === 'ride') return; // held: the first keydown started the hold
-  action(a, 'key');
+  const a = keyVerb(st, e.key, e.repeat); // held: the first keydown started the hold
+  if (a) action(a, 'key');
 });
 document.addEventListener('keyup', (e) => {
   if (e.key === 's') holdEnd('skip');
@@ -2367,15 +2321,16 @@ function setModalFocus() {
   btns.forEach((b, i) => b.classList.toggle('focus', i === modalFocus && !!app.usedNav));
   btns[modalFocus]?.focus({ preventScroll: true });
 }
-function modalAction(a) {
+/** Controller / keyboard in the modal: what = first | last | press | cancel | null (js/controls.js modal*); a = the verb. */
+function modalAction(what, a) {
   app.usedNav = true; // keyboard or controller: show which button A / Enter will press
   if (modalNav?.(a)) return;
   const btns = modalBtns();
-  switch (a) {
-    case 'left': case 'up': case 'easier': modalFocus = 0; setModalFocus(); break;
-    case 'right': case 'down': case 'harder': modalFocus = btns.length - 1; setModalFocus(); break;
-    case 'select': (btns.includes(document.activeElement) ? document.activeElement : btns[modalFocus])?.click(); break;
-    case 'back': modalDone?.(btns.length < 2); break;
+  switch (what) {
+    case 'first': modalFocus = 0; setModalFocus(); break;
+    case 'last': modalFocus = btns.length - 1; setModalFocus(); break;
+    case 'press': (btns.includes(document.activeElement) ? document.activeElement : btns[modalFocus])?.click(); break;
+    case 'cancel': modalDone?.(btns.length < 2); break;
   }
 }
 $('#modal-ok').onclick = () => modalDone?.(true);
