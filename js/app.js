@@ -16,14 +16,14 @@ import { ls, rides, docs } from './store.js?v=202611102147';
 import { dkey, dayDate } from './dates.js?v=202611102147';
 import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js?v=202611102147';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
-import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
+import { initBuilder, openBuilder, builderOpen } from './builder.js?v=202611102147';
 import { initGarage, openGarage, openGearing, dtSpec } from './garage.js?v=202611102147';
 import { initSettings, numField, detectTrainer, shiftLine, renderSignIn } from './settings.js?v=202611102147';
 import { initTraining, renderTraining } from './training.js?v=202611102147';
 import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, previewOf, gradeBand } from './library.js?v=202611102147';
 import { initToday, renderHero, renderWeek, renderCalendar, refreshPlanViews, trainingRows, whoopDay, recZone, BIKE_ICO } from './today.js?v=202611102147';
 import { $, $$, esc, reducedMotion, toast, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
-import { screenOf, actionFor, BUTTON_VERBS, SHIFT_BUTTONS, isLeft, buttonPlan, shiftFor, pairsFront, keyVerb } from './controls.js?v=202611102147';
+import { initControls, action, onButton, onRelease, holdStart, holdEnd, focusables, applyFocus } from './controls.js?v=202611102147';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
@@ -1178,201 +1178,9 @@ document.addEventListener('touchstart', (e) => { if (app.screen === 'ridepage' &
 let rdResize = 0;
 window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return; cancelAnimationFrame(rdResize); rdResize = requestAnimationFrame(drawRideChart); });
 
-// ------------------------------------------------------------------ actions (controller + keyboard)
-// What each Ride button, key and on-screen verb does on each screen is js/controls.js (pure, tested in
-// test/controls.mjs): screenOf() + actionFor() name the action, and this table runs it.
-const controlState = () => ({
-  launching: app.launching, modal: modalOpen(), builder: builderOpen(), screen: app.screen, session: !!app.session,
-  erg: app.session?.mode === 'erg', panel: devPopOpen() || $$('.panel').some((p) => !p.classList.contains('hidden')),
-});
-const fmtGradeSet = (s) => `${(s.gradeOffset * 100).toFixed(0)}%`;
-// ERG: effort +-1%; slope: grade +-1%
-const bump = (dir) => { const s = app.session; s.bump(dir); toast(s.mode === 'erg' ? `Intensity ${Math.round(s.intensity * 100)}%` : `Grade ${fmtGradeSet(s)}`); };
-const DO = {
-  // home: the focus ring moves through the tab's controller list (focusables()), left / right switch tabs
-  focusPrev: () => { app.focus = Math.max(0, app.focus - 1); applyFocus(); },
-  focusNext: () => { app.focus = Math.min(focusables().length - 1, app.focus + 1); applyFocus(); },
-  tabPrev: () => setTab(TABS[(TABS.indexOf(app.tab) - 1 + TABS.length) % TABS.length]),
-  tabNext: () => setTab(TABS[(TABS.indexOf(app.tab) + 1) % TABS.length]),
-  pick: () => {
-    const el = focusables()[app.focus];
-    if (!el) return;
-    if (el.classList.contains('day')) el.querySelector('[data-startday]')?.click();
-    else if (el.dataset.i !== undefined) startWorkout(app.library[+el.dataset.i]);
-    else el.click();
-  },
-  // home, or a panel / Connections opened from the pause screen (it doesn't end the ride)
-  closePanels: () => { $$('.panel').forEach((p) => p.classList.add('hidden')); setDevPop(false); },
-  // the ride
-  effortUp: () => bump(+1), effortDown: () => bump(-1), gradeUp: () => bump(+1), gradeDown: () => bump(-1),
-  shiftEasier: () => app.session.shift(-1), shiftHarder: () => app.session.shift(+1),
-  front: () => { const s = app.session; if (s.gb.isDouble) s.toggleFront(); else toast('1x: no front shifting'); },
-  pause: () => app.session.togglePause(),
-  holdEnd: (src) => holdStart('end', src),
-  holdSkip: (src) => holdStart('skip', src),
-  lap: () => { const s = app.session; if (s.seg) toast('Laps are automatic per interval'); else s.lap(); },
-  ergToggle: () => { const s = app.session; if (s.segs) { s.toggleErg(); toast(s.ergOff ? 'ERG off: slope mode' : 'ERG on'); } },
-  // the ride page, a modal, the builder (keyboard / touch only: B or Esc closes it)
-  pageBack: () => rideAction('back'), pageSelect: () => rideAction('select'), pagePrev: () => rideAction('prev'),
-  pageNext: () => rideAction('next'), pageUp: () => rideAction('up'), pageDown: () => rideAction('down'),
-  modalFirst: (src, a) => modalAction('first', a), modalLast: (src, a) => modalAction('last', a),
-  modalPress: (src, a) => modalAction('press', a), modalCancel: (src, a) => modalAction('cancel', a),
-  closeBuilder: () => closeBuilder(),
-};
-/** Run a verb (up, down, left, right, select, back, skip, lap, ergToggle, easier, harder, front) on the screen showing.
- *  src = 'ctl' (Ride button), 'key' or 'tap' (on screen): skip / end show the hold ring for 'ctl' / 'key'. */
-function action(a, src = 'tap') {
-  const screen = screenOf(controlState());
-  const name = actionFor(screen, a);
-  if (screen === 'modal' && !name) return modalAction(null, a); // still navigation: the modal shows its ring
-  if (name) DO[name](src, a);
-  if (screen.startsWith('ride-') && name !== 'closePanels') renderRide();
-}
-
-let pendingShift = null; // SRAM: wait briefly to see if the other side joins (front shift)
-/** Slope on the ride screen: a shifter is a gear by the shift style (js/controls.js shiftFor / pairsFront). */
-function shiftGear(b) {
-  const s = app.session;
-  if (!pairsFront(app.settings.shiftStyle, s.gb)) { const sh = shiftFor(b, app.settings.shiftStyle, s.gb); if (sh) doShift(...sh); return; }
-  if (pendingShift && isLeft(pendingShift.b) !== isLeft(b)) {
-    clearTimeout(pendingShift.t); pendingShift = null;
-    doShift('toggle', 0);
-    return;
-  }
-  clearTimeout(pendingShift?.t);
-  pendingShift = { b, t: setTimeout(() => { pendingShift = null; doShift('rear', isLeft(b) ? -1 : +1); }, 140) };
-}
-function doShift(kind, dir) {
-  const s = app.session;
-  if (!s) return;
-  if (kind === 'rear') s.shift(dir);
-  else if (kind === 'front') s.shiftFront(dir);
-  else s.toggleFront();
-  renderRide();
-}
-
-const holdTimers = {};
-const lastPress = {};
-function onButton(b, dev) {
-  // with both hoods connected, a button may arrive from both devices: keep the first
-  const now = performance.now();
-  if (now - (lastPress[b] || 0) < 90) return;
-  lastPress[b] = now;
-  app.usedNav = true; // a controller press is navigation like a key: home shows its focus ring
-  const p = buttonPlan(controlState(), b), shifter = SHIFT_BUTTONS.has(b);
-  logMsg('controller', `${dev?.side || ''} ${b}${!shifter && p.verb ? ' -> ' + p.verb : ''}`);
-  if (p.shift) return shiftGear(b);
-  if (!p.verb) return;
-  action(p.verb, shifter ? 'tap' : 'ctl');
-  if (p.repeat) { // held: again after 450 ms, then every 120 ms, until released
-    clearTimeout(holdTimers[b]);
-    const rep = () => { action(p.verb); holdTimers[b] = setTimeout(rep, 120); };
-    holdTimers[b] = setTimeout(rep, 450);
-  }
-}
-function onRelease(b) {
-  clearTimeout(holdTimers[b]); delete holdTimers[b];
-  const a = BUTTON_VERBS[b];
-  if (a === 'skip') holdEnd('skip');
-  else if (a === 'back') holdEnd('end');
-}
-
-// ------------------------------------------------------------------ hold to confirm
-// Skip (Y) and End ride (B) only happen if the button is held the whole time; letting go early cancels.
-// Same for the S / Esc keys (big ring overlay). Phone sheet buttons hold too, shorter, and fill left to right
-// instead of the ring. Mouse clicks (desktop End ride) get a confirm screen.
-const HOLDS = {
-  skip: { ms: 3000, tapMs: 1000, ctl: 'Y', key: 'S', msg: '', sub: (k) => `Keep holding ${k} to skip` },
-  end: { ms: 5000, tapMs: 2000, ctl: 'B', key: 'Esc', msg: 'End ride?', sub: (k) => (tooShort() ? 'Under 10 s, nothing will be saved' : `Keep holding ${k} to end`) },
-};
-let hold = null; // { kind, t, btn }
-function holdStart(kind, src, btn) {
-  const s = app.session;
-  if (!s || app.screen !== 'ride') return;
-  if (kind === 'skip' && !s.segs) return;
-  if (hold) { if (hold.kind === kind) return; holdEnd(); }
-  const h = HOLDS[kind];
-  if (src === 'tap') { // phone sheet button fills left to right
-    if (!btn) return;
-    btn.style.setProperty('--hold-ms', `${h.tapMs}ms`);
-    btn.classList.remove('filling'); void btn.offsetWidth; btn.classList.add('filling');
-    hold = { kind, btn, t: setTimeout(() => holdDone(kind), h.tapMs) };
-    return;
-  }
-  if (src !== 'ctl' && src !== 'key') return;
-  const k = src === 'ctl' ? h.ctl : h.key;
-  const el = $('#hold');
-  el.classList.remove('run', 'skip', 'end');
-  el.classList.add(kind);
-  el.style.setProperty('--hold-ms', `${h.ms}ms`);
-  const test = kind === 'end' && s.inTest; // in a ramp test, B ends the test and the cool-down follows
-  $('#hold-msg').textContent = test ? 'End the test?' : h.msg;
-  const key = $('#hold-key');
-  key.textContent = k;
-  key.classList.toggle('word', k.length > 1);
-  $('#hold-sub').textContent = test ? `Keep holding ${k}: cool-down next` : h.sub(k);
-  el.classList.remove('hidden');
-  void el.offsetWidth; // restart the fill animation
-  el.classList.add('run');
-  hold = { kind, t: setTimeout(() => holdDone(kind), h.ms) };
-}
-function holdEnd(kind) {
-  if (!hold || (kind && hold.kind !== kind)) return;
-  clearTimeout(hold.t);
-  hold.btn?.classList.remove('filling');
-  hold = null;
-  $('#hold').classList.add('hidden');
-  $('#hold').classList.remove('run');
-}
+// ---- actions (controller + keyboard), hold to confirm, the keyboard listener, home focus: js/controls.js
+// (initControls() sits next to initToday(): it needs TABS)
 function hideTakeover() { takeoverAnims.forEach((a) => a.cancel()); takeoverAnims = []; $('#takeover').classList.add('hidden'); }
-function holdDone(kind) {
-  holdEnd(kind);
-  const s = app.session;
-  if (!s || app.screen !== 'ride') return;
-  app.controllers.forEach((c) => c.vibrate?.());
-  $('#rp-sheet').classList.add('hidden');
-  if (kind === 'skip') { if (s.segs) { s.skip(); toast('Skipped'); } renderRide(); }
-  else if (s.inTest) { s.endTest('manual'); renderRide(); }
-  else endSession();
-}
-// a key released while the window is in the background never sends keyup
-window.addEventListener('blur', () => holdEnd());
-document.addEventListener('visibilitychange', () => { if (document.hidden) holdEnd(); });
-
-document.addEventListener('keydown', (e) => {
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
-  if (builderOpen() && e.key !== 'Escape') return; // Space/Enter press the builder's own buttons
-  if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
-    app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
-    toast(`Demo rider: ${app.trainer.riderPower} W`);
-    return;
-  }
-  const st = controlState();
-  if (!keyVerb(st, e.key)) return; // keys and their verbs: js/controls.js KEY_VERBS
-  e.preventDefault();
-  const a = keyVerb(st, e.key, e.repeat); // held: the first keydown started the hold
-  if (a) action(a, 'key');
-});
-document.addEventListener('keyup', (e) => {
-  if (e.key === 's') holdEnd('skip');
-  else if (e.key === 'Escape') holdEnd('end');
-});
-
-function focusables() {
-  const list = [];
-  if (app.tab === 'today') list.push(...$$('#today .hero-btns button'));
-  if (app.tab === 'workouts') {
-    list.push(...$$('#wo-kind button:not(.hidden)'), ...(app.woKind === 'mine' ? [$('#btn-new-wo'), ...$$('#mine-list .wo')] : $$(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo')));
-  }
-  return list;
-}
-function applyFocus() {
-  const items = focusables();
-  $$('.focus').forEach((x) => x.classList.remove('focus'));
-  const el = items[Math.min(app.focus, items.length - 1)];
-  if (el && app.screen === 'home' && app.usedNav) { el.classList.add('focus'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-}
-document.addEventListener('keydown', () => { app.usedNav = true; }, true);
 
 // ------------------------------------------------------------------ ride rendering
 function show(name) {
@@ -2486,6 +2294,8 @@ function setTab(t) {
 $$('#tabs button').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
 // ---- Today + Calendar (overview, hero, Next days, calendar): js/today.js
 initToday({ app, view: todayView, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, bindProfileHover, setTab });
+// ---- controller and keyboard (action(), Ride buttons, hold to confirm, keys, home focus): js/controls.js
+initControls({ app, modalOpen, devPopOpen, setDevPop, setTab, TABS, startWorkout, rideAction, modalAction, renderRide, tooShort, endSession });
 $('#r-pause').onclick = () => { app.session?.togglePause(); renderRide(); };
 $('#r-end').onclick = async () => {
   const short = tooShort();
