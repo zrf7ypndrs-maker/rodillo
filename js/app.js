@@ -660,7 +660,7 @@ function renderLibrary() {
   $('#slope-list').innerHTML = groupedHtml(slope, 'slope') || '<p class="muted empty-list">No slope sessions yet.</p>';
   $('#mine-list').innerHTML = mine.join('') || '<p class="muted empty-list mine-empty">Nothing here yet. Build one with New workout, or open any workout and use Edit a copy.</p>';
   $('#kind-btn-mine').classList.toggle('hidden', !signedIn());
-  setWoKind(app.woKind);
+  setWoKind(ls.get('woKind', app.woKind)); // the kind last picked: "mine" signed out shows ERG but stays remembered
   bindDetailSliders();
   $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
