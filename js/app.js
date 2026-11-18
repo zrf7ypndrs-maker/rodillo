@@ -475,10 +475,16 @@ const fmtHours = (sec) => { const m = Math.round(sec / 60); return `${Math.floor
 /** Recovery, this week's riding vs plan, fatigue/form, FTP. Uses the same numbers as the Training tab. */
 function renderOverview() {
   const el = $('#overview');
+  el.innerHTML = overviewHtml(new Date(), isPhone());
+  bindRecoveryAdvice(el);
+}
+
+/** The overview tiles at `now`; `ph` = the phone layout (three tiles and the recovery card). */
+function overviewHtml(now, ph) {
   const real = (app.rows || []).filter((r) => !r.demo).map((r) => r.summary);
-  const series = loadSeries(real, new Date(), 90);
+  const series = loadSeries(real, now, 90);
   const t = series.at(-1) || { ctl: 0, atl: 0, tsb: 0 };
-  const monday = mondayOf(new Date());
+  const monday = mondayOf(now);
   const weekKeys = Array.from({ length: 7 }, (_, i) => dkey(addDays(monday, i)));
   const ridden = real.filter((r) => weekKeys.includes(r.id.slice(0, 10)));
   const doneSec = ridden.reduce((a, r) => a + (r.durSec || 0), 0);
@@ -487,8 +493,8 @@ function renderOverview() {
   const planSec = planned.reduce((a, d) => a + totalDuration(d.workout), 0);
   // Recovery: only the % (HRV / RHR / sleep live in the WHOOP app, Agustín, Nov 13). Phone: its own card (ring + the call from
   // the hero line); the hero line and the tile hide there.
-  const w = whoopDay(dkey(new Date()));
-  const today = dayInfo(dkey(new Date()));
+  const w = whoopDay(dkey(now));
+  const today = dayInfo(dkey(now));
   const pct = w?.recovery != null ? w.recovery : null, z = pct != null ? recZone(pct) : '';
   const C = 2 * Math.PI * 27;
   const ring = `<svg class="rec-ring ${z}" viewBox="0 0 64 64" aria-hidden="true"><circle class="trk" cx="32" cy="32" r="27"/>${pct != null ? `<circle class="arc" cx="32" cy="32" r="27" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}"/>` : ''}</svg>`;
@@ -501,7 +507,6 @@ function renderOverview() {
   const est = ftpEstimate(real);
   // Premium look tiles (desktop Nov 13; phone too since Nov 13, 10:45 pm): label on top, number, then one small visual per
   // tile. Desktop: four tiles, the recovery call stays in the hero line. Phone: the recovery card above, then three tiles.
-  const ph = isPhone();
   const dTile = (cls, label, v, viz, sub, info = '') => `<div class="stat ov2 ${cls}">${info ? infoTip(info, label) : ''}<div class="ol">${label}</div><div class="v">${v}</div>${viz}${sub ? `<div class="os">${sub}</div>` : ''}</div>`;
   const recViz = `<div class="ov-bar ${z}">${pct != null ? `<i style="width:${pct}%"></i>` : ''}</div>`;
   // this week, Monday to Sunday: ring in the planned workout's zone color, filled once ridden; strength / rest = small dot
@@ -515,12 +520,12 @@ function renderOverview() {
   const formViz = `<div class="ov-form"><span class="band" style="left:${pos(-10)}%;width:${pos(5) - pos(-10)}%"></span><span class="zero" style="left:${pos(0)}%"></span><span class="mk ${ld.form >= 0 ? 'fit' : 'fat'}" style="left:${pos(ld.form)}%"></span></div>`;
   // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
   const wkg = (app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1);
-  const since = dkey(addDays(new Date(), -90));
+  const since = dkey(addDays(now, -90));
   const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [+dayDate(r.id.slice(0, 10)), r.ftp]);
-  fp.push([Date.now(), app.settings.ftp]);
+  fp.push([+now, app.settings.ftp]);
   let ftpViz = '', ftpSub = '';
   if (fp.length > 1) {
-    const t0 = fp[0][0], t1 = Date.now(), vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
+    const t0 = fp[0][0], t1 = +now, vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
     const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
     let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
     for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
@@ -528,7 +533,7 @@ function renderOverview() {
     const dW = app.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
     ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
   } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
-  el.innerHTML =
+  const html =
     dTile('rec-tile', 'Recovery', pct != null ? `<span class="rz ${z}">${pct}%</span>` : `<span class="none">${app.whoop ? 'Not yet' : 'Off'}</span>`, recViz, pct != null ? '' : (app.whoop ? 'not scored yet' : 'no WHOOP'))
     + dTile('', 'This week', `${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, `<div class="ov-week">${dayDots}</div>`, '')
     + (ph
@@ -537,9 +542,8 @@ function renderOverview() {
         + recCard // last: the phone pulls it to the top with order: -1
       : dTile('', 'Form', `${ld.form > 0 ? '+' : ''}${ld.form} <span class="of">${formLabel(ld.form).toLowerCase()}</span>`, formViz, `fitness ${ld.fitness} &middot; fatigue ${ld.fatigue}`, `${LOAD_INFO.tsb}<br><br>${LOAD_INFO.atl} Fatigue now: ${ld.fatigue}.`)
         + dTile('', 'FTP', `${app.settings.ftp} <span class="of">W &middot; <b>${wkg}</b> W/kg</span>`, ftpViz, ftpSub));
-  bindRecoveryAdvice(el);
-  return;
-  }
+  return html;
+}
 
 // ------------------------------------------------------------------ plan: week carousel + calendar
 // day keys: dkey, dayDate, addDays, mondayOf from js/dates.js
@@ -848,6 +852,23 @@ function renderCalendar() {
   const ym = app.calMonth || dkey(now).slice(0, 7);
   const [y, m] = ym.split('-').map(Number);
   const first = new Date(y, m - 1, 1, 12);
+  const sel = app.calSel || dkey(now);
+  $('#cal-title').textContent = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  $('#cal-grid').innerHTML = calGridHtml(ym, sel);
+  $('#cal-grid').querySelectorAll('.cal-cell').forEach((c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
+  // detail for the selected day
+  const info = dayInfo(sel);
+  $('#cal-detail').innerHTML = calDayHtml(sel);
+  $('#cal-detail').style.setProperty('--c', info.workout ? workoutColor(info.workout) : 'transparent'); // phone: soft glow in the day's color
+  $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
+  $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
+  if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
+}
+
+/** The month grid (Monday first, up to six weeks) for `ym` = "YYYY-MM", with the day `sel` selected. */
+function calGridHtml(ym, sel) {
+  const [y, m] = ym.split('-').map(Number);
+  const first = new Date(y, m - 1, 1, 12);
   const start = mondayOf(first);
   const cells = [];
   for (let i = 0; i < 42; i++) {
@@ -855,9 +876,7 @@ function renderCalendar() {
     if (i >= 35 && d.getMonth() !== m - 1) break;
     cells.push(d);
   }
-  const sel = app.calSel || dkey(now);
-  $('#cal-title').textContent = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
-  $('#cal-grid').innerHTML = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-dow">${d}</div>`).join('') +
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-dow">${d}</div>`).join('') +
     cells.map((d) => {
       const info = dayInfo(dkey(d));
       const chip = info.workout ? `<div class="cal-chip" style="--c:${workoutColor(info.workout)}">${esc(info.workout.name)}<span>${Math.round(totalDuration(info.workout) / 60)}'</span></div>`
@@ -866,8 +885,11 @@ function renderCalendar() {
       return `<div class="cal-cell ${d.getMonth() !== m - 1 ? 'other' : ''} ${info.isToday ? 'today' : ''} ${info.key === sel ? 'sel' : ''}" data-day="${info.key}">
         <div class="cal-num">${d.getDate()}</div>${chip}${done}</div>`;
     }).join('');
-  $('#cal-grid').querySelectorAll('.cal-cell').forEach((c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
-  // detail for the selected day
+}
+
+/** The selected day's detail: the result once the planned workout is ridden, else the plan; then the coach's call,
+ *  WHOOP and any other rides that day. */
+function calDayHtml(sel) {
   const info = dayInfo(sel);
   const date = dayDate(sel).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   let html = `<h3>${date}</h3>`;
@@ -895,11 +917,7 @@ function renderCalendar() {
   for (const r of info.ridden.filter((x) => x !== doneRide)) {
     html += `<div class="cal-ride">&#10003; <b>${esc(r.name)}</b> &middot; ${fmtTime(r.durSec)}${r.np != null ? ` &middot; NP ${r.np} W` : ''} &middot; TSS ${r.tss}${r.tssFrom === 'hr' ? ' (from HR)' : ''}${r.avgHr ? ` &middot; HR ${r.avgHr}` : ''}${r.compliance ? ` &middot; intervals ${r.compliance.avg}% (min ${r.compliance.min}%)` : ''}<button class="ghost small cal-see" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   }
-  $('#cal-detail').innerHTML = html;
-  $('#cal-detail').style.setProperty('--c', info.workout ? workoutColor(info.workout) : 'transparent'); // phone: soft glow in the day's color
-  $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
-  $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
-  if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
+  return html;
 }
 
 // ------------------------------------------------------------------ WHOOP recovery
