@@ -1,7 +1,8 @@
 // Settings panel: the Rider / Ride / Road feel / Trainer / Sync tabs (#settings, #set-tabs), the trainer grade range,
 // GitHub token and sign-in row, and the ride history import (Settings > Sync). Moved out of js/app.js Nov 17
 // (code-health plan step 4) with no change in behavior. Shared DOM helpers come from js/ui.js; app.js passes app
-// state and its own hooks in through initSettings(). Never import app.js from here.
+// state and its own hooks in through initSettings(). Never import app.js from here. When a change here affects other
+// screens (sign-in, token, data repo, imported rides), call refreshAfterSettings(); never call a screen's renderer.
 import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange } from './engine/trainers.js?v=202611102147';
 import { GitHubSync } from './sync.js?v=202611102147';
@@ -11,7 +12,7 @@ import { authEnabled, authSession, startSignIn, signOut } from './auth.js?v=2026
 import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 
 // from app.js, set by initSettings()
-let app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, renderHero, renderTraining, refreshPlanViews, closeBuilderNow, applyLibrary;
+let app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings;
 
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
@@ -134,13 +135,13 @@ export function renderSignIn(msg = '') {
     ? `<span>Signed in as <b>${esc(s.login || 'GitHub user')}</b></span> <button class="ghost small" id="btn-gh-out">Sign out</button>${msg ? ` <span class="muted">${esc(msg)}</span>` : ''}`
     : `<button class="primary small" id="btn-gh-in">Sign in with GitHub</button> <span class="muted">${esc(msg || 'Once per browser, about twice a year.')}</span>`;
   if ($('#btn-gh-in')) $('#btn-gh-in').onclick = startSignIn;
-  if ($('#btn-gh-out')) $('#btn-gh-out').onclick = () => { signOut(); renderSignIn('Signed out on this browser'); renderHero(); closeBuilderNow(); applyLibrary(); };
+  if ($('#btn-gh-out')) $('#btn-gh-out').onclick = () => { signOut(); renderSignIn('Signed out on this browser'); refreshAfterSettings(); };
   $('#token-label').textContent = s ? 'Or use a token (not needed while signed in)' : 'Or paste a token instead';
 }
 
 /** Wires the Settings panel. Call once from app.js, after its helpers exist. */
 export function initSettings(deps) {
-  ({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, renderHero, renderTraining, refreshPlanViews, closeBuilderNow, applyLibrary } = deps);
+  ({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings } = deps);
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-open-settings]');
     if (!a) return;
@@ -170,8 +171,8 @@ export function initSettings(deps) {
     const st = $('#token-status');
     if (!token) {
       ls.set('sync', { repo });
-      if (authEnabled() && authSession()) { st.textContent = 'Saved. Loading...'; await loadCoachData(); st.textContent = app.coachError || `Syncing with ${repo}`; renderHero(); return; }
-      st.textContent = 'Sync turned off'; closeBuilderNow(); applyLibrary(); return;
+      if (authEnabled() && authSession()) { st.textContent = 'Saved. Loading...'; await loadCoachData(); st.textContent = app.coachError || `Syncing with ${repo}`; refreshAfterSettings(); return; }
+      st.textContent = 'Sync turned off'; refreshAfterSettings(); return;
     }
     st.textContent = 'Testing...';
     try {
@@ -218,8 +219,7 @@ export function initSettings(deps) {
       const index = await gh.pushRides(docs, `Import ${docs.length} rides (${day(docs[0])} to ${day(docs.at(-1))})`, (a, b) => { st.textContent = `Saving ${a} of ${b}...`; });
       ls.set('remoteIndex', index.rides); ls.set('remoteIndexAt', Date.now());
       st.textContent = `Imported ${docs.length} rides.`;
-      if (app.tab === 'training') renderTraining();
-      refreshPlanViews();
+      refreshAfterSettings();
     } catch (err) {
       logMsg('sync', `import failed: ${err.message}`);
       st.textContent = '';

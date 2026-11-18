@@ -2457,7 +2457,17 @@ document.addEventListener('click', (e) => {
 // ---- Training tab: js/training.js
 initTraining({ app, look: chartLook, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask });
 // ---- Settings panel (Rider / Ride / Road feel / Trainer / Sync): js/settings.js
-initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, renderHero, renderTraining, refreshPlanViews, closeBuilderNow, applyLibrary });
+/**
+ * Settings changed what other screens show: who is signed in, the token or data repo (Mine workouts, the plan and its source
+ * line on Today), or rides imported into the history. Settings calls only this, so it doesn't know which screens exist.
+ */
+function refreshAfterSettings() {
+  if (!signedIn()) closeBuilderNow(); // Mine workouts need rodillo-data
+  renderHero(); // the plan source line, right away
+  applyLibrary(); // the library (Mine), then Today, Next days and Calendar through refreshPlanViews()
+  if (app.tab === 'training') renderTraining();
+}
+initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings });
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {
