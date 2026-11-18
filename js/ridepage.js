@@ -6,7 +6,7 @@
 // rides/YYYY/<id>.json): { summary, intervals, streams: { power, hr, cadence, speed (m/s),
 // grade (%), target, gear, seg }, laps }. Imported rides can miss power, grade and target.
 
-import { ZONES, zoneOf, zoneRange, WORK_FTP } from './zones.js?v=202611102147';
+import { ZONES, zoneRange, WORK_FTP } from './zones.js?v=202611102147';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -109,7 +109,7 @@ function modeOf(doc) {
 
 /** The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel } */
 export function pageHtml(doc, opts) {
-  const st = doc.summary, S = doc.streams || {};
+  const st = doc.summary;
   const d = new Date(st.start || st.id);
   const when = `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} &middot; ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   const mode = modeOf(doc);

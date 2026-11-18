@@ -51,8 +51,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test
-        run: npm ci && npm test
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test with coverage floor
+        run: npm run coverage
+      - name: Browser smoke test
+        run: npm run smoke
       - name: Stamp build id
         run: node tools/stamp.mjs
       - name: Check every import carries the same id

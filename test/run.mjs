@@ -9,7 +9,7 @@ import { Session } from '../js/engine/session.js';
 import { powerAt } from '../js/engine/physics.js';
 import { parseZwo, flatten, totalDuration, estimateTSS, mainSet, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
-import { withDetail, profileSteps, defaultDetail, DETAIL_MAX } from '../js/engine/climb.js';
+import { withDetail, profileSteps, DETAIL_MAX } from '../js/engine/climb.js';
 import { steepestGrade } from '../js/engine/trainers.js';
 import { gearList } from '../js/engine/drivetrain.js';
 import fs from 'node:fs';
@@ -316,6 +316,7 @@ test('real climbs: profile cut at every detail level', () => {
       let at = 0;
       for (const s of st) { assert.ok(Math.abs(Math.round(at / gridLen) * gridLen - at) <= 5 || at === 0, `${id} lv${lv}: boundary ${at} off the ${gridLen} m grid`); at += s.dist; }
       for (let k = 0; k < st.length - 1; k++) assert.ok(Math.abs(st[k].grade - st[k + 1].grade) > 0.9, `${id} lv${lv}: neighbours ${st[k].grade} and ${st[k + 1].grade} should have merged`);
+      assert.ok(st.length <= prev, `${id} lv${lv}: ${st.length} steps, more than the finer level's ${prev}`);
       prev = st.length;
       assert.ok(isTrack(flatten({ steps: st })));
     }

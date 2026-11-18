@@ -6,7 +6,7 @@ import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS, POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, gearList, resolveDrivetrain, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
-import { BIKE_MODELS, MAX_BIKES, MAX_GEARINGS, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, cleanBike, newBikeId, bikeLine, wheelShort, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, gearingLine, gearingName, cleanGearing, migrateGarage } from './engine/garage.js?v=202611102147';
+import { BIKE_MODELS, MAX_BIKES, MAX_GEARINGS, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, cleanBike, newBikeId, bikeLine, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, gearingLine, gearingName, cleanGearing, migrateGarage } from './engine/garage.js?v=202611102147';
 import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange, steepestGrade } from './engine/trainers.js?v=202611102147';
 import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
@@ -186,7 +186,6 @@ function renderDevices() {
   card('trainer', app.trainer, app.demo ? 'Simulated' : tz);
   card('hr', app.hr);
   const ctl = app.controllers.find((c) => c.state === 'connected') || app.controllers[0];
-  const names = app.controllers.filter((c) => c.state === 'connected').map((c) => c.name);
   const sides = app.controllers.filter((c) => c.state === 'connected').map((c) => c.side || 'left');
   card('controller', ctl, sides.length ? `<br>Connected: ${sides.join(' + ')}` : '');
   const anyCtl = app.controllers.some((c) => c.state === 'connected');
@@ -1413,7 +1412,6 @@ async function renderTraining() {
   const thisWeek = wk.at(-1);
   const est = ftpEstimate(real);
   const card = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  const cfg = ls.get('sync', {});
   const at = ls.get('remoteIndexAt');
   $('#sync-status').innerHTML = syncClient()
     ? `Synced with <b>${esc(dataRepo())}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
@@ -3466,7 +3464,6 @@ function editBike(el) {
 let draft = null;
 let garView = { mode: 'list' };
 const wheelName = (w) => WHEELS.reduce((a, b) => (Math.abs(b[0] - w) < Math.abs(a[0] - w) ? b : a))[1];
-const ratio = (r, c) => `${r}×${c} (${(r / c).toFixed(2)})`;
 function shiftText(style, d) {
   if (d.seq) return 'Zwift virtual gears: right harder, left easier';
   if (d.rings.length === 1) { const s = style === 'left' ? 'left' : 'right'; return `1x, shifter on the ${s}: ${s} shift-up or paddle harder, ${s} shift-down easier`; }
