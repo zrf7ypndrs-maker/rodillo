@@ -6,6 +6,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
+import { loadSeries, loadNow } from '../js/stats.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.webp': 'image/webp' };
@@ -25,7 +26,22 @@ const errors = [];
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
 
+// 14 synced rides over the last six weeks (newest first, like rodillo-data index.json): ERG rides with intervals,
+// Zone 2 rides with drift, one HR-only import (no power, no zones). Never today, so Today's hero is unchanged.
+const HISTORY = Array.from({ length: 14 }, (_, i) => {
+  const d = new Date(); d.setDate(d.getDate() - 1 - i * 3); d.setHours(18, 30, 0, 0);
+  const id = `${d.toLocaleDateString('en-CA')}T1830`, hrOnly = i === 5, z2 = i % 2 === 1;
+  return {
+    id, start: d.toISOString(), name: `Smoke ride ${i + 1}`, tags: hrOnly ? ['imported', 'outdoor'] : [], ftp: 250, durSec: 3600 + i * 60,
+    np: hrOnly ? null : 190 + i, if: hrOnly ? null : 0.76, tss: 55 + i * 2, ...(hrOnly ? { tssFrom: 'hr' } : {}), avgHr: 138 + i,
+    bests: hrOnly ? {} : { 5: 700 - i * 5, 15: 600, 30: 480, 60: 380, 180: 310, 300: 290, 600: 270, 1200: 255 - i, 3600: 200 },
+    zones: hrOnly ? undefined : [300, z2 ? 2700 : 1500, 400, z2 ? 200 : 900, z2 ? 0 : 400, 0, 0],
+    compliance: z2 || hrOnly ? null : { avg: 99, min: 96 - (i % 3), reps: 4 }, decoupling: z2 ? 3.1 : null,
+  };
+});
+
 async function run(viewport, label) {
+  const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
   // nothing leaves the machine: GitHub, WHOOP and fonts CDNs get an empty answer
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
@@ -41,6 +57,54 @@ async function run(viewport, label) {
     await page.waitForTimeout(150);
   }
   ok(`${label}: Today, Workouts, Calendar, Training`);
+
+  // Training tab (js/training.js): seeded synced history -> stats card, fitness chart, weekly bars, power curve,
+  // time in zones and the rides list; then the history is taken away again and the tab shows its empty state
+  await page.evaluate((idx) => localStorage.setItem('rodillo.remoteIndex', JSON.stringify(idx)), HISTORY);
+  await page.click('#tabs button[data-tab="today"]');
+  await page.click('#tabs button[data-tab="training"]');
+  await page.waitForFunction((n) => document.querySelectorAll('#ride-table [data-ride]').length >= n, HISTORY.length, { timeout: 3000 });
+  const tr = await page.evaluate(() => {
+    const vis = (el) => !!el && el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none';
+    const q = (s) => document.querySelector(s);
+    return {
+      cards: [...document.querySelectorAll('#training-cards .stat')].map((c) => [c.querySelector('.l').textContent, c.querySelector('.v').textContent]),
+      load: { vis: vis(q('#chart-load svg')), lines: document.querySelectorAll('#chart-load polyline').length, bars: document.querySelectorAll('#chart-load rect').length, view: q('#chart-load svg')?.getAttribute('viewBox'), text: q('#chart-load').textContent },
+      weeks: document.querySelectorAll('#chart-weekly svg > g > title').length, weeklyVis: vis(q('#chart-weekly svg')), weeklyText: q('#chart-weekly').textContent,
+      curve: { vis: vis(q('#chart-curve svg')), phone: !!q('#chart-curve svg.pc-phone'), lines: document.querySelectorAll('#chart-curve polyline').length, dots: document.querySelectorAll('#chart-curve circle').length },
+      zones: [...document.querySelectorAll('#chart-zones h4')].map((h) => h.textContent), zbars: document.querySelectorAll('#chart-zones .zbars').length, zonesVis: vis(q('#chart-zones .zbars')),
+      table: vis(q('#ride-table table')) ? document.querySelectorAll('#ride-table tr[data-ride]').length : 0,
+      list: vis(q('#ride-table .ride-list')) ? document.querySelectorAll('#ride-table .rl').length : 0,
+      names: [...document.querySelectorAll(vis(q('#ride-table table')) ? '#ride-table tr[data-ride]' : '#ride-table .rl')].map((r) => r.dataset.ride),
+      rows: q('#ride-table').textContent,
+    };
+  });
+  const fail = (what) => { throw new Error(`training (${label}): ${what}`); };
+  const card = (l) => tr.cards.find(([x]) => x === l)?.[1];
+  if (tr.cards.length !== 6) fail(`${tr.cards.length} stat cards`);
+  const want = loadNow(loadSeries(HISTORY, new Date(), 90).at(-1));
+  if (card('Fitness (CTL)') !== String(want.fitness) || card('Fatigue (ATL)') !== String(want.fatigue) || card('Form (TSB)') !== `${want.form > 0 ? '+' : ''}${want.form}`)
+    fail(`fitness / fatigue / form cards ${tr.cards.slice(0, 3).map((c) => c[1]).join(' ')}, expected ${want.fitness} ${want.fatigue} ${want.form}`);
+  if (!tr.load.vis || tr.load.lines !== 2 || tr.load.bars < 40 || !tr.load.text.includes('Fitness') || !/Form now/.test(tr.load.text)) fail(`fitness chart ${JSON.stringify(tr.load)}`);
+  if (tr.load.view !== (phone ? '0 0 640 440' : '0 0 640 330')) fail(`fitness chart drawn for the wrong layout (${tr.load.view})`);
+  if (!tr.weeklyVis || tr.weeks !== (phone ? 8 : 12) || !tr.weeklyText.includes('HR only')) fail(`weekly bars: ${tr.weeks} weeks`);
+  if (!tr.curve.vis || tr.curve.lines !== 2 || tr.curve.dots !== 9 || tr.curve.phone !== phone) fail(`power curve ${JSON.stringify(tr.curve)}`);
+  if (tr.zbars !== 2 || !tr.zonesVis || !/^Last 4 weeks/.test(tr.zones[1] || '') || !/rides/.test(tr.zones[1])) fail(`time in zones ${JSON.stringify(tr.zones)}`);
+  if ((phone ? tr.list : tr.table) !== HISTORY.length || (phone ? tr.table : tr.list) !== 0) fail(`rides list: table ${tr.table} rows, list ${tr.list} cards`);
+  if (tr.names.join() !== HISTORY.map((r) => r.id).join()) fail('rides not newest first');
+  if (!tr.rows.includes('Smoke ride 3') || !/HR/.test(tr.rows) || !/Drift|%/.test(tr.rows)) fail('ride rows missing names, HR-only TSS or compliance / drift');
+  // a row opens its ride page (signed out: the "details are in rodillo-data" note), Back returns to Training
+  await page.click(`#ride-table ${phone ? '.rl' : 'tr'}[data-ride="${HISTORY[2].id}"] ${phone ? '.rl-name' : 'td'}`);
+  await page.waitForFunction(() => document.querySelector('#ridepage.active') && /details are in rodillo-data/.test(document.querySelector('#rd').textContent), null, { timeout: 3000 });
+  await page.click('#rd [data-rd="back"]');
+  await page.waitForSelector('#home.active', { timeout: 3000 });
+  if (await page.getAttribute('#home', 'data-tab') !== 'training') fail('Back from a ride page left the Training tab');
+  await page.evaluate(() => localStorage.removeItem('rodillo.remoteIndex'));
+  await page.click('#tabs button[data-tab="today"]');
+  await page.click('#tabs button[data-tab="training"]');
+  await page.waitForFunction(() => /No rides yet/.test(document.querySelector('#ride-table').textContent), null, { timeout: 3000 });
+  await page.click('#tabs button[data-tab="today"]');
+  ok(`${label}: Training: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history`);
 
   if (label === 'desktop') {
     for (const btn of ['#btn-settings', '#btn-controls', '#btn-garage', '#btn-devices']) {
