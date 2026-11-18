@@ -15,7 +15,7 @@ export const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
 };
-const fmtLong = (s) => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; };
+const fmtLong = (s) => { if (s < 60) return `${Math.round(s)} s`; const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; };
 const pctCls = (p) => (p < 95 ? 'low' : p > 105 ? 'high' : 'ok');
 const amax = (a, d = 0) => { let m = -Infinity; for (const v of a || []) if (v > m) m = v; return m === -Infinity ? d : m; };
 const amin = (a, d = 0) => { let m = Infinity; for (const v of a || []) if (v < m) m = v; return m === Infinity ? d : m; };

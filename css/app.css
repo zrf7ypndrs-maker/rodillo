@@ -1201,7 +1201,8 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .rd-stats { grid-template-columns: repeat(4, 1fr); margin: 12px 0; }
   .rd-stats .stat { padding: 8px 8px; }
   .rd-stats .stat:nth-child(4n+1) { border-left: none; padding-left: 0; }
-  .rd-stats .stat:nth-child(n+5) { border-top: 1px solid var(--rule); }
+  /* the line between the rows hangs off the first row, so it spans all four columns even when the second row is short */
+  .rd-stats:has(> .stat:nth-child(5)) > .stat:nth-child(-n+4) { border-bottom: 1px solid var(--rule); }
   .rd-stats .stat .v { font-size: 25px; }
   .rd-stats .stat .v small { font-size: 14px; }
   .rd-stats .stat .l { font-size: 12px; }

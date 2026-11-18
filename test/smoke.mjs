@@ -989,6 +989,40 @@ async function run(viewport, label) {
   await ctx.close();
 }
 
+
+// ---- WebKit (Safari, Bluefy) can run app.js before css/app.css has loaded (WebKit bug 261655), as after every deploy.
+// Chrome waits, so make it act like WebKit: the stylesheet arrives 1.5 s late and doesn't block scripts. Every chart color
+// is read from CSS; read too early they came back blank and the charts drew black (Nov 18). Fail on any pure black pixel.
+async function lateCssRun(viewport, label) {
+  const phone = label === 'phone';
+  const ctx = await browser.newContext({ viewport, hasTouch: phone, isMobile: phone });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`${label} late css: ${e.message}`));
+  await page.route('**/rodillo/', async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, body: (await res.text()).replace(/<link rel="stylesheet" href="([^"]+)">/, '<link rel="stylesheet" href="$1" media="none" onload="this.media=\'all\'">') });
+  });
+  await page.route('**/css/app.css*', async (route) => { await new Promise((r) => setTimeout(r, 1500)); await route.continue(); });
+  await page.goto(base);
+  await page.waitForSelector('#btn-demo', { state: 'attached' });
+  await page.waitForTimeout(2000);
+  await page.click('#btn-devices'); await page.click('#btn-demo'); await page.keyboard.press('Escape');
+  await page.click('#btn-free'); await page.waitForSelector('#ride.active');
+  await page.waitForTimeout(3000);
+  for (let i = 0; i < 4; i++) { await page.keyboard.press('ArrowUp'); await page.waitForTimeout(400); }
+  await page.waitForTimeout(1500);
+  const black = await page.evaluate((sel) => {
+    const c = document.querySelector(sel), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0, drawn = 0;
+    for (let i = 0; i < d.length; i += 4) { if (d[i + 3]) drawn++; if (!d[i] && !d[i + 1] && !d[i + 2] && d[i + 3] > 200) n++; }
+    return { n, drawn };
+  }, phone ? '#rp-chart' : '#r-chart');
+  if (!black.drawn) throw new Error(`${label} late css: the free ride chart drew nothing`);
+  if (black.n) throw new Error(`${label} late css: ${black.n} pure black pixels in the free ride chart (colors read before the CSS loaded)`);
+  ok(`${label}: stylesheet arriving after app.js (WebKit): free ride chart in its real colors`);
+  await ctx.close();
+}
+
 try {
   await run({ width: 1280, height: 800 }, 'desktop');
   await run({ width: 390, height: 844 }, 'phone');
@@ -997,6 +1031,8 @@ try {
   await todayRun({ width: 390, height: 844 }, 'phone');
   await controlsRun({ width: 1280, height: 800 }, 'desktop');
   await controlsRun({ width: 390, height: 844 }, 'phone');
+  await lateCssRun({ width: 1280, height: 800 }, 'desktop');
+  await lateCssRun({ width: 390, height: 844 }, 'phone');
 } finally {
   await browser.close();
   server.close();

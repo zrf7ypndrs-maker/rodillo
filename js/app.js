@@ -35,6 +35,21 @@ const fmtTime = (s) => {
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
 let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE, GRADE = [], TOK = {};
+// WebKit (Safari, Bluefy) can run this module before css/app.css has loaded (WebKit bug 261655), which happens when the CSS
+// isn't cached, i.e. right after every deploy (new ?v=). Every color below would then read blank for the whole session:
+// blank SVG fills draw black, blank strokes draw nothing, canvas keeps black (Nov 18: all-black charts in Bluefy).
+// So nothing starts until the stylesheet is in. Chrome already waits, so there this resolves at once.
+const cssReady = () => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() !== '';
+await new Promise((done) => {
+  const css = document.querySelector('link[rel="stylesheet"][href*="app.css"]');
+  if (!css || cssReady()) return done();
+  css.addEventListener('load', done, { once: true });
+  css.addEventListener('error', done, { once: true });
+  window.addEventListener('load', done, { once: true });
+  setTimeout(done, 10000);
+});
+/** Re-read the tokens if they came back blank (belt and braces for the wait above); call before drawing. */
+const ensureTokens = () => { if (!INK && cssReady()) readTokens(); };
 function readTokens() {
   const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
   [INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE] = ['--ink', '--muted', '--rule', '--faint', '--ftp-line', '--underlay', '--hr-line', '--fitness', '--fatigue'].map(v);
@@ -44,7 +59,7 @@ function readTokens() {
 }
 readTokens();
 // colors and layout the Training charts (js/training.js) draw with, read at draw time so they follow the theme
-const chartLook = () => ({ phone: isPhone(), INK, MUTED, RULE, FAINT, UNDERLAY, FITNESS, FATIGUE, TOK, ZC, zoneHex });
+const chartLook = () => (ensureTokens(), { phone: isPhone(), INK, MUTED, RULE, FAINT, UNDERLAY, FITNESS, FATIGUE, TOK, ZC, zoneHex });
 // what the Workouts library rows (js/library.js) draw with, read at draw time: settings, plan and theme change
 const libView = () => ({ settings: app.settings, plan: app.plan, today: dkey(new Date()), signedIn: signedIn(), GRADE, ZC, profileSvg, woMeta, workSummary });
 // what Today and Calendar (js/today.js) draw with, read at draw time: the plan, rides, WHOOP and settings change, colors follow the theme
@@ -1063,6 +1078,7 @@ function renderRidePage() {
 function drawRideChart() {
   const wrap = $('#rd-wrap');
   if (!wrap || !rd.doc) return;
+  ensureTokens();
   const c = chartSvg(rd.doc, { width: wrap.clientWidth, phone: isPhone(), ftp: rideFtp(), segs: rd.segs, sel: rd.sel, tok: TOK, zoneHex, gradeHex });
   const svg = $('#rd-chart');
   svg.setAttribute('viewBox', `0 0 ${c.width} ${c.height}`);
@@ -1514,6 +1530,7 @@ new ResizeObserver(() => { if (app.screen === 'ride') { sizeChart(); drawChart()
 function drawChart() {
   const s = app.session;
   if (!s) return;
+  ensureTokens();
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height, dpr = devicePixelRatio;
   ctx.clearRect(0, 0, W, H);
@@ -1570,8 +1587,11 @@ function drawChart() {
   // free ride: last 10 minutes of power with grade underlay
   const win = 600, data = s.samples.slice(-win);
   const X = (i) => (i / win) * W;
-  ctx.fillStyle = UNDERLAY;
-  data.forEach((x, i) => { const g = (x.grade || 0) / 100; const h = Math.max(0, ((g + 0.03) / 0.15) * plotH * 0.6); ctx.fillRect(X(i), H - pad - h, W / win + 1, h); });
+  // each second in its grade color, like the phone chart, slope workouts and the ride page (was one flat UNDERLAY gray)
+  data.forEach((x, i) => {
+    const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.6);
+    const x0 = Math.floor(X(i)); ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect(x0, H - pad - h, Math.floor(X(i + 1)) - x0, h); // edge to edge: overlapping see-through bars leave stripes
+  });
   ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
   ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
@@ -1916,7 +1936,7 @@ function drawPhoneChart() {
     const Y = (v) => bot - (Math.min(v, maxP) / maxP) * plotH;
     data.forEach((x, i) => {
       const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.7);
-      ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect((i / win) * W, bot - h, W / win + 1, h);
+      const x0 = Math.floor((i / win) * W); ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect(x0, bot - h, Math.floor(((i + 1) / win) * W) - x0, h);
     });
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
     const sp = smoothPower(s.samples).slice(-win);
