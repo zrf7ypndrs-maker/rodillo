@@ -1,5 +1,5 @@
 // Browser smoke test: the whole app in Chrome, demo trainer, no Bluetooth or network.
-// Opens every home screen and panel, rides a demo workout (start, skip, end), opens the ride page,
+// Opens every home screen and panel (Today and Calendar also on a seeded week with a fixed clock), rides a demo workout (start, skip, end), opens the ride page,
 // and fails on any uncaught error or console error. Covers js/app.js, which the unit tests don't load.
 // Needs Chrome: CHROME_PATH, or /usr/bin/google-chrome (GitHub's ubuntu-latest has it).
 import http from 'node:http';
@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { loadSeries, loadNow } from '../js/stats.js';
-import { flatten } from '../js/engine/workout.js';
+import { flatten, mainSet, totalDuration } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -244,6 +244,203 @@ async function mineRun() {
   await ctx.close();
 }
 
+// ---- Today + Calendar: a plan, rides and WHOOP seeded for one week, the clock fixed on three days of it.
+// The public plan (plans/current.json) is replaced by this one, so the checks don't change when the coach edits the plan.
+const PLAN = {
+  name: 'Smoke week', ftp: 200,
+  days: { '2026-11-16': 'z2-60', '2026-11-17': 'vo2-30-15', '2026-11-18': 'sweetspot-3x12', '2026-11-19': 'rest', '2026-11-20': 'strength', '2026-11-21': 'sim-rolling-45', '2026-11-22': 'z2-90' },
+  optional: ['2026-11-22'],
+  notes: { '2026-11-18': 'Smoke note: steady, not heroic.' },
+  daily: { '2026-11-19': { action: 'rest', reason: 'Smoke coach: legs need a day.' } },
+};
+const rideAt = (day, hh, mm, x) => { const d = new Date(2026, 10, day, hh, mm); return { id: `${d.toLocaleDateString('en-CA')}T${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}`, start: d.toISOString(), ftp: 250, ...x }; };
+// newest first, like rodillo-data index.json: a free ride the morning of the workout day, the Tuesday workout done, an older Zone 2
+const RIDES = [
+  rideAt(18, 7, 15, { name: 'Free ride', tags: [], durSec: 1200, np: 150, avgP: 140, if: 0.6, tss: 15, avgHr: 120 }),
+  rideAt(17, 18, 30, { name: 'VO2max 30/15 x 3 sets', workoutId: 'vo2-30-15', tags: ['vo2'], durSec: 3300, np: 210, avgP: 180, if: 0.84, kj: 600, tss: 72, avgHr: 150, maxHr: 178, compliance: { avg: 97, min: 93, reps: 30 } }),
+  rideAt(12, 18, 0, { name: 'Zone 2, 60 min', workoutId: 'z2-60', tags: ['z2'], durSec: 3600, np: 160, avgP: 155, if: 0.64, tss: 41, avgHr: 128 }),
+];
+const WHOOP = { '2026-11-17': { recovery: 70 }, '2026-11-18': { recovery: 25 } };
+const DAY_AT = { done: new Date(2026, 10, 17, 20, 0), workout: new Date(2026, 10, 18, 9, 0), rest: new Date(2026, 10, 19, 9, 0) };
+const fmtHours = (sec) => { const m = Math.round(sec / 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+const W = (id) => LIB.find((w) => w.id === id);
+
+async function todayRun(viewport, label) {
+  const phone = label === 'phone';
+  const ctx = await browser.newContext({ viewport, hasTouch: phone, isMobile: phone });
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+  await ctx.route((url) => url.pathname.endsWith('/plans/current.json'), (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PLAN) }));
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`today ${label}: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`today ${label} console: ${m.text()}`); });
+  const fail = (what) => { throw new Error(`today (${label}): ${what}`); };
+  const text = (sel) => page.$eval(sel, (el) => el.textContent.replace(/\s+/g, ' ').trim());
+  const vis = (sel) => page.$eval(sel, (el) => el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none').catch(() => false);
+  const at = async (when) => {
+    await page.clock.setFixedTime(when);
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => document.querySelector('#today .hero') && document.querySelectorAll('#week-strip .day').length, null, { timeout: 5000 });
+  };
+  const toRideAndBack = async (sel, tab) => {
+    await page.click(sel);
+    await page.waitForFunction(() => document.querySelector('#ridepage.active') && /details are in rodillo-data/.test(document.querySelector('#rd').textContent), null, { timeout: 3000 });
+    await page.click('#rd [data-rd="back"]');
+    await page.waitForSelector('#home.active', { timeout: 3000 });
+    if (await page.getAttribute('#home', 'data-tab') !== tab) fail(`Back from a ride page left ${tab}`);
+  };
+  await page.clock.setFixedTime(DAY_AT.workout);
+  await page.goto(base, { waitUntil: 'load' });
+  const seed = (rides) => page.evaluate(([r, whoop]) => { localStorage.setItem('rodillo.remoteIndex', JSON.stringify(r)); localStorage.setItem('rodillo.whoop', JSON.stringify(whoop)); }, [rides, WHOOP]);
+  await seed(RIDES.slice(1)); // the free ride comes later
+
+  // ---- workout day (Wed Nov 18): planned Sweet spot, red recovery (then a free ride, below)
+  await at(DAY_AT.workout);
+  const ftp = (await lsGet(page, 'settings')).ftp;
+  const ss = W('sweetspot-3x12'), set = mainSet(ss, ftp).replace(/\s+/g, ' ');
+  const hero = await page.evaluate(() => {
+    const h = document.querySelector('#today .hero'), q = (s) => h.querySelector(s);
+    return {
+      cls: h.className, name: q('.hero-name')?.textContent.trim(), meta: q('.hero-meta')?.textContent.replace(/\s+/g, ' '), desc: q('.hero-desc')?.textContent,
+      btns: [...h.querySelectorAll('.hero-btns button')].map((b) => [b.id, b.className.includes('primary'), b.textContent.trim()]),
+      doneLine: q('.hero-done')?.textContent.replace(/\s+/g, ' ').trim(), doneSee: !!q('.hero-done .hero-done-see'),
+      bars: h.querySelectorAll('.hero-prof svg [data-i]').length, rec: q('.hero-rec')?.textContent.replace(/\s+/g, ' ').trim(), recDot: q('.hero-rec .rdot')?.className,
+      recBtns: [...h.querySelectorAll('.hero-rec [data-rec]')].map((b) => b.dataset.rec), main: q('.hero-nums .hn.main .v')?.textContent,
+    };
+  });
+  if (/nowo|done/.test(hero.cls) || hero.name !== ss.name) fail(`workout day hero ${hero.cls} "${hero.name}"`);
+  if (!hero.meta?.includes(set)) fail(`hero meta ${JSON.stringify(hero.meta)} lacks the main set ${JSON.stringify(set)}`);
+  if (hero.desc !== `Coach: ${PLAN.notes['2026-11-18']}`) fail(`hero coach note "${hero.desc}"`);
+  if (JSON.stringify(hero.btns.map(([id, p]) => [id, p])) !== JSON.stringify([['hero-start', true], ['btn-free', false]]) || !/Start workout/.test(hero.btns[0][2])) fail(`hero buttons ${JSON.stringify(hero.btns)}`);
+  if (hero.doneLine) fail(`done line "${hero.doneLine}" before any ride`);
+  if (hero.bars !== flatten(ss, ftp).length) fail(`hero profile has ${hero.bars} intervals, expected ${flatten(ss, ftp).length}`);
+  if (!/red recovery/i.test(hero.rec || '') || !/red/.test(hero.recDot || '') || hero.recBtns.join() !== 'swap,0.9') fail(`hero recovery line "${hero.rec}" ${hero.recBtns.join()}`);
+  // big numbers (premium look, phone Nov 12, desktop Nov 13) replace the meta line on both layouts
+  if (!(await vis('#today .hero-nums')) || await vis('#today .hero-meta')) fail('hero shows the meta line instead of the big numbers');
+  if (hero.main?.replace(/W$/, '') !== set.match(/at ([\d/]+) W/)[1]) fail(`hero main watts ${hero.main}, set "${set}"`);
+  // the profile readout (mouse on desktop, a tap on the phone) on the first interval
+  await page.$eval('#today .hero-prof', (el) => el.scrollIntoView({ block: 'center' }));
+  const b0 = await page.locator('#today .hero-prof svg [data-i="0"]').boundingBox();
+  if (phone) await page.touchscreen.tap(b0.x + b0.width / 2, b0.y + b0.height * 0.8); else await page.mouse.move(b0.x + b0.width / 2, b0.y + b0.height * 0.8);
+  await page.waitForSelector('#today .hero-prof.hov', { timeout: 3000 });
+  if (await text('#today .hero-prof .pt-lbl') !== flatten(ss, ftp)[0].label) fail(`hero readout "${await text('#today .hero-prof .pt-lbl')}"`);
+  if (!phone) await page.mouse.move(5, 5);
+  // a free ride this morning: the workout stays open (Start still first) with a done line, and the recovery call goes
+  await seed(RIDES);
+  await at(DAY_AT.workout);
+  const free = await page.evaluate(() => ({ name: document.querySelector('#today .hero-name').textContent.trim(), start: !!document.querySelector('#hero-start'), rec: !!document.querySelector('#today .hero-rec'),
+    line: document.querySelector('#today .hero-done')?.textContent.replace(/\s+/g, ' ').trim(), see: !!document.querySelector('#today .hero-done .hero-done-see') }));
+  if (free.name !== ss.name || !free.start || !/Free ride · 15 TSS/.test(free.line || '') || !free.see || free.rec) fail(`after a free ride ${JSON.stringify(free)}`);
+
+  // overview tiles: recovery, this week (done / planned, optional day left out), form, FTP
+  const ov = await page.evaluate(() => {
+    const shown = (el) => el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none';
+    return {
+      tiles: [...document.querySelectorAll('#overview .stat.ov2')].filter(shown).map((t) => [t.querySelector('.ol').textContent, t.querySelector('.v').textContent.replace(/\s+/g, ' ').trim()]),
+      dots: [...document.querySelectorAll('#overview .ov-week .wd')].map((d) => d.className.replace('wd ', '')),
+      card: [...document.querySelectorAll('#overview .rec-card')].filter(shown).map((c) => c.querySelector('.rc-v').textContent),
+    };
+  });
+  const real = RIDES;
+  const ld = loadNow(loadSeries(real, DAY_AT.workout, 90).at(-1));
+  const weekKeys = ['16', '17', '18', '19', '20', '21', '22'].map((d) => `2026-11-${d}`);
+  const planSec = weekKeys.filter((k) => W(PLAN.days[k]) && !PLAN.optional.includes(k)).reduce((a, k) => a + totalDuration(W(PLAN.days[k])), 0);
+  const doneSec = real.filter((r) => weekKeys.includes(r.id.slice(0, 10))).reduce((a, r) => a + r.durSec, 0);
+  const tile = (l) => ov.tiles.find(([x]) => x === l)?.[1];
+  const labels = ov.tiles.map(([l]) => l).join();
+  if (labels !== (phone ? 'This week,Form,FTP' : 'Recovery,This week,Form,FTP')) fail(`overview tiles ${labels}`);
+  if (phone ? ov.card.join() !== '25%' : tile('Recovery') !== '25%') fail(`recovery ${phone ? ov.card.join() : tile('Recovery')}`);
+  if (tile('This week') !== `${fmtHours(doneSec)} / ${fmtHours(planSec)}`) fail(`this week "${tile('This week')}", expected ${fmtHours(doneSec)} / ${fmtHours(planSec)}`);
+  // a day's dot fills once anything is ridden (like the Calendar's check mark), so the free ride fills today's
+  if (ov.dots.join() !== 'plan,done,done today,off,off,plan,plan') fail(`week dots ${ov.dots.join()}`);
+  if (!tile('Form')?.startsWith(`${ld.form > 0 ? '+' : ''}${ld.form}`)) fail(`form "${tile('Form')}", expected ${ld.form}`);
+  if (!tile('FTP')?.startsWith(`${ftp} W`)) fail(`FTP tile "${tile('FTP')}"`);
+
+  // Next days: the 13 days after today, from tomorrow
+  const strip = await page.$$eval('#week-strip .day', (ds) => ds.map((d) => [d.dataset.day, d.querySelector('.d-name').textContent, d.querySelector('.d-missed')?.textContent || '']));
+  const want = [['2026-11-19', 'Rest', ''], ['2026-11-20', 'Strength', ''], ['2026-11-21', W('sim-rolling-45').name, ''], ['2026-11-22', W('z2-90').name, 'Optional'], ['2026-11-23', 'Nothing planned', '']];
+  if (strip.length !== 13 || JSON.stringify(strip.slice(0, 5)) !== JSON.stringify(want)) fail(`Next days ${JSON.stringify(strip.slice(0, 5))} (${strip.length} cards)`);
+  if (!(await page.isDisabled('#week [data-scroll="-1"]'))) fail('Next days starts scrolled');
+  ok(`${label}: Today on a workout day (fixed clock): hero, recovery call, readout, a free ride done, overview tiles, Next days`);
+
+  // a Next days card opens that day in the Calendar
+  await page.click('#week-strip .day[data-day="2026-11-21"]');
+  await page.waitForFunction(() => document.querySelector('#home').dataset.tab === 'calendar' && document.querySelector('.cal-cell.sel')?.dataset.day === '2026-11-21', null, { timeout: 3000 });
+  if (!/^Saturday, November 21/.test(await text('#cal-detail h3')) || await text('#cal-detail .wo-name') !== W('sim-rolling-45').name || await text('#cal-detail [data-startday]') !== 'Ride it now') fail('Next days card opened the wrong Calendar day');
+
+  // ---- Calendar (same fixed day): month grid, chips, today's detail, then a done, a missed and a rest day opened
+  await page.click('#cal-today');
+  const cal = await page.evaluate(() => ({
+    title: document.querySelector('#cal-title').textContent,
+    cells: [...document.querySelectorAll('#cal-grid .cal-cell')].map((c) => [c.dataset.day, c.className.replace(/\s+/g, ' ').trim(), c.querySelector('.cal-chip')?.textContent || '', (c.querySelector('.cal-done, .cal-missed')?.textContent || '').trim()]),
+  }));
+  const cell = (k) => cal.cells.find(([d]) => d === k);
+  const nov = cal.cells.filter(([d]) => d.startsWith('2026-11')).map(([d]) => d);
+  if (cal.title !== 'November 2026' || cal.cells[0][0] !== '2026-10-26' || nov.length !== 30 || new Set(nov).size !== 30) fail(`month ${cal.title}, first ${cal.cells[0][0]}, ${nov.length} November days`);
+  if (cal.cells.filter(([, c]) => /\btoday\b/.test(c)).map(([d]) => d).join() !== '2026-11-18' || cal.cells.filter(([, c]) => /\bsel\b/.test(c)).map(([d]) => d).join() !== '2026-11-18') fail('today / selected cell');
+  const mins = (id) => `${Math.round(totalDuration(W(id)) / 60)}'`;
+  const chips = [['2026-11-16', `${W('z2-60').name}${mins('z2-60')}`, 'missed'], ['2026-11-17', `${W('vo2-30-15').name}${mins('vo2-30-15')}`, '✓ 72 TSS'], ['2026-11-18', `${ss.name}${mins(ss.id)}`, '✓ 15 TSS'],
+    ['2026-11-19', 'Rest', ''], ['2026-11-20', 'Strength', ''], ['2026-11-22', `${W('z2-90').name}${mins('z2-90')}`, 'optional'], ['2026-11-25', '', '']];
+  for (const [k, chip, st] of chips) if (cell(k)[2] !== chip || cell(k)[3] !== st) fail(`${k} cell "${cell(k)[2]}" "${cell(k)[3]}", expected "${chip}" "${st}"`);
+  if (!cell('2026-10-26')[1].includes('other')) fail('October days not marked as the other month');
+  const det = () => page.evaluate(() => {
+    const d = document.querySelector('#cal-detail'), q = (s) => d.querySelector(s)?.textContent.replace(/\s+/g, ' ').trim();
+    return { h: q('h3'), name: q('.wo-name'), done: q('.cal-done-name'), sub: q('.cal-done-sub'), stats: d.querySelectorAll('.cal-stats .hs').length, start: q('[data-startday]'), startPrimary: !!d.querySelector('[data-startday].primary'),
+      missed: q('.cal-missed-line'), coach: q('.coach-call'), whoop: [...d.querySelectorAll('.cal-ride')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()), text: d.textContent.replace(/\s+/g, ' '), bars: d.querySelectorAll('.cal-prof svg [data-i]').length };
+  });
+  let dd = await det();
+  if (!/^Wednesday, November 18/.test(dd.h) || dd.name !== ss.name || dd.start !== 'Start' || !dd.startPrimary || !dd.text.includes(`Coach: ${PLAN.notes['2026-11-18']}`) || dd.bars !== flatten(ss, ftp).length) fail(`today's detail ${JSON.stringify(dd)}`);
+  if (!dd.whoop.some((x) => /WHOOP: recovery 25%/.test(x)) || !dd.whoop.some((x) => /Free ride .*TSS 15.*See ride/.test(x))) fail(`today's detail rides / WHOOP ${JSON.stringify(dd.whoop)}`);
+  // a done day: the result first (no Start, no plan note), the ride's numbers, See ride opens it and Back returns here
+  await page.click('.cal-cell[data-day="2026-11-17"]');
+  dd = await det();
+  const vo2 = RIDES[1];
+  if (!/^Tuesday, November 17/.test(dd.h) || dd.done !== `Done. ${W('vo2-30-15').name}` || !/^Weakest rep at 93% of target\. Ridden at /.test(dd.sub || '') || dd.stats !== 6 || dd.start) fail(`done day detail ${JSON.stringify(dd)}`);
+  if (!dd.text.includes(fmtTime(vo2.durSec)) || !dd.text.includes('210 W') || !dd.text.includes('0.84')) fail('done day numbers');
+  await toRideAndBack('#cal-detail .cal-see-main', 'calendar');
+  if (await page.$eval('.cal-cell.sel', (c) => c.dataset.day) !== '2026-11-17') fail('Back from the ride page lost the selected day');
+  await page.click('.cal-cell[data-day="2026-11-16"]');
+  dd = await det();
+  if (dd.missed !== 'Missed.' || dd.start !== 'Ride it now' || dd.startPrimary || dd.done) fail(`missed day detail ${JSON.stringify(dd)}`);
+  await page.click('.cal-cell[data-day="2026-11-19"]');
+  dd = await det();
+  if (!dd.text.includes('Rest day.') || !/Rest instead/.test(dd.coach || '') || !dd.coach.includes('Smoke coach') || dd.start) fail(`rest day detail ${JSON.stringify(dd)}`);
+  // month switch, a day in another month, back to today
+  await page.click('#cal-next');
+  if (await text('#cal-title') !== 'December 2026') fail('next month');
+  await page.click('#cal-prev'); await page.click('#cal-prev');
+  if (await text('#cal-title') !== 'October 2026') fail('previous month');
+  await page.click('.cal-cell[data-day="2026-11-01"]'); // a November day shown in October's last row moves the month
+  if (await text('#cal-title') !== 'November 2026' || !/^Sunday, November 1/.test((await det()).h)) fail('a next-month cell did not move the month');
+  await page.click('#cal-today');
+  if (await text('#cal-title') !== 'November 2026' || !/^Wednesday, November 18/.test((await det()).h)) fail('Today button');
+  ok(`${label}: Calendar (fixed clock): month grid and chips, a day opened from Next days, done / missed / rest days, ride page and back, month switch`);
+
+  // ---- rest day (Thu Nov 19): no workout, free ride is the main button, the coach's call
+  await page.click('#tabs button[data-tab="today"]');
+  await at(DAY_AT.rest);
+  const rest = await page.evaluate(() => {
+    const h = document.querySelector('#today .hero');
+    return { cls: h.className, name: h.querySelector('.hero-name').textContent, desc: h.querySelector('.hero-desc')?.textContent, start: !!h.querySelector('#hero-start'), prof: !!h.querySelector('.hero-prof'),
+      free: [h.querySelector('#btn-free').className.includes('primary'), h.querySelector('#btn-free').textContent.trim()], rec: h.querySelector('.hero-rec')?.textContent.replace(/\s+/g, ' ').trim() };
+  });
+  if (!rest.cls.includes('nowo') || rest.name !== 'Rest day' || !/Nothing planned/.test(rest.desc) || rest.start || rest.prof || !rest.free[0] || rest.free[1] !== 'Start free ride') fail(`rest day hero ${JSON.stringify(rest)}`);
+  if (!/Rest instead/.test(rest.rec || '') || !rest.rec.includes('Smoke coach')) fail(`rest day coach call "${rest.rec}"`);
+  if (await page.$eval('#week-strip .day', (d) => d.dataset.day) !== '2026-11-20') fail('Next days on the rest day does not start tomorrow');
+
+  // ---- done day (Tue Nov 17, evening): the result, the ride's numbers, See ride and back to Today
+  await at(DAY_AT.done);
+  const done = await page.evaluate(() => {
+    const h = document.querySelector('#today .hero'), q = (s) => h.querySelector(s)?.textContent.replace(/\s+/g, ' ').trim();
+    return { cls: h.className, name: q('.hero-name'), desc: q('.hero-desc'), stats: [...h.querySelectorAll('.hero-stats .hs .l b')].map((b) => b.textContent), start: !!h.querySelector('#hero-start'),
+      btns: [...h.querySelectorAll('.hero-btns button')].map((b) => b.id), bars: h.querySelectorAll('.hero-prof svg [data-i]').length };
+  });
+  if (!done.cls.includes('done') || done.name !== `Done. ${W('vo2-30-15').name}` || done.desc !== 'Weakest rep at 93% of target.' || done.start) fail(`done day hero ${JSON.stringify(done)}`);
+  if (done.stats.join() !== 'Time,NP,TSS,IF,Avg HR,Intervals' || done.btns.join() !== 'hero-see,btn-free' || done.bars !== flatten(W('vo2-30-15'), ftp).length) fail(`done hero stats / buttons ${JSON.stringify(done)}`);
+  await toRideAndBack('#hero-see', 'today');
+  ok(`${label}: Today on a rest day and a done day (fixed clock): free ride first, coach call, the ride's numbers, See ride and back`);
+  await ctx.close();
+}
+
 async function run(viewport, label) {
   const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
@@ -443,6 +640,8 @@ try {
   await run({ width: 1280, height: 800 }, 'desktop');
   await run({ width: 390, height: 844 }, 'phone');
   await mineRun();
+  await todayRun({ width: 1280, height: 800 }, 'desktop');
+  await todayRun({ width: 390, height: 844 }, 'phone');
 } finally {
   await browser.close();
   server.close();
