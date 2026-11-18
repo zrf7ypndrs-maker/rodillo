@@ -9,6 +9,7 @@ import { ZONES, zoneRange } from './zones.js?v=202611102147';
 import { fmtTime } from './ridepage.js?v=202611102147';
 import { ls, rides } from './store.js?v=202611102147';
 import { $, $$, esc } from './ui.js?v=202611102147';
+import { dkey, dayDate } from './dates.js?v=202611102147';
 
 // from app.js, set by initTraining()
 let app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask;
@@ -17,7 +18,6 @@ export function initTraining(deps) {
   ({ app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask } = deps);
 }
 
-const dkey = (d) => d.toLocaleDateString('en-CA'); // same day key as app.js
 
 // Form states, same cutoffs as formLabel() in stats.js (the Form tile)
 const FORM_BANDS = [[15, 25, 'Very fresh'], [5, 15, 'Fresh'], [-10, 5, 'Balanced'], [-30, -10, 'Productive fatigue'], [-45, -30, 'Overreaching']];
@@ -54,7 +54,7 @@ export function svgLoad(series, { phone, INK, MUTED, RULE, FITNESS, FATIGUE }) {
   const bw = Math.max(1, (PR - 30) / n - 1);
   const bars = series.map((d, i) => `<rect x="${f(X(i) - bw / 2)}" y="${f(Math.min(B(d.tsb), Z))}" width="${f(bw)}" height="${f(Math.abs(B(d.tsb) - Z))}" fill="${d.tsb >= 0 ? FITNESS : FATIGUE}" opacity=".85"/>`).join('');
   const m1 = series.findIndex((d) => d.date.endsWith('-01')), first = m1 < 0 || m1 >= (ph ? 16 : 10); // drop the first date if it would run into the 1st of the month
-  const ticks = series.map((d, i) => d.date.endsWith('-01') || (i === 0 && first) ? `<text x="${X(i)}" y="${H - 4}" fill="${MUTED}" font-size="${12 * k}">${new Date(d.date + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
+  const ticks = series.map((d, i) => d.date.endsWith('-01') || (i === 0 && first) ? `<text x="${X(i)}" y="${H - 4}" fill="${MUTED}" font-size="${12 * k}">${dayDate(d.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>` : '').join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="svgchart">
     <text x="0" y="${14 * k}" fill="${MUTED}" font-size="${12 * k}">${Math.round(maxL)}</text>
     ${gap}${line('atl', FATIGUE)}${line('ctl', FITNESS)}
@@ -69,7 +69,7 @@ export function svgWeekly(weeks, { phone, ZC, INK, MUTED, RULE, FAINT, UNDERLAY 
   const top = 24, barMax = phone ? 110 : 120, base = top + barMax, H = base + 40;
   const max = Math.max(100, ...weeks.map((w) => w.tss));
   const bw = (W - 8) / n;
-  const fmtDay = (d) => new Date(d + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const fmtDay = (d) => dayDate(d).toLocaleDateString([], { month: 'short', day: 'numeric' });
   // Each bar is the week's TSS stacked by power zone, Z1 at the bottom; HR-only TSS (no power) sits on top, hatched.
   const bars = weeks.map((w, i) => {
     const h = (w.tss / max) * barMax, x = 4 + i * bw, cx = x + bw / 2, bwid = Math.min(bw - 8, 34), bx = cx - bwid / 2;

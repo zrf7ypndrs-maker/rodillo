@@ -16,6 +16,7 @@ import { ZONES, zoneOf } from './zones.js?v=202611102147';
 import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
 import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
 import { ls, rides, docs } from './store.js?v=202611102147';
+import { dkey, dayDate, addDays, mondayOf } from './dates.js?v=202611102147';
 import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js?v=202611102147';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
 import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
@@ -387,7 +388,7 @@ async function flushMine(gh = syncClient()) {
 /** Dates from today on where the plan has this workout. */
 function plannedOn(id) {
   const today = dkey(new Date());
-  return Object.entries(app.plan?.days || {}).filter(([d, x]) => d >= today && x === id).map(([d]) => new Date(`${d}T12:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+  return Object.entries(app.plan?.days || {}).filter(([d, x]) => d >= today && x === id).map(([d]) => dayDate(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
 }
 
 function applyLibrary() {
@@ -626,7 +627,7 @@ function woFacts(w) {
   const today = dkey(new Date());
   const next = Object.keys(app.plan?.days || {}).sort().find((k) => k >= today && app.plan.days[k] === w.id);
   if (next) {
-    const when = next === today ? 'Today' : new Date(next + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const when = next === today ? 'Today' : dayDate(next).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
     out.push(`<div class="f"><span class="fl">In the plan</span><span class="fv">${when}</span></div>`);
   }
   const segs = flatten(w, app.settings.ftp);
@@ -739,7 +740,7 @@ function renderOverview() {
   // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
   const wkg = (app.settings.ftp / (app.settings.riderKg || 77)).toFixed(1);
   const since = dkey(addDays(new Date(), -90));
-  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [Date.parse(r.id.slice(0, 10) + 'T12:00'), r.ftp]);
+  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [+dayDate(r.id.slice(0, 10)), r.ftp]);
   fp.push([Date.now(), app.settings.ftp]);
   let ftpViz = '', ftpSub = '';
   if (fp.length > 1) {
@@ -765,9 +766,7 @@ function renderOverview() {
   }
 
 // ------------------------------------------------------------------ plan: week carousel + calendar
-const dkey = (d) => d.toLocaleDateString('en-CA');
-const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const mondayOf = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+// day keys: dkey, dayDate, addDays, mondayOf from js/dates.js
 
 function workoutColor(w) {
   const segs = flatten(w);
@@ -790,7 +789,7 @@ function dayInfo(key) {
 }
 
 function dayCardHtml(info) {
-  const d = new Date(info.key + 'T12:00');
+  const d = dayDate(info.key);
   const dow = d.toLocaleDateString([], { weekday: 'short' });
   let body, status = '';
   // Slim cards for the "Next days" strip (today is the hero above it): name + duration, no chart.
@@ -903,7 +902,7 @@ function renderHero() {
   const el = $('#today');
   const today = dayInfo(dkey(new Date()));
   const w = today.workout;
-  const date = new Date(today.key + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const date = dayDate(today.key).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const src = !app.plan ? '' : !syncClient()
     ? `<p class="plan-src">Showing the public copy of the plan. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to get the coach's daily changes on this device.</p>`
     : app.coachNoRepo ? `<p class="plan-src">Can't reach your data repo <b>${esc(app.coachNoRepo)}</b>. Create it on GitHub (private) and install the Rodillo GitHub App on it, then reload. Another repo name goes in <a href="#" data-open-settings="sync">Settings</a>.</p>`
@@ -1094,7 +1093,7 @@ function renderCalendar() {
   $('#cal-grid').querySelectorAll('.cal-cell').forEach((c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
   // detail for the selected day
   const info = dayInfo(sel);
-  const date = new Date(sel + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  const date = dayDate(sel).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   let html = `<h3>${date}</h3>`;
   // The planned workout already ridden: lead with the result, not the plan (no Start, no pre-ride coach note).
   const doneRide = info.workout && info.ridden.find((r) => r.workoutId === info.workout.id);

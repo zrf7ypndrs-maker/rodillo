@@ -3,6 +3,7 @@
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
 import { ZONES, zoneOfWatts, WORK_FTP } from './zones.js?v=202611102147';
+import { dkey, dayDate } from './dates.js?v=202611102147';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -176,8 +177,6 @@ export function buildRide(samples, meta) {
 
 // ---------------- across rides ----------------
 
-const dayKey = (d) => d.toLocaleDateString('en-CA');
-
 /**
  * Daily CTL (42 d), ATL (7 d), TSB from ride summaries, as of the START of each day:
  * a day's ride moves fitness, fatigue and form the next morning, and tsb = ctl - atl on every row.
@@ -186,13 +185,13 @@ const dayKey = (d) => d.toLocaleDateString('en-CA');
 export function loadSeries(rides, until = new Date(), days = 120) {
   const byDay = {};
   for (const r of rides) { const k = r.id.slice(0, 10); byDay[k] = (byDay[k] || 0) + (r.tss || 0); }
-  const end = dayKey(until);
+  const end = dkey(until);
   const first = Object.keys(byDay).sort()[0] || end;
   const out = [];
   let ctl = 0, atl = 0;
   // noon local so DST never skips or repeats a day
-  for (let d = new Date(first + 'T12:00:00'); dayKey(d) <= end; d.setDate(d.getDate() + 1)) {
-    const k = dayKey(d), tss = byDay[k] || 0;
+  for (let d = dayDate(first); dkey(d) <= end; d.setDate(d.getDate() + 1)) {
+    const k = dkey(d), tss = byDay[k] || 0;
     out.push({ date: k, tss, ctl: r1(ctl), atl: r1(atl), tsb: r1(ctl - atl) });
     ctl += (tss - ctl) / 42;
     atl += (tss - atl) / 7;
@@ -238,7 +237,7 @@ export function weekly(rides, n = 12, now = new Date()) {
       const z = tssByZone(r);
       if (z) z.forEach((t, i) => { zoneTss[i] += t; }); else otherTss += r.tss || 0;
     }
-    weeks.push({ start: dayKey(start), rides: rs.length, hours: r1(rs.reduce((a, r) => a + r.durSec, 0) / 3600), tss: rs.reduce((a, r) => a + (r.tss || 0), 0), zoneTss: zoneTss.map(r1), otherTss: r1(otherTss) });
+    weeks.push({ start: dkey(start), rides: rs.length, hours: r1(rs.reduce((a, r) => a + r.durSec, 0) / 3600), tss: rs.reduce((a, r) => a + (r.tss || 0), 0), zoneTss: zoneTss.map(r1), otherTss: r1(otherTss) });
   }
   return weeks;
 }
