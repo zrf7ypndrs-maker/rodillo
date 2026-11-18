@@ -51,6 +51,42 @@ async function run(viewport, label) {
     }
     ok(`${label}: Settings, Controls, Garage, Connections open and close`);
 
+    // Garage (js/garage.js): Bikes / Gearing tabs, a bike's details, a custom bike and a new gearing, both cancelled
+    const saved = () => page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('rodillo.settings') || '{}').garage ?? null));
+    const before = await saved();
+    const shown = (sel) => page.waitForFunction((s) => { const el = document.querySelector(s); return el && !el.closest('.hidden'); }, sel, { timeout: 3000 });
+    await page.click('#btn-garage');
+    await shown('#garage-form .gar-tile');
+    const tiles = await page.locator('#garage-form .gar-tile').count();
+    await page.click('#gar-tabs button[data-gtab="gearing"]');
+    await shown('#gearing-form #gear-all');
+    if (!(await page.isHidden('#garage-form'))) throw new Error('garage: Bikes still showing on the Gearing tab');
+    await page.click('#gear-new');
+    await shown('#gearing-form #set-gears');
+    await page.selectOption('#set-gears', '2x12');
+    await page.click('#gear-back');
+    await shown('#gearing-form #gear-all');
+    await page.click('#gar-tabs button[data-gtab="bikes"]');
+    await shown('#garage-form .gar-tile');
+    if (!(await page.isHidden('#gearing-form'))) throw new Error('garage: Gearing still showing on the Bikes tab');
+    await page.click('#garage-form .gar-more[data-details]');
+    await shown('#garage-form .gar-dl');
+    await page.click('#gar-back');
+    await shown('#garage-form .gar-tile');
+    await page.click('#gar-custom');
+    await shown('#garage-form #set-gname');
+    await page.fill('#set-gname', 'Smoke bike');
+    await page.selectOption('#set-bike', 'custom');
+    await shown('#garage-form #set-btype');
+    await page.selectOption('#set-btype', { index: 1 });
+    await page.click('#gar-back'); // Cancel
+    await shown('#garage-form .gar-tile');
+    if (await page.locator('#garage-form .gar-tile').count() !== tiles) throw new Error('garage: Cancel changed the bike list');
+    if (await saved() !== before) throw new Error('garage: Cancel saved something');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#garage.hidden', { state: 'attached', timeout: 3000 });
+    ok(`${label}: Garage: Bikes / Gearing, details, custom bike and new gearing cancelled`);
+
     await page.click('#btn-devices');
     await page.click('#btn-demo');
     await page.keyboard.press('Escape');
