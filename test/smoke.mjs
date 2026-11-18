@@ -1,5 +1,6 @@
 // Browser smoke test: the whole app in Chrome, demo trainer, no Bluetooth or network.
 // Opens every home screen and panel (Today and Calendar also on a seeded week with a fixed clock), rides a demo workout (start, skip, end), opens the ride page,
+// drives home and a ride with a fake Zwift Ride (both hoods, real button bytes) and the keyboard,
 // and fails on any uncaught error or console error. Covers js/app.js, which the unit tests don't load.
 // Needs Chrome: CHROME_PATH, or /usr/bin/google-chrome (GitHub's ubuntu-latest has it).
 import http from 'node:http';
@@ -458,6 +459,335 @@ async function todayRun(viewport, label) {
   await ctx.close();
 }
 
+// ---- controller and keyboard: action(), the button map, hold to confirm, the keyboard listener (js/app.js)
+// A fake Zwift Ride in the page: Web Bluetooth hands out two hoods (left 0x08, right 0x07) whose button service sends
+// real RideKeyPadStatus bytes, so a press goes through js/ble/zwiftride.js and onButton() like on the bike.
+// window.__ride.press(['a'], 'left' | 'right' | 'both') adds buttons to what that hood holds; .release(side) lets go of all.
+function fakeRide() {
+  const uuid16 = (n) => `0000${n.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
+  const RIDE = uuid16(0xfc82), ch = (n) => `0000000${n}-19ca-4651-86e5-fa29dcdd09d1`;
+  const MASK = { left: 0x1, up: 0x2, right: 0x4, down: 0x8, a: 0x10, b: 0x20, y: 0x40, z: 0x80, shiftUpL: 0x100, shiftDnL: 0x200, powerUpL: 0x400, onOffL: 0x800, shiftUpR: 0x1000, shiftDnR: 0x2000, powerUpR: 0x4000, onOffR: 0x8000 };
+  const varint = (v) => { const out = []; while (v >= 0x80) { out.push((v % 128) | 0x80); v = Math.floor(v / 128); } out.push(v); return out; };
+  const char = (value = new Uint8Array(0)) => ({
+    l: [], addEventListener(_, f) { this.l.push(f); }, async startNotifications() {}, async readValue() { return new DataView(value.buffer); },
+    async writeValueWithResponse() {}, async writeValueWithoutResponse() {}, async writeValue() {},
+    fire(bytes) { const v = new DataView(new Uint8Array(bytes).buffer); for (const f of this.l) f({ target: { value: v } }); },
+  });
+  const hoods = {};
+  const device = (side) => {
+    const asyncC = char();
+    const svcs = {
+      [RIDE]: { [ch(2)]: asyncC, [ch(3)]: char(), [ch(4)]: char() },
+      [uuid16(0x180a)]: { [uuid16(0x2a26)]: char(new TextEncoder().encode('1.2.0')) },
+      [uuid16(0x180f)]: { [uuid16(0x2a19)]: char(new Uint8Array([85])) },
+    };
+    const svc = (u) => ({ uuid: u, async getCharacteristic(c) { if (!svcs[u][c]) throw new Error(`no characteristic ${c}`); return svcs[u][c]; } });
+    const server = { async getPrimaryService(u) { if (!svcs[u]) throw new Error(`no service ${u}`); return svc(u); }, async getPrimaryServices() { return Object.keys(svcs).map(svc); } };
+    return { name: 'Zwift Ride', id: `smoke-ride-${side}`, held: new Set(), asyncC, addEventListener() {}, gatt: { connected: true, async connect() { return server; }, disconnect() {} } };
+  };
+  const send = (d) => {
+    let v = 0xffffffff; // a 0 bit = pressed
+    for (const b of d.held) if (MASK[b]) v -= MASK[b];
+    const bytes = [0x23, 0x08, ...varint(v)];
+    for (const [b, loc] of [['paddleL', 0], ['paddleR', 1]]) if (d.held.has(b)) bytes.push(0x1a, 5, 0x08, loc, 0x10, 0xc8, 0x01); // analog 100
+    d.asyncC.fire(bytes);
+  };
+  const sides = (side) => (side === 'both' ? ['left', 'right'] : [side]);
+  Object.defineProperty(navigator, 'bluetooth', {
+    configurable: true,
+    value: { async requestDevice(o) { const side = o.filters?.[0]?.manufacturerData?.[0]?.dataPrefix?.[0] === 0x07 ? 'right' : 'left'; return (hoods[side] = device(side)); } },
+  });
+  window.__ride = {
+    press(names, side = 'left') { for (const s of sides(side)) { names.forEach((b) => hoods[s].held.add(b)); send(hoods[s]); } },
+    release(side = 'left') { for (const s of sides(side)) { hoods[s].held.clear(); send(hoods[s]); } },
+  };
+}
+
+async function controlsRun(viewport, label) {
+  const phone = label === 'phone';
+  const ctx = await browser.newContext({ viewport, hasTouch: phone, isMobile: phone });
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+  await ctx.addInitScript(fakeRide);
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`controls ${label}: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`controls ${label} console: ${m.text()}`); });
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForSelector('#today', { state: 'attached' });
+  await page.waitForFunction(() => document.querySelectorAll('#workout-list .wo').length > 0, null, { timeout: 5000 });
+  const fail = (what) => { throw new Error(`controls (${label}): ${what}`); };
+  const wait = (ms) => page.waitForTimeout(ms);
+  const press = (names, side = 'left') => page.evaluate(([n, s]) => window.__ride.press(n, s), [names, side]);
+  const release = (side = 'left') => page.evaluate((s) => window.__ride.release(s), side);
+  // a press, then let go; onButton() drops the same button again within 90 ms (both hoods), so leave a gap
+  const tap = async (names, side = 'left') => { await press(names, side); await wait(40); await release(side); await wait(130); };
+  const holdBtn = async (names, ms, side = 'left') => { await press(names, side); await wait(ms); await release(side); await wait(120); };
+  const key = async (k) => { await page.keyboard.press(k); await wait(80); };
+  const st = () => page.evaluate(() => {
+    const app = window.rodillo, s = app.session, q = (sel) => document.querySelector(sel);
+    const shown = (sel) => !!q(sel) && !q(sel).classList.contains('hidden') && !q(sel).closest('.hidden');
+    return {
+      screen: app.screen, tab: app.tab, woKind: app.woKind, modal: shown('#modal'), devpop: shown('#devpop'), controls: shown('#controls'),
+      hold: shown('#hold') ? { kind: ['skip', 'end'].find((k) => q('#hold').classList.contains(k)), key: q('#hold-key').textContent, msg: q('#hold-msg').textContent, sub: q('#hold-sub').textContent } : null,
+      toast: q('#toast').classList.contains('show') ? q('#toast').textContent : '',
+      s: s && { started: s.started, paused: s.paused, mode: s.mode, intensity: s.intensity, grade: s.gradeOffset, seg: s.segIndex, rear: s.gb.rear, front: s.gb.front, nRear: s.gb.nRear, double: s.gb.isDouble, samples: s.samples.length },
+    };
+  });
+  // the home focus ring: which item of the tab's controller list carries .focus (-1 none, -2 more than one)
+  const ring = () => page.evaluate(() => {
+    const app = window.rodillo, all = (sel) => [...document.querySelectorAll(sel)];
+    const list = app.tab === 'today' ? all('#today .hero-btns button')
+      : app.tab === 'workouts' ? [...all('#wo-kind button:not(.hidden)'), ...all(app.woKind === 'slope' ? '#slope-list .wo' : '#workout-list .wo')] : [];
+    const f = all('#home .focus');
+    return { at: f.length === 1 ? list.indexOf(f[0]) : f.length ? -2 : -1, n: list.length };
+  });
+  const modalRing = () => page.evaluate(() => [...document.querySelectorAll('#modal .modal-btns button:not(.hidden)')].findIndex((b) => b.classList.contains('focus')));
+  const expectRing = async (at, what) => { const r = await ring(); if (r.at !== at) fail(`${what}: focus ring on item ${r.at} of ${r.n}, expected ${at}`); };
+  const expectTab = async (t, what) => {
+    const got = await page.evaluate(() => [document.querySelector('#home').dataset.tab, document.querySelector('#tabs button.active')?.dataset.tab, window.rodillo.tab]);
+    if (got.some((x) => x !== t)) fail(`${what}: tab ${got.join(' / ')}, expected ${t}`);
+  };
+
+  // connect both hoods from Connections; B (a menu "back") closes the popover
+  await page.click('#btn-devices');
+  await page.click('[data-connect="controller"]');
+  await page.waitForFunction(() => window.rodillo.controllers.filter((c) => c.state === 'connected').length === 1, null, { timeout: 3000 });
+  if (!phone) {
+    await page.waitForSelector('[data-connect="controllerR"]:not(.hidden)', { timeout: 3000 });
+    await page.click('[data-connect="controllerR"]');
+    await page.waitForFunction(() => window.rodillo.controllers.filter((c) => c.state === 'connected').length === 2, null, { timeout: 3000 });
+  }
+  if (!(await st()).devpop) fail('Connections popover not open after connecting');
+  await tap(['b']);
+  if ((await st()).devpop) fail('B on home did not close the Connections popover');
+  ok(`${label}: Ride controller${phone ? '' : 's (both hoods)'} connect through the fake Bluetooth; B closes Connections`);
+
+  // ---- home, controller only (no key pressed yet): tabs, focus ring, select, the modal
+  await expectTab('today', 'start');
+  await tap(['right'], phone ? 'left' : 'both'); // both hoods send it: counted once
+  await expectTab('workouts', 'D-pad right');
+  await expectRing(0, 'Workouts tab, controller only'); // the ERG switch; the ring shows without a key ever pressed
+  for (const t of ['calendar', 'training', 'today', 'workouts']) { await tap(['right']); await expectTab(t, 'D-pad right'); }
+  await tap(['left']); await expectTab('today', 'D-pad left');
+  await tap(['left']); await expectTab('training', 'D-pad left wraps');
+  await tap(['right']); await tap(['right']); await expectTab('workouts', 'D-pad right');
+  const moves = [[['down'], 1], [['paddleR'], 2], [['shiftUpR'], 3], [['shiftDnL'], 2], [['up'], 1], [['shiftUpL'], 0], [['up'], 0], [['paddleL'], 0]];
+  for (const [b, at] of moves) { await tap(b, b[0].endsWith('R') && !phone ? 'right' : 'left'); await expectRing(at, `${b} on the Workouts tab`); }
+  await holdBtn(['down'], 800); // menus don't repeat a held button (only the ride screen does)
+  await expectRing(1, 'D-pad down held 800 ms on home');
+  await tap(['a']); // A on the Slope switch
+  if ((await st()).woKind !== 'slope') fail('A on the Slope switch did not show the Slope list');
+  await expectRing(1, 'after A on the Slope switch');
+  await tap(['down']); await expectRing(2, 'first Slope row');
+  await tap(['a']); // a row: no trainer yet, so the app asks
+  await page.waitForFunction(() => !document.querySelector('#modal').classList.contains('hidden'), null, { timeout: 3000 });
+  const nBtns = await page.$$eval('#modal .modal-btns button:not(.hidden)', (b) => b.length);
+  if (nBtns !== 2 || await modalRing() !== 1) fail(`"No trainer" modal: ${nBtns} buttons, ring on ${await modalRing()}, expected 2 and the last`);
+  await tap(['left']); if (await modalRing() !== 0) fail('D-pad left in the modal');
+  await tap(['right']); if (await modalRing() !== 1) fail('D-pad right in the modal');
+  await tap(['shiftDnL']); if (await modalRing() !== 0) fail('left shifter (easier) in the modal');
+  await tap(['b']);
+  const afterModal = await st();
+  if (afterModal.modal || afterModal.s || afterModal.screen !== 'home') fail(`B in the modal: modal ${afterModal.modal}, session ${!!afterModal.s}, screen ${afterModal.screen}`);
+  ok(`${label}: controller on home: tabs both ways, focus ring moved by D-pad, shifters and paddles, A on the switch and a row, the modal, B`);
+
+  // ---- home, keyboard: tabs, focus, Enter, Esc closes a panel
+  if (!phone) {
+    await key('ArrowRight'); await expectTab('calendar', 'ArrowRight');
+    await key('ArrowLeft'); await expectTab('workouts', 'ArrowLeft');
+    await key('ArrowDown'); await expectRing(1, 'ArrowDown');
+    await key('ArrowUp'); await expectRing(0, 'ArrowUp');
+    await key('Enter'); // the ERG switch
+    if ((await st()).woKind !== 'erg') fail('Enter on the ERG switch did not show the ERG list');
+    await page.click('#btn-controls');
+    if (!(await st()).controls) fail('Controls panel did not open');
+    await key('Escape');
+    if ((await st()).controls) fail('Esc on home did not close the Controls panel');
+    ok(`${label}: keyboard on home: arrows, Enter, Esc closes a panel`);
+  } else {
+    await tap(['up']); await tap(['up']); await expectRing(0, 'back up to the ERG switch');
+    await tap(['a']);
+    if ((await st()).woKind !== 'erg') fail('A on the ERG switch did not show the ERG list');
+  }
+
+  // ---- ride: Demo mode, then A on the first ERG row starts the workout (no launch animation from a row)
+  await page.click('#btn-devices');
+  await page.click('#btn-demo');
+  await tap(['b']);
+  await expectRing(0, 'ERG switch before the row');
+  await tap(['down']); await tap(['down']); await expectRing(2, 'first ERG row');
+  await tap(['a']);
+  await page.waitForSelector('#ride.active', { timeout: 5000 });
+  await page.waitForFunction(() => window.rodillo.session?.started && !window.rodillo.session.paused, null, { timeout: 10000 });
+  let r = await st();
+  if (r.s.mode !== 'erg') fail(`first ERG row rides in ${r.s.mode} mode`);
+
+  if (phone) {
+    // B held 5 s right away: under 10 s, nothing is saved, back home
+    await press(['b']); await wait(400);
+    r = await st();
+    if (r.hold?.kind !== 'end' || r.hold.key !== 'B' || !/Under 10 s/.test(r.hold.sub)) fail(`hold B overlay ${JSON.stringify(r.hold)}`);
+    await wait(5200); await release(); await wait(300);
+    r = await st();
+    if (r.s || r.screen !== 'home' || r.hold) fail(`B held 5 s under 10 s: screen ${r.screen}, session ${!!r.s}`);
+    ok(`${label}: A on a row starts the ride; B held 5 s ends it, under 10 s nothing saved`);
+    // again, for A pause, shifters (ERG) and the phone sheet's hold buttons (fill left to right, no ring)
+    await tap(['a']);
+    await page.waitForFunction(() => window.rodillo.session?.started && !window.rodillo.session.paused, null, { timeout: 10000 });
+    await tap(['a']); if (!(await st()).s.paused) fail('A did not pause');
+    await tap(['a']); if ((await st()).s.paused) fail('A did not resume');
+    await tap(['shiftUpR']); if ((await st()).s.intensity !== 1.01) fail('right shifter in ERG did not raise the effort to 101%');
+    await tap(['shiftDnL']); if ((await st()).s.intensity !== 1) fail('left shifter in ERG did not lower the effort to 100%');
+    const sheetHold = async (id, ms) => {
+      await page.evaluate((x) => document.getElementById(x).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })), id);
+      await wait(ms);
+      const filling = await page.$eval(`#${id}`, (el) => el.classList.contains('filling'));
+      await page.evaluate((x) => document.getElementById(x).dispatchEvent(new PointerEvent('pointerup', { bubbles: true })), id);
+      await wait(150);
+      return filling;
+    };
+    await page.click('#rp-more');
+    const seg0 = (await st()).s.seg;
+    if (!(await sheetHold('rp-skip', 400))) fail('sheet Skip did not fill while held');
+    r = await st(); if (r.s.seg !== seg0 || r.hold) fail('sheet Skip let go after 0.4 s still skipped');
+    await sheetHold('rp-skip', 1200);
+    r = await st(); if (r.s.seg !== seg0 + 1 || r.toast !== 'Skipped') fail(`sheet Skip held 1.2 s: segment ${seg0} -> ${r.s.seg}, toast "${r.toast}"`);
+    if (await page.$eval('#rp-sheet', (el) => !el.classList.contains('hidden'))) fail('sheet still open after the skip');
+    await page.click('#rp-more');
+    await sheetHold('rp-end', 600);
+    if (!(await st()).s) fail('sheet End let go after 0.6 s still ended the ride');
+    await sheetHold('rp-end', 2300);
+    r = await st(); if (r.s || !['home', 'ridepage'].includes(r.screen)) fail(`sheet End held 2.3 s: screen ${r.screen}, session ${!!r.s}`);
+    ok(`${label}: ride: A pause, ERG shifters, sheet Skip and End holds (let go early does nothing)`);
+    await ctx.close();
+    return;
+  }
+
+  // pause / resume with A and Space
+  await tap(['a']); r = await st();
+  if (!r.s.paused || !(await shownNow(page, '#r-paused'))) fail('A did not pause (or the pause screen is hidden)');
+  await tap(['a']); if ((await st()).s.paused) fail('A did not resume');
+  await key(' '); if (!(await st()).s.paused) fail('Space did not pause');
+  await key(' '); if ((await st()).s.paused) fail('Space did not resume');
+
+  // ERG: easier / harder = effort -/+1% from the shifters, paddles, D-pad, [ ] and the arrows
+  const effort = [[['shiftUpR'], 'right', 1.01], [['shiftDnL'], 'left', 1], [['paddleL'], 'left', 0.99], [['paddleR'], 'right', 1], [['shiftDnR'], 'right', 1.01], [['shiftUpL'], 'left', 1], [['up'], 'left', 1.01], [['down'], 'left', 1]];
+  for (const [b, side, want] of effort) {
+    await tap(b, side); r = await st();
+    if (r.s.intensity !== want) fail(`${b} in ERG: effort ${r.s.intensity}, expected ${want}`);
+  }
+  if (!/^Intensity 100%$/.test(r.toast)) fail(`ERG toast "${r.toast}"`);
+  for (const [k, want] of [[']', 1.01], ['[', 1], ['ArrowRight', 1.01], ['ArrowLeft', 1], ['ArrowUp', 1.01], ['ArrowDown', 1]]) {
+    await key(k); r = await st();
+    if (r.s.intensity !== want) fail(`${k} in ERG: effort ${r.s.intensity}, expected ${want}`);
+  }
+  // held: repeats after 450 ms, every 120 ms, and stops on release
+  const e0 = (await st()).s.intensity;
+  await holdBtn(['shiftUpR'], 1000, 'right');
+  const e1 = (await st()).s.intensity, up = Math.round((e1 - e0) * 100);
+  if (up < 4 || up > 8) fail(`right shifter held 1 s: effort +${up}%, expected 4 to 8 (repeat)`);
+  await wait(400);
+  if ((await st()).s.intensity !== e1) fail('effort kept changing after the shifter was let go');
+  await holdBtn(['down'], 1000);
+  const down = Math.round((e1 - (await st()).s.intensity) * 100);
+  if (down < 4 || down > 8) fail(`D-pad down held 1 s: effort -${down}%, expected 4 to 8 (repeat)`);
+  ok(`${label}: ride, ERG: A / Space pause; shifters, paddles, D-pad, [ ] and arrows change the effort 1%; held repeats`);
+
+  // B / Esc close a panel or Connections opened from the pause screen instead of ending the ride
+  await tap(['a']);
+  const closes = [['#pz-controls', 'controls', () => tap(['b']), 'B'], ['#pz-controls', 'controls', () => key('Escape'), 'Esc'], ['#pz-devices', 'devpop', () => tap(['b']), 'B']];
+  for (const [btn, what, back, name] of closes) {
+    await page.click(btn);
+    if (!(await st())[what]) fail(`${btn} did not open ${what} on the pause screen`);
+    await back();
+    r = await st();
+    if (r[what] || r.hold || !r.s || r.screen !== 'ride' || !r.s.paused) fail(`${name} with ${what} open on the ride: ${what} ${r[what]}, hold ${JSON.stringify(r.hold)}, screen ${r.screen}, paused ${r.s?.paused}`);
+  }
+  await wait(600);
+  if ((await st()).hold || !(await st()).s) fail('the ride ended or a hold started after closing the panels');
+  await tap(['a']); if ((await st()).s.paused) fail('A did not resume after closing the panels');
+  ok(`${label}: ride: B / Esc close Controls and Connections from the pause screen, ride kept`);
+
+  // skip: Y (and S) must be held 3 s; letting go early does nothing
+  const seg0 = (await st()).s.seg;
+  await press(['y'], 'right'); await wait(1000);
+  r = await st();
+  if (r.hold?.kind !== 'skip' || r.hold.key !== 'Y' || r.hold.sub !== 'Keep holding Y to skip') fail(`hold Y overlay ${JSON.stringify(r.hold)}`);
+  await release('right'); await wait(150);
+  r = await st();
+  if (r.hold || r.s.seg !== seg0) fail(`Y let go after 1 s: overlay ${!!r.hold}, segment ${seg0} -> ${r.s.seg}`);
+  await page.keyboard.down('s'); await wait(500);
+  r = await st();
+  if (r.hold?.key !== 'S') fail(`hold S overlay ${JSON.stringify(r.hold)}`);
+  await page.keyboard.up('s'); await wait(150);
+  r = await st();
+  if (r.hold || r.s.seg !== seg0) fail('S let go after 0.5 s still skipped or left the overlay');
+  await holdBtn(['y'], 3400, 'right');
+  r = await st();
+  if (r.s.seg !== seg0 + 1 || r.toast !== 'Skipped' || r.hold) fail(`Y held 3.4 s: segment ${seg0} -> ${r.s.seg}, toast "${r.toast}"`);
+  // end: B (and Esc) let go early keeps riding
+  await press(['b'], 'right'); await wait(1500);
+  r = await st();
+  if (r.hold?.kind !== 'end' || r.hold.key !== 'B' || r.hold.msg !== 'End ride?') fail(`hold B overlay ${JSON.stringify(r.hold)}`);
+  await release('right'); await wait(150);
+  r = await st();
+  if (r.hold || !r.s || r.screen !== 'ride') fail('B let go after 1.5 s ended the ride or left the overlay');
+  await page.keyboard.down('Escape'); await wait(800);
+  r = await st();
+  if (r.hold?.key !== 'Esc' || r.hold.kind !== 'end') fail(`hold Esc overlay ${JSON.stringify(r.hold)}`);
+  await page.keyboard.up('Escape'); await wait(150);
+  r = await st();
+  if (r.hold || !r.s) fail('Esc let go after 0.8 s ended the ride');
+  ok(`${label}: ride: skip and end holds: overlay names Y / S and B / Esc; let go early does nothing; Y held 3 s skips`);
+
+  // slope (ERG off with E): shifters change gear by the shift style (SRAM 2x: left + right together = front)
+  await key('e');
+  if ((await st()).toast !== 'ERG off: slope mode') fail('E did not turn ERG off');
+  await page.waitForFunction(() => window.rodillo.session.mode === 'sim', null, { timeout: 2000 });
+  r = await st();
+  if (!r.s.double) fail('the default bike should be a 2x for this step');
+  const r0 = r.s.rear, f0 = r.s.front;
+  if (r0 >= r.s.nRear - 1) fail(`rear already in the hardest cog (${r0})`);
+  const gear = async (what, rear, front) => { await wait(200); const g = (await st()).s; if (g.rear !== rear || g.front !== front) fail(`${what}: rear ${g.rear} front ${g.front}, expected ${rear} / ${front}`); };
+  await tap(['shiftUpR'], 'right'); await gear('right shifter (harder)', r0 + 1, f0);
+  await tap(['shiftDnL'], 'left'); await gear('left shifter (easier)', r0, f0);
+  await tap(['paddleR'], 'right'); await gear('right paddle', r0 + 1, f0);
+  await tap(['paddleL'], 'left'); await gear('left paddle', r0, f0);
+  await page.evaluate(() => { window.__ride.press(['shiftUpL'], 'left'); window.__ride.press(['shiftUpR'], 'right'); });
+  await wait(60); await release('both'); await gear('left + right together', r0, 1 - f0);
+  await key('ArrowRight'); await gear('ArrowRight', r0 + 1, 1 - f0);
+  await key('ArrowLeft'); await gear('ArrowLeft', r0, 1 - f0);
+  await key(']'); await gear(']', r0 + 1, 1 - f0);
+  await key('['); await gear('[', r0, 1 - f0);
+  await key('f'); await gear('F', r0, f0);
+  await tap(['up']); r = await st();
+  if (r.s.grade !== 0.01 || r.toast !== 'Grade 1%') fail(`D-pad up in slope: grade ${r.s.grade}, toast "${r.toast}"`);
+  await key('ArrowDown'); if ((await st()).s.grade !== 0) fail('ArrowDown in slope did not lower the grade');
+  await key('e');
+  if ((await st()).toast !== 'ERG on') fail('E did not turn ERG back on');
+  await page.waitForFunction(() => window.rodillo.session.mode === 'erg', null, { timeout: 2000 });
+  ok(`${label}: ride, slope: shifters, paddles, left + right (front), arrows, [ ] and F shift; D-pad / arrows change the grade; E toggles ERG`);
+
+  // B held 5 s ends the ride; the done page: D-pad right picks an interval, B clears it, B again closes
+  // first ride on until one step has a result for the done page (js/stats.js intervalResults: 10 s after a 5 s ramp-in)
+  await page.waitForFunction(() => {
+    const s = window.rodillo.session;
+    return s.segs.some((g, i) => s.samples.filter((x) => x.si === i && x.st >= (g.dur >= 30 ? 5 : 0)).length >= Math.min(10, g.dur * 0.5));
+  }, null, { timeout: 30000, polling: 250 });
+  await holdBtn(['b'], 5400, 'right');
+  await page.waitForSelector('#ridepage.active', { timeout: 10000 });
+  await page.waitForFunction(() => document.querySelectorAll('#rd-ints tr[data-i]').length > 0, null, { timeout: 5000 });
+  const sel = () => page.$$eval('#rd-ints tr.sel', (t) => t.map((x) => x.dataset.i).join());
+  await tap(['right']);
+  const first = await sel();
+  if (!first) fail('D-pad right on the done page picked no interval');
+  await tap(['b']);
+  if (await sel() !== '' || (await st()).screen !== 'ridepage') fail('B on the done page with an interval picked should clear it and stay');
+  await tap(['b']);
+  await page.waitForSelector('#home.active', { timeout: 3000 });
+  ok(`${label}: B held 5 s ends the ride; done page: D-pad picks an interval, B clears it, B closes`);
+  await ctx.close();
+}
+
 async function run(viewport, label) {
   const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
@@ -665,6 +995,8 @@ try {
   await mineRun();
   await todayRun({ width: 1280, height: 800 }, 'desktop');
   await todayRun({ width: 390, height: 844 }, 'phone');
+  await controlsRun({ width: 1280, height: 800 }, 'desktop');
+  await controlsRun({ width: 390, height: 844 }, 'phone');
 } finally {
   await browser.close();
   server.close();
