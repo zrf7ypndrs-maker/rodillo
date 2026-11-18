@@ -241,6 +241,23 @@ async function mineRun() {
   await page.waitForFunction(() => document.querySelectorAll('#mine-list .wo').length === 2, null, { timeout: 5000 });
   if (await kindsShown(page) !== 'mine') fail('signed in again: did not land on Mine');
   ok('desktop: Workouts: Mine signed in (seeded token), newest first, Edit; hidden signed out, back on sign-in');
+
+  // Settings > Sync, token cleared while the builder is open: the other screens follow (builder closed, no Mine,
+  // Today's hero on the public plan), without Settings knowing which screens those are
+  await page.click('#btn-settings');
+  await page.click('#set-tabs button[data-stab="sync"]');
+  if (await page.inputValue('#set-token') !== 'smoke-token') fail('Sync tab does not show the token');
+  await page.fill('#set-token', '');
+  // the builder covers Settings (and closes it), so both can't be open by hand; closing the builder when access goes is a
+  // safeguard, driven here through the DOM
+  await page.$eval('#btn-new-wo', (b) => b.click());
+  await page.waitForSelector('#builder:not(.hidden)', { timeout: 3000 });
+  await page.$eval('#btn-token', (b) => b.click());
+  await page.waitForFunction(() => /Sync turned off/.test(document.querySelector('#token-status').textContent), null, { timeout: 3000 });
+  await page.waitForFunction(() => /public copy of the plan/.test(document.querySelector('#today .plan-src')?.textContent || ''), null, { timeout: 3000 })
+    .catch(() => fail('Today\'s hero not refreshed after sync was turned off'));
+  if (!(await page.isHidden('#builder')) || !(await page.isHidden('#kind-btn-mine')) || await page.locator('#mine-list .wo').count() || (await lsGet(page, 'sync')).token) fail('sync off: builder still open, Mine still offered or the token kept');
+  ok('desktop: Settings > Sync, token cleared: builder closed, Mine hidden, Today on the public plan');
   await ctx.close();
 }
 
