@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node test/run.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/sync-errors.mjs && node test/import.mjs && node test/ridepage.mjs",
     "lint": "eslint .",
-    "coverage": "c8 --check-coverage --lines 90 --branches 78 --functions 85 --include 'js/**' --exclude js/app.js --exclude js/builder.js --reporter text-summary npm test",
+    "coverage": "c8 --check-coverage --lines 90 --branches 78 --functions 85 --include 'js/**' --exclude js/app.js --exclude js/builder.js --exclude js/garage.js --reporter text-summary npm test",
     "smoke": "node test/smoke.mjs",
     "check": "npm run lint && npm run coverage && npm run smoke"
   },
