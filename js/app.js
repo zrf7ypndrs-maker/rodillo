@@ -20,12 +20,10 @@ import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHea
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
 import { initBuilder, openBuilder, builderOpen, closeBuilder } from './builder.js?v=202611102147';
 import { initGarage, openGarage, openGearing, dtSpec } from './garage.js?v=202611102147';
+import { $, $$, esc, reducedMotion, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 import { authEnabled, authSession, authToken, startSignIn, takeSignIn, signOut } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtTime = (s) => {
   s = Math.max(0, Math.round(s));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
@@ -689,31 +687,6 @@ function setWoKind(k, animate = false) {
   if (animate && prev !== app.woKind) slideIn($(`#kind-${app.woKind}`), WO_KINDS.indexOf(app.woKind) > WO_KINDS.indexOf(prev) ? 1 : -1);
 }
 const WO_KINDS = ['erg', 'slope', 'mine'];
-
-// ------------------------------------------------------------------ sliding indicators (ERG/Slope pill, tab underline)
-/** Moves a container's indicator (CSS ::before/::after reading --ink-x/--ink-w) under the active element.
- *  The first placement and resizes jump; user switches slide (the .ink-ready class turns the transition on). */
-function placeInk(box, el) {
-  if (!box || !el || !el.offsetWidth) return;
-  box.style.setProperty('--ink-x', `${el.offsetLeft}px`);
-  box.style.setProperty('--ink-w', `${el.offsetWidth}px`);
-  if (!box.classList.contains('ink-ready')) requestAnimationFrame(() => box.classList.add('ink-ready'));
-}
-const inkObserver = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => {
-  for (const { target } of entries) {
-    target.classList.remove('ink-ready'); // fonts loading, rotation, tab shown: jump, don't slide
-    placeInk(target, target.querySelector('.on, .active'));
-  }
-}) : null;
-
-/** Fades a newly shown pane in from the side it came from (dir 1 = from the right). */
-function slideIn(el, dir) {
-  if (!el) return;
-  el.classList.remove('slide-in');
-  el.style.setProperty('--from', `${dir * 14}px`);
-  void el.offsetWidth; // restart the animation
-  el.classList.add('slide-in');
-}
 
 // ------------------------------------------------------------------ rider overview (top of home)
 const fmtHours = (sec) => { const m = Math.round(sec / 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
@@ -2372,7 +2345,6 @@ function renderSegList(s) {
     box.scrollTo({ top, behavior: first || reducedMotion() ? 'auto' : 'smooth' }); // the box only, never the page
   }
 }
-const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Next card: "4:00 @ 216 W" (+ cadence target); "Finish" on the last interval; hidden when there is no next step. */
 function renderNextCard(s, next, setHTML) {
@@ -3231,14 +3203,6 @@ function takeover({ line, big, sub }, { color = null, dark = false, hold = 2200 
   return grow.finished.then(() => { el.classList.add('hidden'); takeoverAnims = []; }, () => {});
 }
 
-// ------------------------------------------------------------------ toast
-let toastTimer;
-function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
-}
-
 // ------------------------------------------------------------------ modal
 // In-app replacement for alert()/confirm(), which open as browser windows.
 // ask() resolves true (OK) or false (Cancel, Esc, controller B, tap outside).
@@ -3301,14 +3265,11 @@ const SET_TABS = {
   trainer: [],
 };
 const SET_TAB_IDS = ['rider', 'ride', 'road', 'trainer', 'sync'];
-/** One settings field: label on top, control, optional help. Half width unless cls has "full". */
-const fld = (id, label, control, help = '', cls = '') =>
-  `<div class="fld${cls ? ` ${cls}` : ''}"><label for="${id}">${label}</label>${control}${help ? `<div class="help">${help}</div>` : ''}</div>`;
 const numField = ([k, label, step, mult = 1, help, offset = 0, cls = '']) =>
   fld(`set-${k}`, label, `<input id="set-${k}" type="number" step="${step}" value="${+((app.settings[k] * mult + offset).toFixed(3))}" data-k="${k}" data-mult="${mult}" data-off="${offset}">`, help, cls);
 const nameField = () => fld('set-name', 'Your name', `<input id="set-name" type="text" maxlength="30" autocomplete="given-name" value="${esc(app.settings.riderName || '')}" placeholder="First name">`, 'The coach uses it in workout messages.', 'full');
 // ---- garage and gearing (the #garage popup, Bikes | Gearing): js/garage.js
-initGarage({ app, esc, fld, numField, saveSettings, toast, ask, syncClient, setDevPop, placeInk, slideIn, inkObserver });
+initGarage({ app, numField, saveSettings, ask, syncClient, setDevPop });
 
 // ---- trainer: the grade range it can simulate
 function trainerOptions() {
@@ -3453,7 +3414,7 @@ $('#pz-gearing').onclick = () => openGearing();
 $('#pz-settings').onclick = () => $('#btn-settings').click();
 setWoKind(app.woKind);
 initBuilder({
-  esc, ask, placeInk, profileSvg, woMeta, zoneHex, gradeHex, plannedOn, signedIn,
+  ask, profileSvg, woMeta, zoneHex, gradeHex, plannedOn, signedIn,
   ftp: () => app.settings.ftp,
   maxMinutes: () => app.plan?.maxMinutes || 0,
   onSave: saveMine,

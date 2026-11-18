@@ -1,18 +1,17 @@
 // Bike garage and gearing: the #garage popup (Bikes | Gearing tabs) and its editors. Moved out of js/app.js
 // Nov 17 (code-health plan step 4) with no change in behavior. The editors work on `draft`, never on settings;
 // picking a bike or gearing writes settings and saves through app.js. Pure logic: js/engine/garage.js,
-// drivetrain.js, bikes.js. app.js passes its helpers in through initGarage() (same pattern as js/builder.js).
+// drivetrain.js, bikes.js. Shared DOM helpers come from js/ui.js; app.js passes app state and its own hooks in through initGarage().
 import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
 import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
 import { BIKE_MODELS, MAX_BIKES, MAX_GEARINGS, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, cleanBike, newBikeId, bikeLine, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, gearingLine, gearingName, cleanGearing } from './engine/garage.js?v=202611102147';
 import { logMsg } from './ble/base.js?v=202611102147';
 import { ls } from './store.js?v=202611102147';
+import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
 // from app.js, set by initGarage()
-let app, esc, fld, numField, saveSettings, toast, ask, syncClient, setDevPop, placeInk, slideIn, inkObserver;
+let app, numField, saveSettings, ask, syncClient, setDevPop;
 
 // ---- gearing: a known drivetrain, or your own chainrings and cogs
 // The menu is "a x b" gears, chainring teeth, smallest and largest cog (the cogs between come from cassette()).
@@ -425,7 +424,7 @@ async function removeGearing(id) {
 
 /** Wires the Garage popup. Call once from app.js, after its helpers exist. */
 export function initGarage(deps) {
-  ({ app, esc, fld, numField, saveSettings, toast, ask, syncClient, setDevPop, placeInk, slideIn, inkObserver } = deps);
+  ({ app, numField, saveSettings, ask, syncClient, setDevPop } = deps);
   {
     const f = $('#garage-form');
     f.oninput = (e) => {

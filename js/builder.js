@@ -4,14 +4,12 @@
 // Saving goes through deps.onSave (app.js stores it in rodillo-data workouts/mine.json).
 import { flatten, parseMessageLines, formatMessageLines } from './engine/workout.js?v=202611102147';
 import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mine.js?v=202611102147';
+import { $, $$, esc, placeInk, reducedMotion as reduced } from './ui.js?v=202611102147';
 
 let D = null;   // deps from app.js
 let st = null;  // { w, isNew, mine, snap, kind, sel, untouched, undo: [], scale }
 let drag = null;
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAXF = 1.5; // top of the timeline = 150% FTP (same scale as the library profiles)
 const gradeH = (g) => Math.min(1, Math.max(0.04, (g / 100 + 0.03) / 0.15)); // grade % -> bar height fraction
 
@@ -195,7 +193,7 @@ function render() {
   const w = st.w;
   $('#builder-body').innerHTML = `
     <div class="b-top">
-      <input id="b-name" class="b-name" data-f="name" placeholder="Workout name" value="${D.esc(w.name)}" autocomplete="off" enterkeyhint="done">
+      <input id="b-name" class="b-name" data-f="name" placeholder="Workout name" value="${esc(w.name)}" autocomplete="off" enterkeyhint="done">
     </div>
     <div class="b-pal-row">
       <div class="wo-kind seg-tg b-kind" id="b-kind" role="tablist" aria-label="Blocks for">
@@ -212,14 +210,14 @@ function render() {
     <div class="b-meta" id="b-meta"></div>
     <div class="b-steps" id="b-steps"></div>
     <label class="b-lab" for="b-desc">Description</label>
-    <textarea id="b-desc" class="b-desc" data-f="description" rows="3" placeholder="What the session is for and how it should feel">${D.esc(w.description)}</textarea>
+    <textarea id="b-desc" class="b-desc" data-f="description" rows="3" placeholder="What the session is for and how it should feel">${esc(w.description)}</textarea>
     <div class="b-problems hidden" id="b-problems" role="alert"></div>`;
   $('#builder-title').textContent = st.isNew ? (w.basedOn ? 'Copy of a workout' : 'New workout') : 'Edit workout';
   $('#b-delete').classList.toggle('hidden', st.isNew);
   renderPalette();
   renderSteps();
   renderTimeline();
-  requestAnimationFrame(() => D.placeInk($('#b-kind'), $('#b-kind button.on')));
+  requestAnimationFrame(() => placeInk($('#b-kind'), $('#b-kind button.on')));
 }
 
 function renderPalette() {
@@ -279,7 +277,7 @@ function renderMeta() {
   const w = st.w, segs = flatten(w, D.ftp());
   const total = segs.length ? segs.at(-1).end : 0, cap = D.maxMinutes();
   const s = st.sel != null && safeStep(st.sel);
-  $('#b-meta').innerHTML = `<span class="b-tot">${segs.length ? D.woMeta(w) : '0 min'}</span>${s ? `<span class="b-selinfo">${D.esc(describe(s))}</span>` : ''}${cap && total > cap * 60 ? `<span class="b-cap">Over the plan's ${cap}-min cap</span>` : ''}`;
+  $('#b-meta').innerHTML = `<span class="b-tot">${segs.length ? D.woMeta(w) : '0 min'}</span>${s ? `<span class="b-selinfo">${esc(describe(s))}</span>` : ''}${cap && total > cap * 60 ? `<span class="b-cap">Over the plan's ${cap}-min cap</span>` : ''}`;
 }
 function describe(s) {
   const ftp = D.ftp(), t = typeOf(s);
@@ -319,14 +317,14 @@ function renderSteps() {
         <select class="b-in b-type" data-f="type" data-fp="${p}" aria-label="Step type">${TYPES.map(([k, l]) => `<option value="${k}"${k === t ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <span class="b-len"><input class="b-in b-dur" data-f="len" data-fp="${p}" value="${km ? +(s.dist / 1000).toFixed(2) : fmtDur(s.dur)}" ${km ? 'inputmode="decimal"' : ''} aria-label="${km ? 'Distance, km' : 'Duration'}"><button class="b-in b-unit" data-unitp="${p}" title="${km ? 'Switch to time' : 'Switch to distance'}" aria-label="${km ? 'By distance. Switch to time' : 'By time. Switch to distance'}">${km ? 'km' : 'min'}</button></span>
         <span class="b-tgt">${tgt}<span class="b-w muted" data-w="${p}"></span></span>
-        <input class="b-in b-cad" data-f="cadence" data-fp="${p}" value="${D.esc(s.cadence ?? '')}" placeholder="rpm" aria-label="Cadence target: 90, 80-90 or 100+">
+        <input class="b-in b-cad" data-f="cadence" data-fp="${p}" value="${esc(s.cadence ?? '')}" placeholder="rpm" aria-label="Cadence target: 90, 80-90 or 100+">
         ${acts(p)}
       </div>
       <div class="b-line2">
-        <input class="b-in" data-f="label" data-fp="${p}" value="${D.esc(s.label || '')}" placeholder="Name on screen" aria-label="Step name">
-        <input class="b-in" data-f="text" data-fp="${p}" value="${D.esc(s.text || '')}" placeholder="Cue on screen" aria-label="Cue">
+        <input class="b-in" data-f="label" data-fp="${p}" value="${esc(s.label || '')}" placeholder="Name on screen" aria-label="Step name">
+        <input class="b-in" data-f="text" data-fp="${p}" value="${esc(s.text || '')}" placeholder="Cue on screen" aria-label="Cue">
         <span class="b-msgs-k muted">Messages over the chart, one per line</span>
-        <textarea class="b-in b-msgs" data-f="messages" data-fp="${p}" rows="${Math.min(6, Math.max(2, (s.messages?.length || 0) + 1))}" placeholder="0:30 Settle in  ·  -0:15 Hold it  ·  50% Halfway  ·  last -0:20 Last one  ·  {watts} = target watts" aria-label="Messages, one per line">${D.esc(formatMessageLines(s.messages))}</textarea>
+        <textarea class="b-in b-msgs" data-f="messages" data-fp="${p}" rows="${Math.min(6, Math.max(2, (s.messages?.length || 0) + 1))}" placeholder="0:30 Settle in  ·  -0:15 Hold it  ·  50% Halfway  ·  last -0:20 Last one  ·  {watts} = target watts" aria-label="Messages, one per line">${esc(formatMessageLines(s.messages))}</textarea>
       </div>
     </div>`;
   };
@@ -604,7 +602,7 @@ async function onClick(e) {
   if (b.dataset.kind) {
     st.kind = b.dataset.kind;
     $$('#b-kind button').forEach((x) => x.classList.toggle('on', x === b));
-    D.placeInk($('#b-kind'), b);
+    placeInk($('#b-kind'), b);
     if (st.untouched) { st.w.steps = TEMPLATE[st.kind](); st.snap = JSON.stringify(st.w); st.sel = null; renderSteps(); renderTimeline(); }
     renderPalette();
     return;
@@ -662,7 +660,7 @@ async function save(ride) {
 }
 function showProblems(list) {
   const box = $('#b-problems');
-  box.innerHTML = list.map((x) => `<div>${D.esc(x)}</div>`).join('');
+  box.innerHTML = list.map((x) => `<div>${esc(x)}</div>`).join('');
   box.classList.toggle('hidden', !list.length);
   if (list.length) box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
 }
