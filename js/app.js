@@ -922,9 +922,8 @@ function downloadFit(ride) {
   const bytes = encodeActivity(ride.samples, ride.laps, { tss: ride.summary?.tss });
   const blob = new Blob([bytes], { type: 'application/octet-stream' });
   const a = document.createElement('a');
-  const d = new Date(ride.id);
   a.href = URL.createObjectURL(blob);
-  a.download = `rodillo-${d.toLocaleDateString('en-CA')}-${ride.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.fit`;
+  a.download = `rodillo-${dkey(new Date(ride.id))}-${ride.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.fit`; // the local day it was ridden
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }

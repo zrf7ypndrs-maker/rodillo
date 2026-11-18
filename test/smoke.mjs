@@ -649,6 +649,12 @@ async function run(viewport, label) {
     await page.waitForSelector('#ridepage.active', { timeout: 10000 });
     await page.waitForFunction(() => /Demo ride/.test(document.querySelector('#ridepage').innerText), null, { timeout: 5000 });
     ok(`${label}: hold Esc ends the ride, done page opens`);
+
+    // Export .FIT from the done page: the file is named after the local day the ride was ridden
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }), page.click('#rd [data-rd="fit"] >> nth=0')]);
+    const day = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    if (!new RegExp(`^rodillo-${day}-[a-z0-9-]+\\.fit$`).test(dl.suggestedFilename())) throw new Error(`.FIT file named ${dl.suggestedFilename()}, expected rodillo-${day}-<name>.fit`);
+    ok(`${label}: Export .FIT from the done page, named by the local day`);
   }
   await ctx.close();
 }
