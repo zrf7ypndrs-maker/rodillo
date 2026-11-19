@@ -638,6 +638,9 @@ table.ints { margin-bottom: 14px; }
 /* light / dark switch in the top right corner of the ride screen; above the pause overlay like the bottom bar */
 #r-theme { position: absolute; top: 14px; right: 16px; z-index: 6; border-color: transparent; }
 #r-theme:hover { border-color: var(--rule); }
+/* time of day next to it (Nov 18, Agustín: 12 h, e.g. "8:02 PM"); same height as the switch so the two sit on one line */
+.r-tod { position: absolute; top: 14px; right: 62px; height: 38px; display: flex; align-items: center; z-index: 6; font-family: var(--num); font-stretch: 80%; font-weight: 720; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; pointer-events: none; }
+.r-tod:empty { display: none; }
 
 /* ---------- ride page (one completed ride; js/ridepage.js) ---------- */
 #ridepage { max-width: 1180px; margin: 0 auto; padding: 22px 28px 64px; }

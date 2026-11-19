@@ -658,9 +658,16 @@ async function controlsRun(viewport, label) {
     await sheetHold('rp-end', 2300);
     r = await st(); if (r.s || !['home', 'ridepage'].includes(r.screen)) fail(`sheet End held 2.3 s: screen ${r.screen}, session ${!!r.s}`);
     ok(`${label}: ride: A pause, ERG shifters, sheet Skip and End holds (let go early does nothing)`);
+    if (await shownNow(page, '#r-tod')) fail('time of day shows on the phone ride screen');
     await ctx.close();
     return;
   }
+
+  // time of day, 12 h, left of the light / dark switch on the same line
+  const tod = await page.evaluate(() => { const c = document.querySelector('#r-tod'), t = document.querySelector('#r-theme'); const a = c.getBoundingClientRect(), b = t.getBoundingClientRect(); return { text: c.textContent, left: a.right <= b.left, mid: Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) }; });
+  if (!/^\d{1,2}:\d{2}\s[AP]M$/.test(tod.text)) fail(`time of day "${tod.text}"`);
+  if (!(await shownNow(page, '#r-tod')) || !tod.left || tod.mid > 2) fail(`time of day not beside the theme switch ${JSON.stringify(tod)}`);
+  ok(`${label}: ride: time of day (12 h) beside the light / dark switch`);
 
   // pause / resume with A and Space
   await tap(['a']); r = await st();

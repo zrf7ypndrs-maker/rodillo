@@ -1199,8 +1199,15 @@ window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return;
 function hideTakeover() { takeoverAnims.forEach((a) => a.cancel()); takeoverAnims = []; $('#takeover').classList.add('hidden'); }
 
 // ------------------------------------------------------------------ ride rendering
+// time of day on the desktop ride screen (#r-tod), 12 h whatever the system locale; ticks only while the ride screen shows
+let todTimer = 0;
+const timeOfDay = (d = new Date()) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+function tickTod() { const el = $('#r-tod'), t = timeOfDay(); if (el && el.textContent !== t) el.textContent = t; }
+
 function show(name) {
   app.screen = name;
+  clearInterval(todTimer); todTimer = 0;
+  if (name === 'ride') { tickTod(); todTimer = setInterval(tickTod, 1000); }
   if ($('#devpop').classList.contains('on-ride')) setDevPop(false); // don't carry a pause-screen popover into the next screen
   $$('.screen').forEach((s) => s.classList.toggle('active', s.id === name));
   if (name === 'home') { renderDevices(); applyFocus(); }
