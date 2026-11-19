@@ -81,6 +81,118 @@ export async function zipRead(blob, entry) {
 // ---------------------------------------------------------------- FIT
 const FIT_SUB = { 6: 'indoor', 58: 'indoor', 8: 'mtb', 7: 'road', 46: 'gravel', 49: 'gravel', 28: 'ebike', 47: 'ebike', 69: 'ebike' };
 
+/** Where the FIT segment at `pos` keeps its messages, or null when the bytes there aren't one. */
+function fitSegment(v, bytes, pos) {
+  const hs = v.getUint8(pos);
+  if (String.fromCharCode(...bytes.subarray(pos + 8, pos + 12)) !== '.FIT') return null;
+  let end = pos + hs + v.getUint32(pos + 4, true);
+  if (end <= pos + hs || end > bytes.length) end = bytes.length; // a wrong data size: read to the end
+  return { start: pos + hs, end };
+}
+
+/** A definition message (its header byte already read at p - 1): stores the layout, returns the next position. */
+function readDefinition(v, p, h, defs) {
+  const little = v.getUint8(p + 1) === 0;
+  const global = v.getUint16(p + 2, little);
+  const n = v.getUint8(p + 4);
+  p += 5;
+  const fields = [];
+  for (let i = 0; i < n; i++, p += 3) fields.push([v.getUint8(p), v.getUint8(p + 1), v.getUint8(p + 2)]);
+  let devSize = 0; // developer fields: only their sizes matter, the values are skipped
+  if (h & 0x20) { const dn = v.getUint8(p++); for (let i = 0; i < dn; i++, p += 3) devSize += v.getUint8(p + 1); }
+  defs[h & 0x0f] = { global, little, fields, devSize };
+  return p;
+}
+
+/** Time of a compressed-timestamp header: 5 bits of offset from the last full time, rolling over every 32 s. */
+const compressedTime = (lastT, off) => (lastT & ~0x1f) + off + (off < (lastT & 0x1f) ? 0x20 : 0);
+
+/** A data message's header byte: its local type, and its time when the header is a compressed timestamp. */
+function fitHeader(h, lastT) {
+  if (h & 0x80) return { local: (h >> 5) & 3, compressedT: compressedTime(lastT, h & 0x1f) };
+  return { local: h & 0x0f, compressedT: null };
+}
+
+const FIT_INVALID = { 1: 0xff, 2: 0xffff, 4: 0xffffffff };
+/** One field's raw number, or undefined when it holds its base type's invalid value. */
+function fieldValue(v, p, size, base, little) {
+  const raw = size === 1 ? v.getUint8(p) : size === 2 ? v.getUint16(p, little) : v.getUint32(p, little);
+  const type = base & 0x1f;
+  if (type >= 10 && type <= 12) return raw === 0 ? undefined : raw; // z types: 0 is invalid
+  if (raw === FIT_INVALID[size] || (type === 3 && raw === 0x7fff) || (type === 1 && raw === 0x7f)) return undefined;
+  return raw;
+}
+
+/** A data message's valid fields by field number ({ m }) and the position after it ({ p }). Sizes other than 1, 2 and 4 are skipped. */
+function readFields(v, p, d) {
+  const m = {};
+  for (const [num, size, base] of d.fields) {
+    if (size === 1 || size === 2 || size === 4) {
+      const x = fieldValue(v, p, size, base, d.little);
+      if (x !== undefined) m[num] = x;
+    }
+    p += size;
+  }
+  return { m, p: p + d.devSize };
+}
+
+/**
+ * What each message the reader knows does to the result (st = { res, since, isActivity }).
+ * Returns 'skip' to drop the rest of the segment, 'old' to stop the whole file.
+ */
+const FIT_MESSAGES = {
+  0(m, t, st) { // file_id (a chained file can start with a settings segment)
+    if (m[0] !== 4) return 'skip';
+    st.isActivity = true;
+    if (st.since && m[4] && (m[4] + FIT_EPOCH) * 1000 < st.since - 864e5) return 'old';
+  },
+  7(m, t, { res }) { // zones_target
+    if (m[1]) res.maxHr = m[1];
+    if (m[2]) res.lthr = m[2];
+  },
+  12(m, t, { res }) { // sport
+    if (res.sport == null && m[0] != null) { res.sport = m[0]; res.subSport = m[1] ?? null; }
+  },
+  18(m, t, { res }) { // session
+    if (m[5] != null) { res.sport = m[5]; res.subSport = m[6] ?? res.subSport; }
+    if (m[2] && (!res.start || m[2] < res.start)) res.start = m[2];
+  },
+  20(m, t, { res }) { // record
+    const speed = m[73] ?? m[6];
+    res.points.push({
+      t, hr: m[3] ?? null, cad: m[4] ?? null, power: m[7] ?? null,
+      dist: m[5] != null ? m[5] / 100 : null, speed: speed != null ? speed / 1000 : null,
+    });
+  },
+};
+
+/** Reads one segment's messages into st. Returns 'old' when the file is too old; throws on a truncated or odd segment. */
+function readSegment(v, { start, end }, st) {
+  const defs = {};
+  let p = start, lastT = 0;
+  while (p < end) {
+    const h = v.getUint8(p++);
+    if (!(h & 0x80) && h & 0x40) { p = readDefinition(v, p, h, defs); continue; }
+    const { local, compressedT } = fitHeader(h, lastT);
+    if (compressedT != null) lastT = compressedT;
+    const d = defs[local];
+    if (!d) throw new Error('FIT: data before its definition');
+    const { m, p: next } = readFields(v, p, d);
+    p = next;
+    if (m[253] != null) lastT = m[253];
+    const verdict = FIT_MESSAGES[d.global]?.(m, m[253] ?? compressedT ?? lastT, st);
+    if (verdict) return verdict;
+  }
+}
+
+/** The finished result in ms since 1970, or null when the file had no file_id saying activity, or no records. */
+function fitResult({ res, isActivity }) {
+  if (!isActivity || !res.points.length) return null;
+  res.start = ((res.start || res.points[0].t) + FIT_EPOCH) * 1000;
+  for (const pt of res.points) pt.t = (pt.t + FIT_EPOCH) * 1000;
+  return res;
+}
+
 /**
  * Minimal FIT reader: file_id, zones_target, session, sport and record messages.
  * Returns { start, sport, subSport, lthr, maxHr, points: [{ t, hr, cad, power, dist, speed }] }
@@ -88,85 +200,16 @@ const FIT_SUB = { 6: 'indoor', 58: 'indoor', 8: 'mtb', 7: 'road', 46: 'gravel', 
  */
 export function parseFit(bytes, { since = 0 } = {}) {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const res = { start: null, sport: null, subSport: null, lthr: null, maxHr: null, points: [] };
-  let pos = 0, isActivity = null;
-  while (pos + 12 <= bytes.length) { // a file can chain several FIT segments
-    const hs = v.getUint8(pos);
-    if (String.fromCharCode(...bytes.subarray(pos + 8, pos + 12)) !== '.FIT') break;
-    let end = pos + hs + v.getUint32(pos + 4, true);
-    if (end <= pos + hs || end > bytes.length) end = bytes.length;
-    let p = pos + hs;
-    const defs = {};
-    let lastT = 0, skipSeg = false;
-    try { while (p < end && !skipSeg) {
-      const h = v.getUint8(p++);
-      let local, compressedT = null;
-      if (h & 0x80) { // compressed timestamp header
-        local = (h >> 5) & 3;
-        const off = h & 0x1f;
-        compressedT = (lastT & ~0x1f) + off + (off < (lastT & 0x1f) ? 0x20 : 0);
-        lastT = compressedT;
-      } else if (h & 0x40) { // definition
-        local = h & 0x0f;
-        const little = v.getUint8(p + 1) === 0;
-        const global = v.getUint16(p + 2, little);
-        const n = v.getUint8(p + 4);
-        p += 5;
-        const fields = [];
-        for (let i = 0; i < n; i++, p += 3) fields.push([v.getUint8(p), v.getUint8(p + 1), v.getUint8(p + 2)]);
-        let devSize = 0;
-        if (h & 0x20) { const dn = v.getUint8(p++); for (let i = 0; i < dn; i++, p += 3) devSize += v.getUint8(p + 1); }
-        defs[local] = { global, little, fields, devSize };
-        continue;
-      } else local = h & 0x0f;
-      const d = defs[local];
-      if (!d) throw new Error('FIT: data before its definition');
-      const m = {};
-      for (const [num, size, base] of d.fields) {
-        if (size === 1 || size === 2 || size === 4) {
-          const raw = size === 1 ? v.getUint8(p) : size === 2 ? v.getUint16(p, d.little) : v.getUint32(p, d.little);
-          const zType = (base & 0x1f) >= 10 && (base & 0x1f) <= 12;
-          const invalid = zType ? raw === 0 : raw === (size === 1 ? 0xff : size === 2 ? 0xffff : 0xffffffff) || ((base & 0x1f) === 3 && raw === 0x7fff) || ((base & 0x1f) === 1 && raw === 0x7f);
-          if (!invalid) m[num] = raw;
-        }
-        p += size;
-      }
-      p += d.devSize;
-      if (m[253] != null) lastT = m[253];
-      const t = m[253] ?? compressedT ?? lastT;
-      switch (d.global) {
-        case 0: // file_id (a chained file can start with a settings segment)
-          if (m[0] !== 4) { skipSeg = true; break; }
-          isActivity = true;
-          if (since && m[4] && (m[4] + FIT_EPOCH) * 1000 < since - 864e5) return { old: true };
-          break;
-        case 7: // zones_target
-          if (m[1]) res.maxHr = m[1];
-          if (m[2]) res.lthr = m[2];
-          break;
-        case 12: // sport
-          if (res.sport == null && m[0] != null) { res.sport = m[0]; res.subSport = m[1] ?? null; }
-          break;
-        case 18: // session
-          if (m[5] != null) { res.sport = m[5]; res.subSport = m[6] ?? res.subSport; }
-          if (m[2] && (!res.start || m[2] < res.start)) res.start = m[2];
-          break;
-        case 20: { // record
-          const speed = m[73] ?? m[6];
-          res.points.push({
-            t, hr: m[3] ?? null, cad: m[4] ?? null, power: m[7] ?? null,
-            dist: m[5] != null ? m[5] / 100 : null, speed: speed != null ? speed / 1000 : null,
-          });
-          break;
-        }
-      }
-    } } catch { /* truncated or odd file: keep what was read */ }
-    pos = end + 2; // CRC
+  const st = { res: { start: null, sport: null, subSport: null, lthr: null, maxHr: null, points: [] }, since, isActivity: null };
+  for (let pos = 0; pos + 12 <= bytes.length;) { // a file can chain several FIT segments
+    const seg = fitSegment(v, bytes, pos);
+    if (!seg) break;
+    let verdict;
+    try { verdict = readSegment(v, seg, st); } catch { /* truncated or odd file: keep what was read */ }
+    if (verdict === 'old') return { old: true };
+    pos = seg.end + 2; // CRC
   }
-  if (!isActivity || !res.points.length) return null;
-  res.start = ((res.start || res.points[0].t) + FIT_EPOCH) * 1000;
-  for (const pt of res.points) pt.t = (pt.t + FIT_EPOCH) * 1000;
-  return res;
+  return fitResult(st);
 }
 
 // ---------------------------------------------------------------- GPX / TCX (regex, so it also runs in Node)
