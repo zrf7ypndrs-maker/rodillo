@@ -17,7 +17,7 @@ import { dkey, dayDate } from './dates.js?v=202611102147';
 import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js?v=202611102147';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js?v=202611102147';
 import { initBuilder, openBuilder, builderOpen } from './builder.js?v=202611102147';
-import { initGarage, openGarage, openGearing, dtSpec } from './garage.js?v=202611102147';
+import { initGarage, openGarage, openGearing, dtSpec, forgetBikePhotos } from './garage.js?v=202611102147';
 import { initSettings, numField, detectTrainer, shiftLine, renderSignIn } from './settings.js?v=202611102147';
 import { initTraining, renderTraining } from './training.js?v=202611102147';
 import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, previewOf, gradeBand } from './library.js?v=202611102147';
@@ -411,14 +411,14 @@ function plannedOn(id) {
 }
 
 function applyLibrary() {
-  const custom = new Map((app.coachWorkouts || []).map((w) => [w.id, { ...w, _source: 'coach' }]));
+  const custom = new Map((signedIn() ? app.coachWorkouts || [] : []).map((w) => [w.id, { ...w, _source: 'coach' }]));
   const lib = (app.baseLibrary || []).map((w) => custom.get(w.id) || w);
   for (const [id, w] of custom) if (!lib.some((x) => x.id === id)) lib.push(w);
   for (const w of ls.get('imported', [])) lib.push(w);
   // Agustín's own workouts (builder) are private: only with access to rodillo-data (GitHub sign-in or token).
   const mine = !signedIn() ? [] : mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  app.plan = app.coachPlan || app.basePlan || null;
+  app.plan = (signedIn() && app.coachPlan) || app.basePlan || null; // the coach's plan is private: signed out shows the public one
   reconcileSettings();
   app.library = [...mine, ...lib].map((w) => cutClimb(w, app.settings)); // newest edit first; real climbs cut at the rider's detail
   renderLibrary();
@@ -2257,7 +2257,49 @@ function refreshAfterSettings() {
   applyLibrary(); // the library (Mine), then Today, Next days and Calendar through refreshPlanViews()
   if (app.tab === 'training') renderTraining();
 }
-initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings });
+
+// ---- leaving rodillo-data on this browser (Sign out, or the token cleared): nothing private stays behind
+// Everything that came from rodillo-data or is the rider's own: ride history, the coach's plan and workouts, Mine,
+// WHOOP, settings (they live in the plan and come back on the next sign-in), bike photos, ride files.
+const PRIVATE_KEYS = ['remoteIndex', 'remoteIndexAt', 'coachPlan', 'coachWorkouts', 'mineDoc', 'minePending', 'whoop',
+  'settingsBase', 'settingsPending', 'pendingDeletes', 'garagePhotos'];
+/** What this browser has that never reached rodillo-data, as words for the question ('' = nothing). */
+async function unsentHere() {
+  let n = 0;
+  try { n = (await rides.list()).filter((r) => !r.demo && !r.synced && (r.status === 'done' || r.status === 'inprogress')).length; } catch { /* no idb */ }
+  const parts = [n && `${n} ride${n > 1 ? 's' : ''}`, Object.keys(ls.get('settingsPending', {})).length && 'settings changes',
+    Object.keys(ls.get('minePending', {})).length && 'workout edits'].filter(Boolean);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0] || '';
+}
+/**
+ * Called by Settings before it signs out or clears the token. `keepsAccess` = another way in stays (a token after
+ * GitHub sign-out, or the reverse): then nothing is wiped. Otherwise sends what's pending, asks before deleting
+ * anything that still didn't make it, runs `revoke`, and wipes this browser. False = the rider cancelled.
+ */
+async function leaveData(revoke, keepsAccess) {
+  if (keepsAccess) { revoke(); refreshAfterSettings(); return true; }
+  const gh = syncClient();
+  if (gh) { await syncPending(); await flushSettings(gh); await flushMine(gh); }
+  const left = await unsentHere();
+  if (left && !(await ask(`${left} on this browser haven't reached rodillo-data yet. Signing out deletes them from here.`,
+    { title: 'Sign out anyway?', ok: 'Sign out and delete', danger: true }))) return false;
+  revoke();
+  await forgetHere();
+  refreshAfterSettings();
+  return true;
+}
+async function forgetHere() {
+  for (const k of PRIVATE_KEYS) localStorage.removeItem(`rodillo.${k}`);
+  try { await rides.clear(); await docs.clear(); } catch (e) { logMsg('app', `could not clear rides: ${e.message}`); }
+  Object.assign(app, { coachPlan: null, coachWorkouts: [], mineDoc: null, whoop: null, rows: [], coachError: null, coachNoRepo: null });
+  forgetBikePhotos();
+  if (!(app.session && !app.session.finished)) { // mid-ride the ride keeps its settings; the next load starts clean
+    app.settings = { ...DEFAULT_SETTINGS };
+    ls.set('settings', app.settings);
+  }
+  logMsg('sync', 'signed out: private data removed from this browser');
+}
+initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData });
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {

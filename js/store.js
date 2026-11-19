@@ -34,6 +34,7 @@ export const rides = {
   put: (ride) => tx('readwrite', (s) => s.put(ride)),
   get: (id) => tx('readonly', (s) => s.get(id)),
   del: (id) => tx('readwrite', (s) => s.delete(id)),
+  clear: () => tx('readwrite', (s) => s.clear()),
   async list() {
     const all = await tx('readonly', (s) => s.getAll());
     return (all || []).map(({ samples, ...meta }) => meta).sort((a, b) => b.id - a.id);
@@ -44,6 +45,7 @@ export const rides = {
 const DOC_KEEP = 40;
 export const docs = {
   get: (id) => tx('readonly', (s) => s.get(id), 'docs').then((r) => r?.doc || null),
+  clear: () => tx('readwrite', (s) => s.clear(), 'docs'),
   async put(id, doc) {
     await tx('readwrite', (s) => s.put({ id, doc, at: Date.now() }), 'docs');
     const keys = await tx('readonly', (s) => s.getAllKeys(), 'docs');

@@ -176,6 +176,12 @@ export const infoTip = (html, label) => `<span class="info"><button type="button
 
 export async function renderTraining() {
   const lk = look();
+  const locked = !syncClient(); // private: signed out shows only how to sign in
+  $('#tab-training').classList.toggle('locked', locked);
+  if (locked) {
+    $('#sync-status').innerHTML = `Your training history is private. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to see it.`;
+    return;
+  }
   const rows = await trainingRows();
   const real = rows.filter((r) => !r.demo).map((r) => r.summary);
   const series = loadSeries(real, new Date(), 90);
@@ -186,9 +192,7 @@ export async function renderTraining() {
   const est = ftpEstimate(real);
   const card = (v, l, sub = '', info = '') => `<div class="stat">${info ? infoTip(info, l) : ''}<div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   const at = ls.get('remoteIndexAt');
-  $('#sync-status').innerHTML = syncClient()
-    ? `Synced with <b>${esc(dataRepo())}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`
-    : `History is only on this device. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to sync it to rodillo-data so your coach can see it.`;
+  $('#sync-status').innerHTML = `Synced with <b>${esc(dataRepo())}</b>${at ? `, last checked ${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} <button class="ghost small" id="btn-syncnow">Sync now</button>`;
   if ($('#btn-syncnow')) $('#btn-syncnow').onclick = () => syncPending();
   $('#training-cards').innerHTML = [
     card(ld.fitness, 'Fitness (CTL)', '', LOAD_INFO.ctl), card(ld.fatigue, 'Fatigue (ATL)', '', LOAD_INFO.atl),

@@ -186,11 +186,13 @@ function weightText(b) {
 const garPhotos = ls.get('garagePhotos', {});
 const photoLoading = new Set();
 function bikePhoto(model) {
-  if (!BIKE_MODELS[model]?.photo) return null;
+  if (!BIKE_MODELS[model]?.photo || !syncClient()) return null; // private photos: signed in only
   if (garPhotos[model]) return garPhotos[model];
   loadBikePhoto(model);
   return null;
 }
+/** Signed out: the cached photos go with the rest of the private data. */
+export function forgetBikePhotos() { for (const k of Object.keys(garPhotos)) delete garPhotos[k]; }
 async function loadBikePhoto(model) {
   const gh = syncClient();
   if (!gh || photoLoading.has(model)) return;

@@ -72,6 +72,16 @@ const listOf = (page, sel) => page.$$eval(`${sel} .wo-sec`, (secs) => secs.map((
 const shownNow = (page, sel) => page.$eval(sel, (el) => !el.closest('.hidden') && el.getBoundingClientRect().height > 0);
 const kindsShown = (page) => page.evaluate(() => ['erg', 'slope', 'mine'].filter((k) => !document.querySelector(`#kind-${k}`).classList.contains('hidden')).join());
 const lsGet = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(`rodillo.${key}`) ?? 'null'), k);
+// Signed in with a pasted token; the GitHub contents API answers from `files` (path -> JSON, change it to change the
+// answers), every other GitHub call gets 404. Register after the catch-all 404 route (the newest route wins).
+const TOKEN = JSON.stringify({ token: 'smoke-token' });
+async function mockGitHub(ctx, files) {
+  await ctx.route((url) => url.href.startsWith(`https://api.github.com/repos/${DEFAULT_REPO}/contents/`), (r) => {
+    const f = files[decodeURIComponent(new URL(r.request().url()).pathname.split('/contents/')[1])];
+    return f === undefined ? r.fulfill({ status: 404, body: '' })
+      : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sha: 'smoke', content: Buffer.from(JSON.stringify(f)).toString('base64') }) });
+  });
+}
 const rowSel = async (page, list, name) => {
   const i = (await listOf(page, list)).flatMap((s) => s.rows).find((r) => r.name === name)?.i;
   if (i === undefined) throw new Error(`library: no row "${name}" in ${list}`);
@@ -255,10 +265,49 @@ async function mineRun() {
   await page.waitForSelector('#builder:not(.hidden)', { timeout: 3000 });
   await page.$eval('#btn-token', (b) => b.click());
   await page.waitForFunction(() => /Sync turned off/.test(document.querySelector('#token-status').textContent), null, { timeout: 3000 });
-  await page.waitForFunction(() => /public copy of the plan/.test(document.querySelector('#today .plan-src')?.textContent || ''), null, { timeout: 3000 })
+  await page.waitForFunction(() => /Signed out: your plan and history are private/.test(document.querySelector('#today .plan-src')?.textContent || ''), null, { timeout: 3000 })
     .catch(() => fail('Today\'s hero not refreshed after sync was turned off'));
   if (!(await page.isHidden('#builder')) || !(await page.isHidden('#kind-btn-mine')) || await page.locator('#mine-list .wo').count() || (await lsGet(page, 'sync')).token) fail('sync off: builder still open, Mine still offered or the token kept');
-  ok('desktop: Settings > Sync, token cleared: builder closed, Mine hidden, Today on the public plan');
+  ok('desktop: Settings > Sync, token cleared: builder closed, Mine hidden, Today signed out');
+
+  // Leaving rodillo-data wipes this browser: private caches, ride files and settings go; a ride that never synced
+  // is asked about first (Cancel keeps everything, token included)
+  const PRIVATE = { remoteIndex: HISTORY, remoteIndexAt: 1, coachPlan: { name: 'Coach', days: {} }, whoop: { '2026-11-18': { recovery: 40 } }, garagePhotos: { x: 'data:' }, settingsBase: {} };
+  const seedPrivate = () => page.evaluate(async ([priv, tok]) => {
+    for (const [k, v] of Object.entries(priv)) localStorage.setItem(`rodillo.${k}`, JSON.stringify(v));
+    localStorage.setItem('rodillo.sync', tok);
+    localStorage.setItem('rodillo.settings', JSON.stringify({ ...JSON.parse(localStorage.getItem('rodillo.settings') || '{}'), ftp: 262, riderName: 'Smoke' }));
+    await new Promise((res, rej) => { const o = indexedDB.open('rodillo', 2); o.onsuccess = () => { const t = o.result.transaction('rides', 'readwrite'); t.objectStore('rides').put({ id: 1, status: 'done', synced: false, summary: { id: '2026-11-18T0900' } }); t.oncomplete = res; t.onerror = rej; }; o.onerror = rej; });
+  }, [PRIVATE, TOKEN]);
+  const ridesHere = () => page.evaluate(() => new Promise((res) => { const o = indexedDB.open('rodillo', 2); o.onsuccess = () => { const r = o.result.transaction('rides').objectStore('rides').count(); r.onsuccess = () => res(r.result); }; }));
+  const clearToken = async () => {
+    await page.click('#btn-settings');
+    await page.click('#set-tabs button[data-stab="sync"]');
+    await page.fill('#set-token', '');
+    await page.click('#btn-token');
+    await page.waitForFunction(() => !document.querySelector('#modal').classList.contains('hidden'), null, { timeout: 3000 }).catch(() => fail('no question about the ride that never synced'));
+    if (!/1 ride\b/.test(await page.textContent('#modal'))) fail(`sign-out question: ${await page.textContent('#modal')}`);
+  };
+  await seedPrivate();
+  await page.reload({ waitUntil: 'load' });
+  await clearToken();
+  await page.click('#modal-cancel');
+  await page.waitForTimeout(200);
+  if (!(await lsGet(page, 'sync')).token || !(await lsGet(page, 'remoteIndex')) || await ridesHere() !== 1 || await page.inputValue('#set-token') !== 'smoke-token') fail('Cancel still signed out or wiped');
+  await page.click('#settings [data-close]');
+  await clearToken();
+  await page.click('#modal-ok');
+  await page.waitForFunction(() => /Sync turned off/.test(document.querySelector('#token-status').textContent), null, { timeout: 3000 });
+  const left = await page.evaluate((keys) => keys.filter((k) => localStorage.getItem(`rodillo.${k}`) !== null), Object.keys(PRIVATE));
+  const st = await lsGet(page, 'settings');
+  const baseNow = JSON.stringify(await lsGet(page, 'settingsBase')); // rebuilt from the default settings at once
+  if (left.filter((k) => k !== 'settingsBase').length || /262|Smoke/.test(baseNow) || await ridesHere() || st.ftp === 262 || st.riderName === 'Smoke') fail(`base ${baseNow}; `+`signed out but left behind: ${left.join()} rides ${await ridesHere()} ftp ${st.ftp} name ${st.riderName}`);
+  await page.click('#settings [data-close]');
+  await page.click('#tabs button[data-tab="training"]');
+  await page.waitForFunction(() => document.querySelector('#tab-training').classList.contains('locked') && /history is private/.test(document.querySelector('#sync-status').textContent), null, { timeout: 3000 })
+    .catch(() => fail('Training not locked after sign-out'));
+  if (await shownNow(page, '#training-cards')) fail('Training cards show signed out');
+  ok('desktop: sign-out asks about an unsynced ride (Cancel keeps all), then wipes caches, rides and settings; Training locked');
   await ctx.close();
 }
 
@@ -288,6 +337,8 @@ async function todayRun(viewport, label) {
   const ctx = await browser.newContext({ viewport, hasTouch: phone, isMobile: phone });
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
   await ctx.route((url) => url.pathname.endsWith('/plans/current.json'), (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PLAN) }));
+  const gh = {}; // signed in: history and WHOOP come from the mocked rodillo-data (the plan stays the public one above)
+  await mockGitHub(ctx, gh);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`today ${label}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`today ${label} console: ${m.text()}`); });
@@ -308,7 +359,11 @@ async function todayRun(viewport, label) {
   };
   await page.clock.setFixedTime(DAY_AT.workout);
   await page.goto(base, { waitUntil: 'load' });
-  const seed = (rides) => page.evaluate(([r, whoop]) => { localStorage.setItem('rodillo.remoteIndex', JSON.stringify(r)); localStorage.setItem('rodillo.whoop', JSON.stringify(whoop)); }, [rides, WHOOP]);
+  await page.evaluate((t) => localStorage.setItem('rodillo.sync', t), TOKEN);
+  const seed = (rides) => { // rodillo-data and this browser's cached copy agree, so the first draw already has them
+    gh['index.json'] = { rides }; gh['whoop/daily.json'] = { days: WHOOP };
+    return page.evaluate(([r, whoop]) => { localStorage.setItem('rodillo.remoteIndex', JSON.stringify(r)); localStorage.setItem('rodillo.whoop', JSON.stringify(whoop)); }, [rides, WHOOP]);
+  };
   await seed(RIDES.slice(1)); // the free ride comes later
 
   // ---- workout day (Wed Nov 18): planned Sweet spot, red recovery (then a free ride, below)
@@ -798,8 +853,10 @@ async function controlsRun(viewport, label) {
 async function run(viewport, label) {
   const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
-  // nothing leaves the machine: GitHub, WHOOP and fonts CDNs get an empty answer
+  // nothing leaves the machine: GitHub, WHOOP and fonts CDNs get an empty answer (rodillo-data's index: the history)
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+  const history = { rides: HISTORY };
+  await mockGitHub(ctx, { get 'index.json'() { return history; } });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
@@ -815,7 +872,14 @@ async function run(viewport, label) {
 
   // Training tab (js/training.js): seeded synced history -> stats card, fitness chart, weekly bars, power curve,
   // time in zones and the rides list; then the history is taken away again and the tab shows its empty state
+  // signed out first: a cached history must not show (only the sign-in line), then signed in with a token
   await page.evaluate((idx) => localStorage.setItem('rodillo.remoteIndex', JSON.stringify(idx)), HISTORY);
+  await page.click('#tabs button[data-tab="today"]');
+  await page.click('#tabs button[data-tab="training"]');
+  await page.waitForFunction(() => document.querySelector('#tab-training').classList.contains('locked') && /history is private/.test(document.querySelector('#sync-status').textContent), null, { timeout: 3000 })
+    .catch(() => { throw new Error(`training (${label}): not locked signed out`); });
+  if (await page.locator('#ride-table [data-ride]').count() || await shownNow(page, '#training-cards')) throw new Error(`training (${label}): cached history shows signed out`);
+  await page.evaluate((t) => localStorage.setItem('rodillo.sync', t), TOKEN);
   await page.click('#tabs button[data-tab="today"]');
   await page.click('#tabs button[data-tab="training"]');
   await page.waitForFunction((n) => document.querySelectorAll('#ride-table [data-ride]').length >= n, HISTORY.length, { timeout: 3000 });
@@ -854,12 +918,14 @@ async function run(viewport, label) {
   await page.click('#rd [data-rd="back"]');
   await page.waitForSelector('#home.active', { timeout: 3000 });
   if (await page.getAttribute('#home', 'data-tab') !== 'training') fail('Back from a ride page left the Training tab');
+  history.rides = [];
   await page.evaluate(() => localStorage.removeItem('rodillo.remoteIndex'));
   await page.click('#tabs button[data-tab="today"]');
   await page.click('#tabs button[data-tab="training"]');
   await page.waitForFunction(() => /No rides yet/.test(document.querySelector('#ride-table').textContent), null, { timeout: 3000 });
   await page.click('#tabs button[data-tab="today"]');
-  ok(`${label}: Training: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history`);
+  await page.evaluate(() => localStorage.removeItem('rodillo.sync')); // the rest of the run is signed out, as before
+  ok(`${label}: Training: locked signed out; signed in: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history`);
 
   await libraryStep(page, label);
 

@@ -241,8 +241,9 @@ export function renderHero() {
   const today = dayInfo(dkey(new Date()), v);
   const w = today.workout;
   const date = dayDate(today.key).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-  const src = !app.plan ? '' : !syncClient()
-    ? `<p class="plan-src">Showing the public copy of the plan. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to get the coach's daily changes on this device.</p>`
+  const src = !syncClient()
+    ? `<p class="plan-src">Signed out: your plan and history are private. ${syncHint()} in <a href="#" data-open-settings="sync">Settings</a> to see them.</p>`
+    : !app.plan ? ''
     : app.coachNoRepo ? `<p class="plan-src">Can't reach your data repo <b>${esc(app.coachNoRepo)}</b>. Create it on GitHub (private) and install the Rodillo GitHub App on it, then reload. Another repo name goes in <a href="#" data-open-settings="sync">Settings</a>.</p>`
     : app.coachError ? `<p class="plan-src">Couldn't load the coach plan (${esc(app.coachError.slice(0, 80))}). Showing the last saved copy. Check sync in <a href="#" data-open-settings="sync">Settings</a>.</p>` : '';
   const free = (primary) => `<button class="${primary ? 'primary' : 'ghost'} hero-free" id="btn-free"><span class="hs-label">${primary ? 'Start free ride' : 'Free ride'}</span>${BIKE_ICO}</button>`;
@@ -459,8 +460,8 @@ function bindRecoveryAdvice(root) {
 }
 
 async function loadWhoop() {
-  app.whoop = ls.get('whoop', null);
   const gh = syncClient();
+  app.whoop = gh ? ls.get('whoop', null) : null; // private: signed in only
   if (!gh) return;
   try {
     const r = await gh.getJson('whoop/daily.json');
@@ -476,6 +477,7 @@ export async function refreshPlanViews() {
 }
 
 export async function trainingRows() {
+  if (!syncClient()) return []; // ride history is private: nothing shows signed out, not even a cached copy
   const remote = ls.get('remoteIndex', []);
   let local = [];
   try { local = (await rides.list()).filter((r) => r.status === 'done' || r.status === 'inprogress'); } catch { /* no idb */ }
