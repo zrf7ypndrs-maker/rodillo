@@ -57,7 +57,9 @@ async function refresh(s) {
     // Another tab may have used the refresh token first (they rotate): take its result if it's newer.
     const cur = authSession();
     if (cur && cur.refresh_token !== s.refresh_token) return cur.access_token;
-    if (r.status === 401) throw expired();
+    // Only a refresh token GitHub has rejected means signed out. A throttled or failed call (older Workers
+    // also answered GitHub's 429 with a 401) keeps the session; the next call tries again.
+    if (r.status === 401 && /bad_refresh_token|invalid_grant|missing refresh_token/.test(body.error || '')) throw expired();
     throw new Error(`Sign-in refresh failed: ${body.error_description || body.error || r.status}`);
   }
   ls.set(KEY, { ...body, login: s.login });

@@ -102,19 +102,37 @@ async function refresh(req, env, appUrls) {
   const { refresh_token } = await req.json().catch(() => ({}));
   if (!refresh_token) return Response.json({ error: 'missing refresh_token' }, { status: 400, headers: cors });
   const tok = await tokenCall(env, { grant_type: 'refresh_token', refresh_token });
-  if (tok.error) return Response.json({ error: tok.error, error_description: tok.error_description }, { status: 401, headers: cors });
+  if (tok.error) return Response.json({ error: tok.error, error_description: tok.error_description }, { status: tok.transient ? 503 : 401, headers: cors });
   return Response.json(session(tok), { headers: { ...cors, 'Cache-Control': 'no-store' } });
 }
 
+// github.com throttles the shared Cloudflare egress IPs now and then (429, or a 5xx). A throttled call is
+// rejected before GitHub looks at the code / refresh token, so retrying it is safe. Short waits only: the
+// person is sitting on a redirect.
+const RETRY_WAITS = [500, 1500, 3000];
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
 async function tokenCall(env, params) {
-  const r = await fetch(`${gh(env)}/login/oauth/access_token`, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'rodillo-auth' },
-    body: JSON.stringify({ client_id: env.CLIENT_ID, client_secret: env.CLIENT_SECRET, ...params }),
-  });
-  const body = await r.json().catch(() => ({ error: `GitHub returned ${r.status}` }));
-  if (!r.ok && !body.error) body.error = `GitHub returned ${r.status}`;
-  return body;
+  for (let i = 0; ; i++) {
+    const r = await fetch(`${gh(env)}/login/oauth/access_token`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'rodillo-auth' },
+      body: JSON.stringify({ client_id: env.CLIENT_ID, client_secret: env.CLIENT_SECRET, ...params }),
+    });
+    const transient = r.status === 429 || r.status >= 500;
+    if (transient && i < RETRY_WAITS.length) {
+      const after = Number(r.headers.get('Retry-After')) * 1000;
+      await sleep(Math.min(after > 0 ? after : RETRY_WAITS[i], 5000));
+      continue;
+    }
+    const body = await r.json().catch(() => ({ error: `GitHub returned ${r.status}` }));
+    if (!r.ok && !body.error) body.error = `GitHub returned ${r.status}`;
+    if (transient) {
+      body.transient = true;
+      body.error_description = `GitHub is rate-limiting sign-in right now (${r.status}). Wait a minute and try again.`;
+    }
+    return body;
+  }
 }
 
 // GitHub App user tokens last 8 h; the refresh token lasts about 6 months and rotates on every use.
