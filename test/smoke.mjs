@@ -1,6 +1,7 @@
 // Browser smoke test: the whole app in Chrome, demo trainer, no Bluetooth or network.
 // Opens every home screen and panel (Today and Calendar also on a seeded week with a fixed clock), rides a demo workout (start, skip, end), opens the ride page,
-// drives home and a ride with a fake Zwift Ride (both hoods, real button bytes) and the keyboard,
+// drives home and a ride with a fake Zwift Ride (both hoods, real button bytes) and the keyboard, checks the desktop ride
+// screen on demo rides with a paused clock (ERG, slope, real climb, free ride, workout messages, the ramp test takeover),
 // and fails on any uncaught error or console error. Covers js/app.js, which the unit tests don't load.
 // Needs Chrome: CHROME_PATH, or /usr/bin/google-chrome (GitHub's ubuntu-latest has it).
 import http from 'node:http';
@@ -8,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { loadSeries, loadNow } from '../js/stats.js';
-import { flatten, mainSet, totalDuration } from '../js/engine/workout.js';
+import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -850,6 +851,181 @@ async function controlsRun(viewport, label) {
   await ctx.close();
 }
 
+// ---- the desktop ride screen on demo rides, the clock paused and moved only by runFor(): interval card, Next card,
+// tiles, a slope workout and a real climb, free ride, a workout message and the ramp test takeover. Each ride gets its
+// own browser context (and clock). Expected numbers come from the workout files and the engine in Node, plus the
+// session's own state for what the rider does (time left, gears, position on the road).
+async function rideRun() {
+  const FTP = DEFAULT_SETTINGS.ftp;
+  const fail = (what) => { throw new Error(`ride screen: ${what}`); };
+  let ctx, page;
+  const run = (ms) => page.clock.runFor(ms);
+  const key = async (k) => { await page.keyboard.press(k); await run(300); };
+  const hold = async (k, ms) => { await page.keyboard.down(k); await run(ms); await page.keyboard.up(k); await run(300); };
+  /** Open the app on Demo with the clock paused, then `start()`; resolves once the session has started (and a launch animation is over). */
+  async function ride(name, start) {
+    ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+    await ctx.clock.install({ time: new Date('2026-11-19T18:00:00') });
+    page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`ride ${name}: ${e.message}`));
+    page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`ride ${name} console: ${m.text()}`); });
+    await page.goto(base, { waitUntil: 'load' });
+    await page.waitForFunction(() => document.querySelectorAll('#workout-list .wo').length > 0, null, { timeout: 5000 });
+    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 1000));
+    await page.click('#btn-devices'); await page.click('#btn-demo'); await page.keyboard.press('Escape');
+    await start();
+    for (let i = 0; i < 60 && !(await page.evaluate(() => document.querySelector('#ride.active') && window.rodillo.session?.started && !window.rodillo.launching)); i++) { await run(250); await page.waitForTimeout(40); }
+    if (!(await page.evaluate(() => window.rodillo.session?.started))) fail(`${name}: the ride did not start`);
+  }
+  const fromLibrary = (wname, kind) => async () => {
+    await page.click('#tabs button[data-tab="workouts"]');
+    await page.click(`#wo-kind button[data-kind="${kind}"]`);
+    const row = await rowSel(page, kind === 'erg' ? '#workout-list' : '#slope-list', wname);
+    await page.click(`${row} .wo-name`);
+    await page.click(`${row} button[data-start]`);
+  };
+  // what the ride screen shows, and the session it shows
+  const screen = () => page.evaluate(() => {
+    const q = (sel) => document.querySelector(sel), tx = (sel) => q(sel)?.textContent ?? '', s = window.rodillo.session;
+    return {
+      label: tx('#r-int-label'), text: tx('#r-int-text'), big: tx('#r-int-big'), bar: !q('#r-int-bar').classList.contains('hidden'),
+      next: { none: q('#r-next').classList.contains('none'), amt: tx('#r-next .amt'), cad: tx('#r-next .cad') },
+      pct: q('#r-pct').classList.contains('hidden') ? null : tx('#r-pct'), target: tx('#r-target'),
+      gear: tx('#r-gear'), ratio: tx('#r-ratio'), gearviz: !!q('#r-ratio svg.gearviz'), gearDim: q('.tile.gear').classList.contains('dim'), flash: q('.tile.gear').classList.contains('flash'),
+      climbLabel: tx('#r-climb-label'), climb: tx('#r-climb'), climbSub: tx('#r-climbsub'),
+      msg: q('#r-msg').classList.contains('show') ? tx('#r-msg') : '',
+      takeover: q('#takeover').classList.contains('hidden') ? null : { line: tx('#to-line'), big: tx('#to-big'), sub: tx('#to-sub') },
+      segn: tx('#r-segn'), withSegs: q('#r-body').classList.contains('with-segs'),
+      s: { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, chartPos: s.chartPos, climbed: s.climbed, mode: s.mode, gb: { label: s.gb.label, seq: s.gb.seq, ratio: s.gb.ratio, rear: s.gb.rear }, target: s.target, segs: s.segs },
+    };
+  });
+  const left = (rem) => (rem.sec !== undefined ? fmtTime(rem.sec) : rem.m < 1000 ? `${Math.round(rem.m)}m` : `${(rem.m / 1000).toFixed(2)}km`);
+  const gearText = (gb) => (gb.seq ? gb.label : gb.label.replace('x', '×'));
+  const expect = (what, got, want) => { if (got !== want) fail(`${what}: "${got}", expected "${want}"`); };
+  /** Climbed / To the top tile on a slope-only workout, from the road laid out in Node. */
+  const toTop = (v) => {
+    const tr = track(v.s.segs), d = trackDist(tr, v.s.segs, v.s.chartPos);
+    expect('tile label on a slope-only workout', v.climbLabel, 'To the top');
+    expect('To the top', v.climb, `${Math.round(Math.max(0, tr.ascent - trackClimbed(tr, d)))}m`);
+    expect('To the top, km left', v.climbSub, `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`);
+  };
+  /** A shift: the gear tile shows the new gear (flashing) and its ratio. */
+  async function shifts(name) {
+    const v0 = await screen();
+    if (v0.gearDim || v0.gear !== gearText(v0.s.gb)) fail(`${name}: gear tile "${v0.gear}" (dim ${v0.gearDim}) for gear ${v0.s.gb.label}`);
+    await page.keyboard.press(']'); await run(300);
+    const v = await screen();
+    if (v.s.gb.rear !== v0.s.gb.rear + 1) fail(`${name}: ] did not shift (rear ${v0.s.gb.rear} -> ${v.s.gb.rear})`);
+    expect(`${name}: gear tile after a shift`, v.gear, gearText(v.s.gb));
+    if (!v.flash) fail(`${name}: the gear tile did not flash on the shift`);
+    if (!v.ratio.includes(`ratio ${v.s.gb.ratio.toFixed(2)}`) || v.gearviz === v.s.gb.seq) fail(`${name}: gear ratio line "${v.ratio}"`);
+  }
+
+  // ERG workout: Sweet spot 3 x 12 (a ramp warm-up, then 12 min at 90% with a cadence target)
+  const ss = flatten(SS);
+  await ride('ERG', fromLibrary(SS.name, 'erg'));
+  await run(5000);
+  let v = await screen();
+  expect('ERG card label', v.label, ss[0].label);
+  expect('ERG card, ramp', v.big, `Ramp to${Math.round(ss[0].to * FTP)}Win${left(v.s.rem)}`);
+  const now = +v.text.match(/^now (\d+) W$/)?.[1];
+  if (!(now >= Math.round(ss[0].from * FTP) && now <= Math.round(ss[0].to * FTP))) fail(`ERG card, ramp sub line "${v.text}"`);
+  expect('Next card', v.next.amt, `${fmtTime(ss[1].dur)}@${Math.round(ss[1].from * FTP)}W`);
+  expect('Next card cadence', v.next.cad, ss[1].cad.label);
+  if (v.pct !== null || !v.bar || !v.withSegs || v.segn !== `0/${ss.length}`) fail(`ERG start: effort ${v.pct}, bar ${v.bar}, list ${v.withSegs} ${v.segn}`);
+  if (!v.gearDim || v.ratio !== 'ERG: gears not used' || v.climbLabel !== 'Climbed') fail(`ERG tiles: gear dim ${v.gearDim} "${v.ratio}", ${v.climbLabel}`);
+  if (!/^target \d+ W$/.test(v.target)) fail(`power tile "${v.target}"`);
+  await key('ArrowUp'); // effort 101%
+  v = await screen();
+  if (v.s.intensity !== 1.01 || v.pct !== '101%') fail(`effort up: ${v.s.intensity}, tile "${v.pct}"`);
+  expect('ERG card at 101%', v.big, `Ramp to${Math.round(ss[0].to * FTP * 1.01)}Win${left(v.s.rem)}`);
+  expect('Next card at 101%', v.next.amt, `${fmtTime(ss[1].dur)}@${Math.round(ss[1].from * FTP * 1.01)}W`);
+  await hold('s', 3500); // skip: interval 1 of 3
+  await run(3000);
+  v = await screen();
+  if (v.s.seg !== 1) fail(`hold S: segment ${v.s.seg}`);
+  expect('ERG card label after the skip', v.label, `${ss[1].label} 1/3`);
+  expect('ERG card, hold', v.big, `Hold${Math.round(ss[1].from * FTP * 1.01)}Wfor${left(v.s.rem)}`);
+  expect('ERG card sub line', v.text, `${Math.round(ss[1].from * 100 * 1.01)}% FTP · ${ss[1].cad.label}`);
+  expect('Next card after the skip', v.next.amt, `${fmtTime(ss[2].dur)}@${Math.round(ss[2].from * FTP * 1.01)}W`);
+  expect('interval count', v.segn, `1/${ss.length}`);
+  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), Next card, effort 101%, hold S skips, tiles');
+  await ctx.close();
+
+  // slope workout (a road: To the top), a shift, the profile moved up 1%
+  const CR = byName('Climb repeats 4 x 6 min at 6%'), cr = flatten(CR);
+  await ride('slope', fromLibrary(CR.name, 'slope'));
+  await run(20000);
+  v = await screen();
+  if (v.s.mode !== 'sim' || v.pct !== null) fail(`slope workout in ${v.s.mode} mode, effort tile ${v.pct}`);
+  expect('slope card label', v.label, cr[0].label);
+  expect('slope card', v.big, `${(cr[0].grade * 100).toFixed(0)}%grade for${left(v.s.rem)}`);
+  expect('slope card sub line', v.text, 'use your gears');
+  expect('Next card on a slope workout', v.next.amt, `${fmtTime(cr[1].dur)}@${(cr[1].grade * 100).toFixed(0)}%`);
+  toTop(v);
+  await shifts('slope workout');
+  await key('ArrowUp'); // the whole profile +1%
+  await hold('s', 3500);
+  await run(5000);
+  v = await screen();
+  if (v.s.seg !== 1 || Math.abs(v.s.offset - 0.01) > 1e-9) fail(`slope: segment ${v.s.seg}, offset ${v.s.offset}`);
+  expect('slope card on the climb', v.big, `${((cr[1].grade + 0.01) * 100).toFixed(0)}%grade for${left(v.s.rem)}`);
+  expect('slope card sub line on the climb', v.text, `profile +1% · ${cr[1].text} · ${cr[1].cad.label}`);
+  toTop(v);
+  ok('desktop: ride, slope workout: grade card, profile +1%, Next card, gear shown after a shift, To the top');
+  await ctx.close();
+
+  // a real climb (distance steps; the warm-up roll leaves the chart once ridden)
+  await ride('real climb', fromLibrary(CLIMB.name, 'slope'));
+  await run(10000);
+  toTop(await screen());
+  await hold('s', 3500);
+  await run(20000);
+  v = await screen();
+  const g1 = v.s.segs[1];
+  if (v.s.seg !== 1 || !g1.dist) fail(`real climb: segment ${v.s.seg} after the skip`);
+  expect('real climb card label', v.label, g1.label);
+  expect('real climb card', v.big, `${(g1.grade * 100).toFixed(0)}%grade for${left(v.s.rem)}`);
+  if (!/m$/.test(v.big)) fail(`real climb card counts metres: "${v.big}"`);
+  toTop(v);
+  await shifts('real climb');
+  ok('desktop: ride, real climb: metres left on the card, To the top and km to go, a shift');
+  await ctx.close();
+
+  // free ride: grade card, no Next card or list, Climbed
+  await ride('free ride', async () => { await page.click('#tabs button[data-tab="today"]'); await page.click('#btn-free'); });
+  v = await screen();
+  if (v.label !== 'Free ride' || v.big !== '0.0%grade' || v.text !== 'up/down changes the grade by 1%, shift to hold your cadence') fail(`free ride card ${JSON.stringify([v.label, v.big, v.text])}`);
+  if (v.bar || !v.next.none || v.withSegs || v.climbLabel !== 'Climbed') fail(`free ride: bar ${v.bar}, next ${!v.next.none}, list ${v.withSegs}, ${v.climbLabel}`);
+  await key('ArrowUp'); await key('ArrowUp');
+  await run(60000);
+  v = await screen();
+  expect('free ride card at 2%', v.big, '2.0%grade');
+  if (!(v.s.climbed > 0)) fail('free ride at 2% for a minute climbed nothing');
+  expect('Climbed tile', v.climb, `${Math.round(v.s.climbed)}m`);
+  await shifts('free ride');
+  ok('desktop: ride, free ride: grade card, no Next card or list, Climbed, a shift');
+  await ctx.close();
+
+  // ramp test: the workout's messages over the chart, then the "Here we go" takeover on step 1
+  const RT = LIB.find((w) => w.id === 'ramp-test'), rt = flatten(RT), msgs = RT.steps[0].messages;
+  await ride('ramp test', fromLibrary(RT.name, 'erg'));
+  await run(1000);
+  expect('first workout message', (await screen()).msg, msgs[0].text);
+  await run((msgs[1].at + 2) * 1000);
+  expect('second workout message', (await screen()).msg, msgs[1].text);
+  await hold('s', 3500); await run(1000); await hold('s', 3500);
+  v = await screen();
+  const step1 = rt.findIndex((g) => g.untilFail);
+  if (v.s.seg !== step1) fail(`ramp test: segment ${v.s.seg}, expected the first step (${step1})`);
+  expect('ramp test card', v.big, `Hold${Math.round(rt[step1].from * FTP)}Wfor${left(v.s.rem)}`);
+  if (!v.takeover || v.takeover.line !== 'Here we go.' || v.takeover.big !== `${Math.round(rt[step1].from * FTP)} W` || !/^\+20 W every minute/.test(v.takeover.sub)) fail(`ramp test takeover ${JSON.stringify(v.takeover)}`);
+  await page.waitForFunction(() => document.querySelector('#takeover').classList.contains('hidden'), null, { timeout: 6000 });
+  ok('desktop: ride, ramp test: workout messages over the chart, "Here we go" takeover on step 1, then back');
+  await ctx.close();
+}
+
 async function run(viewport, label) {
   const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
@@ -1104,6 +1280,7 @@ try {
   await todayRun({ width: 390, height: 844 }, 'phone');
   await controlsRun({ width: 1280, height: 800 }, 'desktop');
   await controlsRun({ width: 390, height: 844 }, 'phone');
+  await rideRun();
   await lateCssRun({ width: 1280, height: 800 }, 'desktop');
   await lateCssRun({ width: 390, height: 844 }, 'phone');
 } finally {
