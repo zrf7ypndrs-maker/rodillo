@@ -19,7 +19,7 @@ const v = { ftp: 200, riderKg: 80, hrBpm: undefined, track: null, zoneHex: (f) =
 const text = (html) => html.replace(/<[^>]+>/g, '').replace(/&middot;/g, '·').replace(/&#9650;/g, '▲').replace(/&#9660;/g, '▼');
 
 const ss = flatten(W('sweetspot-3x12')); // 0 warm-up ramp 45-70%, 1 sweet spot 90% @ 90 rpm (1/3), 2 recovery 50%, ..., 7 cool-down ramp
-const cr = flatten(W('sim-climb-repeats')); // 0 warm-up roll 1%, 1 climb 6% @ 85 rpm "Hold ~100% FTP", 2 flat roll 0%
+const cr = flatten(W('sim-climb-repeats')); // 0 warm-up roll 1%, 1 climb 6% @ 85 rpm "Hold ~100% FTP" (aim 1: 190-210 W), 2 flat roll 0%
 const rt = flatten(W('ramp-test'));
 
 /** A session as renderRide() sees it: the fields the ride screen reads, defaults for an ERG ride at 100%. */
@@ -71,12 +71,16 @@ function ses(x = {}) {
   let c = intervalCard(ses({ segs: cr, segIndex: 1, mode: 'sim' }), v);
   assert.equal(c.label, 'Climb 1/4');
   assert.equal(text(c.big), '6%grade for4:30');
-  assert.equal(text(c.text), 'Hold ~100% FTP · 85 rpm');
+  assert.equal(text(c.text), 'Hold ~200 W · 85 rpm'); // "% FTP" in a slope step's text reads in watts
   assert.equal(c.zc, 'grade(0.060)');
   // the profile moved up / down with the D-pad: said first, and the grade includes it
   c = intervalCard(ses({ segs: cr, segIndex: 1, mode: 'sim', gradeOffset: 0.02 }), v);
   assert.equal(text(c.big), '8%grade for4:30');
-  assert.equal(text(c.text), 'profile +2% · Hold ~100% FTP · 85 rpm');
+  assert.equal(text(c.text), 'profile +2% · Hold ~200 W · 85 rpm');
+  // no text of its own: the aim goes in the small line
+  const aimed = flatten({ steps: [{ dur: 300, grade: 7, aim: 0.9, cadence: '60-65' }] });
+  c = intervalCard(ses({ segs: aimed, segIndex: 0, mode: 'sim' }), v);
+  assert.equal(text(c.text), 'use your gears, aim 180 W · 60-65 rpm');
   c = intervalCard(ses({ segs: cr, segIndex: 2, mode: 'sim', gradeOffset: -0.01 }), v);
   assert.equal(text(c.big), '-1%grade for3:00');
   assert.equal(text(c.text), 'profile -1% · use your gears');
@@ -86,7 +90,7 @@ function ses(x = {}) {
   assert.match(text(c.big), /grade for87m$/);
   c = intervalCard(ses({ segs: climb, segIndex: d, mode: 'sim', segRemaining: { m: 1530 } }), v);
   assert.match(text(c.big), /grade for1\.53km$/);
-  ok('interval card, slope: grade, profile offset up and down, own text and cadence, metres and km left');
+  ok('interval card, slope: grade, profile offset up and down, own text in watts, aim and cadence, metres and km left');
 }
 {
   let c = intervalCard(ses({ segIndex: -1 }), v);
@@ -110,7 +114,7 @@ function ses(x = {}) {
   assert.equal(text(c.html), 'Next5:00@120-80W');
   assert.equal(c.nc, 'zone(0.60)');
   c = nx(ses({ segs: cr, segIndex: 0, mode: 'sim', gradeOffset: 0.01 }), 1);
-  assert.equal(text(c.html), 'Next6:00@7%85 rpm');
+  assert.equal(text(c.html), 'Next6:00@7%85 rpm · ~200 W');
   assert.equal(c.nc, 'grade(0.060)'); // the step's own grade, like the workout's colors
   const climb = flatten(W('climb-el-durazno')), d = climb.findIndex((g) => g.dist);
   c = nx(ses({ segs: climb, segIndex: d - 1, mode: 'sim' }), d);
@@ -155,6 +159,23 @@ function ses(x = {}) {
   r = t({ segIndex: 0, cadStatus: null });
   assert.deepEqual([r.cadState, r.cadTarget], ['', '']);
   ok('tiles: heart rate (strap first, 10 min average), cadence target and warnings');
+}
+{
+  // slope step with an aim: the power tile turns green on target, red (and pulses) with an arrow off it
+  const t = (x) => rideTiles(ses({ segs: cr, segIndex: 1, mode: 'sim', ...x }), v);
+  let r = t({ aimStatus: null });
+  assert.deepEqual([r.powerCls, text(r.target)], ['', 'target 190-210 W']); // settling: just the band
+  r = t({ aimStatus: 'ok' });
+  assert.deepEqual([r.powerCls, text(r.target)], ['aim-ok', 'target 190-210 W']);
+  r = t({ aimStatus: 'low' });
+  assert.deepEqual([r.powerCls, text(r.target)], ['aim-bad', '▲ Push harder']);
+  r = t({ aimStatus: 'high' });
+  assert.deepEqual([r.powerCls, text(r.target)], ['aim-bad', '▼ Ease off']);
+  r = t({ segIndex: 2, aimStatus: null, powerShown: 160 }); // flat roll: no aim, W/kg as before
+  assert.deepEqual([r.powerCls, r.target], ['', '2.0 W/kg']);
+  r = rideTiles(ses({ target: 180, powerShown: 180, aimStatus: 'low' }), v); // ERG keeps its own target line
+  assert.deepEqual([r.powerCls, text(r.target)], ['ok', 'target 180 W']);
+  ok('tiles: slope power aim, green on target, red with push harder / ease off, nothing without an aim or in ERG');
 }
 {
   const t = (x) => rideTiles(ses(x), v);

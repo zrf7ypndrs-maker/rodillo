@@ -1262,7 +1262,7 @@ function renderPhone(s) {
       set('rp-target-sub', `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`);
     } else {
       set('rp-target', `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`);
-      set('rp-target-sub', `grade, use your gears${cad}`);
+      set('rp-target-sub', `${seg.aim ? `grade, aim ${Math.round(seg.aim.mid * ftp)} W` : 'grade, use your gears'}${cad}`);
     }
   } else if (s.segs) {
     zc = 'var(--ok-bg)';
@@ -1279,11 +1279,17 @@ function renderPhone(s) {
   }
   setZc(hero, zc);
 
-  // power + on-target gauge (centre = target, ends = ±20%)
+  // power + on-target gauge (centre = target, ends = ±20%); a slope step's aim works like the cadence box
   set('rp-power', p);
+  const aim = s.mode !== 'erg' && seg?.kind === 'sim' ? seg.aim : null, as = aim ? s.aimStatus : null;
+  const gt = s.target || (aim ? aim.mid * ftp : 0);
   const gauge = $('#rp-gauge');
-  gauge.classList.toggle('off', !s.target);
-  if (s.target) gauge.querySelector('b').style.left = `${Math.max(0, Math.min(1, (p / s.target - 0.8) / 0.4)) * 100}%`;
+  gauge.classList.toggle('off', !gt);
+  if (gt) gauge.querySelector('b').style.left = `${Math.max(0, Math.min(1, (p / gt - 0.8) / 0.4)) * 100}%`;
+  const pb = $('#rp-power-box');
+  pb.classList.toggle('ok', as === 'ok');
+  pb.classList.toggle('bad', as === 'low' || as === 'high');
+  set('rp-power-sub', !aim ? '' : as === 'low' ? '&#9650; push harder' : as === 'high' ? '&#9660; ease off' : `${Math.round(aim.lo * ftp)}-${Math.round(aim.hi * ftp)} W`);
 
   set('rp-hr', hr || '--');
   set('rp-cad', Math.round(td.cadence || 0));

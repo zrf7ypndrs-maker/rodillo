@@ -11,6 +11,8 @@
 //     { "repeat": 5, "steps": [ { "dur": 240, "power": 1.05 }, { "dur": 240, "power": 0.50 } ] },
 //     { "dur": 360, "grade": 7, "cadence": 65, "text": "Seated grind" },   // SIM: grade in %; cadence target ±5 rpm
 //     (cadence can also be a range "80-90" or a floor "100+"; omit it for no target)
+//     { "dur": 360, "grade": 7, "aim": 0.9 },                          // SIM power target, fraction of FTP: ±5% FTP band
+//     (aim can also be a range [0.85, 0.95] or "85-95"; with no aim, "~90% FTP" in the step's text sets it)
 //     { "dist": 1500, "grade": 6 },                                   // SIM step by distance (metres)
 //     { "dur": 300, "free": true, "label": "Free ride" }                 // SIM at 0%
 //     { "dur": 60, "power": 1.10, "untilFail": true }                   // test step (ramp test), see below
@@ -25,7 +27,8 @@
 //                 { "at": -30, "text": "..." },        // negative = seconds before the end
 //                 { "at": "50%", "text": "..." },      // share of the step
 //                 { "at": -20, "rep": "last", "text": "Last one" } ]  // rep: number, "first", "last" or a list
-// Text can use {watts} (target now), {ftp}, {rep}, {of}, {left} (reps left after this one) and {name}
+// In slope steps, "90% FTP" / "85-95% FTP" in the step text and its messages show as watts at the rider's FTP.
+// Text can use {watts} (target now; the aim on a slope step), {ftp}, {rep}, {of}, {left} (reps left after this one) and {name}
 // (rider's name from Settings; with no name, "Nice, {name}." reads "Nice.").
 // Distance steps time their messages on the estimated duration.
 
@@ -54,6 +57,7 @@ export function flatten(workout, ftp = 200) {
       if (s.untilFail) seg.untilFail = true;
       if (s.grade !== undefined) { seg.kind = 'sim'; seg.grade = Number(s.grade) / 100; }
       else if (s.free) { seg.kind = 'sim'; seg.grade = 0; seg.free = true; }
+      if (seg.kind === 'sim') { const aim = parseAim(s.aim, s.text); if (aim) seg.aim = aim; }
       else if (s.watts !== undefined) { seg.kind = 'erg'; seg.watts = Number(s.watts); seg.from = seg.to = seg.watts / ftp; }
       else if (s.from !== undefined) { seg.kind = 'erg'; seg.from = Number(s.from); seg.to = Number(s.to); }
       else { seg.kind = 'erg'; seg.from = seg.to = Number(s.power); }
@@ -96,8 +100,37 @@ function repMatches(want, rep) {
   return Array.isArray(want) ? want.some(one) : one(want);
 }
 
-/** Fills {watts} {ftp} {rep} {of} {left} {name} in a message. */
+/** "90% FTP" -> "216 W", "85-95% FTP" -> "204-228 W" at this FTP (slope steps: the rider sees watts, not percent). */
+export function ftpWatts(text, ftp) {
+  if (!text || !ftp) return text || '';
+  const W = (p) => Math.round((Number(p) / 100) * ftp);
+  return String(text)
+    .replace(/(\d{2,3})\s*(?:-|to)\s*(\d{2,3})\s*%\s*(?:of\s+)?FTP\b/gi, (_, a, b) => `${W(a)}-${W(b)} W`)
+    .replace(/(\d{2,3})\s*%\s*(?:of\s+)?FTP\b/gi, (_, a) => `${W(a)} W`);
+}
+
+/**
+ * Power target of a slope step as fractions of FTP: { lo, hi, mid } or null. `aim` = 0.9 (±5% FTP), 90 (percent),
+ * [0.85, 0.95] or "85-95"; with no aim, the first "90% FTP" / "85-95% FTP" in the step's text.
+ */
+export function parseAim(aim, text = '') {
+  const f = (x) => { const n = Number(x); return n > 3 ? n / 100 : n; }; // 90 and 0.9 both mean 90%
+  const band = (lo, hi) => (Number.isFinite(lo) && Number.isFinite(hi) && lo > 0 && hi >= lo ? { lo, hi, mid: (lo + hi) / 2 } : null);
+  if (Array.isArray(aim)) return band(f(aim[0]), f(aim[1]));
+  if (typeof aim === 'string') {
+    const m = aim.match(/^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*%?\s*$/);
+    if (m) return band(f(m[1]), f(m[2]));
+  }
+  if (aim != null && aim !== '' && Number.isFinite(Number(aim))) { const n = f(aim); return band(n - 0.05, n + 0.05); }
+  let m = String(text || '').match(/(\d{2,3})\s*(?:-|to)\s*(\d{2,3})\s*%\s*(?:of\s+)?FTP\b/i);
+  if (m) return band(+m[1] / 100, +m[2] / 100);
+  m = String(text || '').match(/(\d{2,3})\s*%\s*(?:of\s+)?FTP\b/i);
+  return m ? band(+m[1] / 100 - 0.05, +m[1] / 100 + 0.05) : null;
+}
+
+/** Fills {watts} {ftp} {rep} {of} {left} {name} in a message; on slope steps "90% FTP" reads in watts. */
 export function fillMessage(text, { seg, watts, ftp, name = '' }) {
+  if (seg?.kind === 'sim') text = ftpWatts(text, ftp);
   const nm = String(name || '').trim();
   const lead = /^\s*\{name\}/.test(text);
   text = nm ? text.replace(/\{name\}/g, nm) : text.replace(/,?\s+\{name\}|,\s*\{name\}/g, '').replace(/\{name\},?\s*/g, '');

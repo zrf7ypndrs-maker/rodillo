@@ -19,6 +19,7 @@
         {
           "dist": 1500,
           "grade": 6,
+          "aim": 1.05,
           "label": "Climb",
           "cadence": 80,
           "text": "Seated, ~105% FTP"

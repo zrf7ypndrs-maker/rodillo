@@ -9,6 +9,8 @@ import { ZP_WHEEL } from '../ble/zwifthub.js?v=202611102147';
 
 export const POWER_SHOW_S = 5; // power box smoothing, seconds
 const POWER_BUF_S = 10;
+const AIM_AVG_S = 5;     // slope power target: judged on the same 5 s average the power box shows
+const AIM_SETTLE_S = 10; // time to find the gear at the start of a slope step before the power card says anything
 
 export const DEFAULT_SETTINGS = {
   ftp: 200,
@@ -233,6 +235,13 @@ export class Session extends Emitter {
     const c = this.cadBuf.reduce((a, x) => a + x, 0) / this.cadBuf.length;
     return c < g.cad.lo ? 'low' : c > g.cad.hi ? 'high' : 'ok';
   }
+  /** Power vs a slope step's aim (5 s average, after 10 s to settle): null (no aim / settling), 'ok', 'low' or 'high'. */
+  get aimStatus() {
+    const g = this.seg;
+    if (!g?.aim || g.kind !== 'sim' || this.paused || !this.started || this.segElapsed < AIM_SETTLE_S || !this.powerBuf.length) return null;
+    const p = this.powerAvg(AIM_AVG_S), ftp = this.s.ftp;
+    return p < g.aim.lo * ftp ? 'low' : p > g.aim.hi * ftp ? 'high' : 'ok';
+  }
   /** Trailing average of the last `sec` seconds of trainer power (buffer holds POWER_BUF_S). */
   powerAvg(sec) {
     const b = this.powerBuf, n = Math.min(b.length, Math.max(1, Math.round(sec / (this._dt || 0.25))));
@@ -412,7 +421,7 @@ export class Session extends Emitter {
       const key = `${this.segI}:${k}`;
       if (done.has(key) || pos < m.t) return;
       done.add(key);
-      if (pos - m.t <= 15) this.emit('message', fillMessage(m.text, { seg: g, watts: this.target ?? (g.kind === 'erg' ? segTarget(g, this.segProgress) * this.s.ftp * this.intensity : null), ftp: this.s.ftp, name: this.s.riderName }));
+      if (pos - m.t <= 15) this.emit('message', fillMessage(m.text, { seg: g, watts: this.target ?? (g.kind === 'erg' ? segTarget(g, this.segProgress) * this.s.ftp * this.intensity : g.aim ? g.aim.mid * this.s.ftp : null), ftp: this.s.ftp, name: this.s.riderName }));
     });
   }
 

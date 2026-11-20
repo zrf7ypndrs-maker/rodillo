@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { loadSeries, loadNow } from '../js/stats.js';
-import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed } from '../js/engine/workout.js';
+import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -892,12 +892,13 @@ async function rideRun() {
       label: tx('#r-int-label'), text: tx('#r-int-text'), big: tx('#r-int-big'), bar: !q('#r-int-bar').classList.contains('hidden'),
       next: { none: q('#r-next').classList.contains('none'), amt: tx('#r-next .amt'), cad: tx('#r-next .cad') },
       pct: q('#r-pct').classList.contains('hidden') ? null : tx('#r-pct'), target: tx('#r-target'),
+      aimCls: ['aim-ok', 'aim-bad'].find((c) => q('.tile.power').classList.contains(c)) || '',
       gear: tx('#r-gear'), ratio: tx('#r-ratio'), gearviz: !!q('#r-ratio svg.gearviz'), gearDim: q('.tile.gear').classList.contains('dim'), flash: q('.tile.gear').classList.contains('flash'),
       climbLabel: tx('#r-climb-label'), climb: tx('#r-climb'), climbSub: tx('#r-climbsub'),
       msg: q('#r-msg').classList.contains('show') ? tx('#r-msg') : '',
       takeover: q('#takeover').classList.contains('hidden') ? null : { line: tx('#to-line'), big: tx('#to-big'), sub: tx('#to-sub') },
       segn: tx('#r-segn'), withSegs: q('#r-body').classList.contains('with-segs'),
-      s: { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, chartPos: s.chartPos, climbed: s.climbed, mode: s.mode, gb: { label: s.gb.label, seq: s.gb.seq, ratio: s.gb.ratio, rear: s.gb.rear }, target: s.target, segs: s.segs },
+      s: { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, chartPos: s.chartPos, climbed: s.climbed, mode: s.mode, gb: { label: s.gb.label, seq: s.gb.seq, ratio: s.gb.ratio, rear: s.gb.rear }, target: s.target, segs: s.segs, aim: s.aimStatus },
     };
   });
   const left = (rem) => (rem.sec !== undefined ? fmtTime(rem.sec) : rem.m < 1000 ? `${Math.round(rem.m)}m` : `${(rem.m / 1000).toFixed(2)}km`);
@@ -963,6 +964,8 @@ async function rideRun() {
   expect('slope card', v.big, `${(cr[0].grade * 100).toFixed(0)}%grade for${left(v.s.rem)}`);
   expect('slope card sub line', v.text, 'use your gears');
   expect('Next card on a slope workout', v.next.amt, `${fmtTime(cr[1].dur)}@${(cr[1].grade * 100).toFixed(0)}%`);
+  expect('Next card cadence and power aim', v.next.cad, `${cr[1].cad.label} · ~${Math.round(cr[1].aim.mid * FTP)} W`);
+  if (v.aimCls || v.target.startsWith('target')) fail(`warm-up has no aim: power tile ${v.aimCls} "${v.target}"`);
   toTop(v);
   await shifts('slope workout');
   await key('ArrowUp'); // the whole profile +1%
@@ -971,9 +974,19 @@ async function rideRun() {
   v = await screen();
   if (v.s.seg !== 1 || Math.abs(v.s.offset - 0.01) > 1e-9) fail(`slope: segment ${v.s.seg}, offset ${v.s.offset}`);
   expect('slope card on the climb', v.big, `${((cr[1].grade + 0.01) * 100).toFixed(0)}%grade for${left(v.s.rem)}`);
-  expect('slope card sub line on the climb', v.text, `profile +1% · ${cr[1].text} · ${cr[1].cad.label}`);
+  expect('slope card sub line on the climb', v.text, `profile +1% · ${ftpWatts(cr[1].text, FTP)} · ${cr[1].cad.label}`);
+  if (v.text.includes('FTP')) fail(`slope card still says FTP: "${v.text}"`);
   toTop(v);
-  ok('desktop: ride, slope workout: grade card, profile +1%, Next card, gear shown after a shift, To the top');
+  // power aim: 10 s to settle (just the band), then green on target, red with an arrow off it
+  const band = `target ${Math.round(cr[1].aim.lo * FTP)}-${Math.round(cr[1].aim.hi * FTP)} W`;
+  if (v.s.aim !== null || v.aimCls) fail(`aim while settling: ${v.s.aim}, tile ${v.aimCls}`);
+  expect('power tile while settling', v.target, band);
+  await run(8000);
+  v = await screen();
+  if (!v.s.aim) fail('no power aim status 13 s into the climb');
+  expect('power tile class', v.aimCls, v.s.aim === 'ok' ? 'aim-ok' : 'aim-bad');
+  expect('power tile line', v.target, v.s.aim === 'ok' ? band : v.s.aim === 'low' ? '▲ Push harder' : '▼ Ease off');
+  ok('desktop: ride, slope workout: grade card, profile +1%, Next card, gear shown after a shift, To the top, power aim');
   await ctx.close();
 
   // a real climb (distance steps; the warm-up roll leaves the chart once ridden)

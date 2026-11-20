@@ -23,10 +23,11 @@
     {
       "dur": 120,
       "grade": 3,
+      "aim": 1,
       "label": "Opener",
-      "text": "About FTP on the power card",
+      "text": "About 100% FTP on the power card",
       "messages": [
-        { "text": "Two minutes at about FTP. Wake the legs up." }
+        { "text": "Two minutes at about 100% FTP. Wake the legs up." }
       ]
     },
     {

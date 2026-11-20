@@ -720,6 +720,48 @@ import { TRAINERS, matchTrainer, trainerFor, trainerFits, cleanRange } from '../
   console.log(`ok - cadence targets (${ints[0].cadInRange}% in range)`);
 }
 {
+  const { parseAim, ftpWatts, fillMessage } = await import('../js/engine/workout.js');
+  const r2 = (a) => a && [a.lo, a.hi, a.mid].map((x) => Math.round(x * 1000) / 1000);
+  assert.deepEqual(r2(parseAim(0.9)), [0.85, 0.95, 0.9]);
+  assert.deepEqual(r2(parseAim(90)), [0.85, 0.95, 0.9], 'percent works too');
+  assert.deepEqual(r2(parseAim([0.8, 0.9])), [0.8, 0.9, 0.85]);
+  assert.deepEqual(r2(parseAim('85-95')), [0.85, 0.95, 0.9]);
+  assert.deepEqual(r2(parseAim(null, 'Big gear, seated, ~90% FTP')), [0.85, 0.95, 0.9], 'from the text');
+  assert.deepEqual(r2(parseAim(undefined, 'Hold 85-95% FTP')), [0.85, 0.95, 0.9]);
+  assert.deepEqual(r2(parseAim(1.05, 'about 90% FTP')), [1, 1.1, 1.05], 'aim wins over the text');
+  assert.equal(parseAim(null, 'Easy spin'), null);
+  assert.equal(parseAim('', ''), null);
+  assert.equal(parseAim([0.9, 0.8]), null, 'upside-down range');
+  assert.equal(ftpWatts('Big gear, seated, ~90% FTP', 240), 'Big gear, seated, ~216 W');
+  assert.equal(ftpWatts('Hold 85-95% FTP, then 105% of FTP', 240), 'Hold 204-228 W, then 252 W');
+  assert.equal(ftpWatts('Your new FTP is 75% of your best minute.', 240), 'Your new FTP is 75% of your best minute.');
+  assert.equal(ftpWatts('', 240), '');
+  // flatten: slope steps only (ERG and free ride never get an aim)
+  const segs = flatten({ steps: [{ dur: 60, power: 0.9, text: '~90% FTP' }, { dur: 60, grade: 6, text: '~90% FTP' }, { dur: 60, free: true }] });
+  assert.deepEqual(segs.map((g) => !!g.aim), [false, true, false]);
+  // messages: watts on slope steps, {watts} = the aim
+  const sim = { kind: 'sim', rep: null }, erg = { kind: 'erg', rep: null };
+  assert.equal(fillMessage('Aim for about 90% FTP.', { seg: sim, ftp: 240 }), 'Aim for about 216 W.');
+  assert.equal(fillMessage('Settle at {watts} W.', { seg: sim, watts: 216, ftp: 240 }), 'Settle at 216 W.');
+  assert.equal(fillMessage('6 x 4 min at 110% FTP.', { seg: erg, ftp: 240 }), '6 x 4 min at 110% FTP.', 'ERG text stays as written');
+  // the session: settle 10 s, then the 5 s power average against the band (FTP 200, aim 0.9 = 170-190 W)
+  const wo = { steps: [{ dur: 120, grade: 4, aim: 0.9, messages: [{ at: 1, text: 'Hold {watts} W, ~90% FTP' }] }, { dur: 60, grade: 0 }] };
+  const trainer = new SimTrainer(); const hr = new SimHr(trainer);
+  const s = new Session({ trainer, hr, settings: { ftp: 200 }, workout: wo });
+  const said = []; s.on('message', (m) => said.push(m));
+  const at = (w, sec) => { const td = trainer.data; for (let i = 0; i < sec * 4; i++) { trainer.data = { ...td, power: w, cadence: 80, speedKmh: 20 }; s.tick(0.25); } };
+  assert.equal(s.aimStatus, null, 'not started');
+  s.start(); at(140, 5);
+  assert.equal(s.aimStatus, null, 'settling');
+  at(140, 6); assert.equal(s.aimStatus, 'low');
+  at(180, 6); assert.equal(s.aimStatus, 'ok');
+  at(230, 6); assert.equal(s.aimStatus, 'high');
+  s.togglePause(); assert.equal(s.aimStatus, null, 'paused'); s.togglePause();
+  at(180, 100); assert.equal(s.aimStatus, null, 'no aim on the flat');
+  assert.deepEqual(said, ['Hold 180 W, ~180 W']);
+  console.log('ok - slope power aim: parse, watts in slope text and messages, low / ok / high after settling');
+}
+{
   const w = { steps: [{ dur: 900, watts: 100, cadence: 85 }] };
   const trainer = new SimTrainer(); const hr = new SimHr(trainer);
   const s = new Session({ trainer, hr, settings: { ftp: 263 }, workout: w });
@@ -826,6 +868,7 @@ test('Ramp test is open-ended and ends when the rider fails', () => {
 
   // the builder keeps the flag
   assert.ok(cleanWorkout(wo).steps.filter((x) => x.untilFail).length === 12);
+  assert.deepEqual(cleanWorkout({ steps: [{ dur: 60, grade: 6, aim: 0.9 }, { dur: 60, grade: 6, aim: [0.8, 0.9] }, { dur: 60, grade: 6, aim: '85-95' }] }).steps.map((x) => x.aim), [0.9, [0.8, 0.9], '85-95'], 'Mine keeps the power aim');
 });
 
 test('Ramp test coach and {name}', async () => {

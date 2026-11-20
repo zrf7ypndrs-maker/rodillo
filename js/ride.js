@@ -7,7 +7,7 @@
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { POWER_SHOW_S } from './engine/session.js?v=202611102147';
-import { segTarget, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
+import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
 import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
 import { fmtTime } from './ridepage.js?v=202611102147';
 import { action } from './controls.js?v=202611102147';
@@ -165,7 +165,7 @@ export function segRows(s) {
     const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
     const a = s.segAgg[i];
     const avgP = a?.n ? Math.round(a.p / a.n) : null, avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
-    const cadChip = g.cad ? `<span class="cad-chip">${g.cad.label}</span>` : '';
+    const cadChip = (g.cad ? `<span class="cad-chip">${g.cad.label}</span>` : '') + (g.kind === 'sim' && g.aim ? `<span class="cad-chip">~${Math.round(g.aim.mid * ftp)} W</span>` : '');
     if (g.kind === 'erg') {
       const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
       const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
@@ -209,6 +209,9 @@ export function rideTiles(s, v) {
   const r = s.target ? p / s.target : 0;
   const hrs = s.samples.filter((x) => x.hr).slice(-600);
   const cs = s.cadStatus;
+  // slope step with a power aim (Nov 20, Agustín): the power tile works like the cadence one, green on target, red + pulse off it
+  const aim = s.mode !== 'erg' && s.seg?.kind === 'sim' ? s.seg.aim : null, as = aim ? s.aimStatus : null;
+  const aimW = (f) => Math.round(f * v.ftp);
   // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
   // Real climbs say what's left (the chart header already counts what's done).
   let up = s.climbed || 0, upSub = '', upLabel = 'Climbed';
@@ -220,8 +223,10 @@ export function rideTiles(s, v) {
   return {
     elapsed: fmtTime(s.elapsed),
     power: p,
-    powerCls: !s.target ? '' : r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok',
-    target: s.target ? `target <b style="color:var(--text)">${s.target}</b> W` : `${(p / v.riderKg).toFixed(1)} W/kg`,
+    powerCls: s.target ? (r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok') : as === 'ok' ? 'aim-ok' : as ? 'aim-bad' : '',
+    target: s.target ? `target <b style="color:var(--text)">${s.target}</b> W`
+      : as === 'low' ? '<b>&#9650; Push harder</b>' : as === 'high' ? '<b>&#9660; Ease off</b>'
+        : aim ? `target <b style="color:var(--text)">${aimW(aim.lo)}-${aimW(aim.hi)}</b> W` : `${(p / v.riderKg).toFixed(1)} W/kg`,
     effortShown: !(s.mode !== 'erg' || Math.abs(s.intensity - 1) < 0.001),
     effort: `${Math.round(s.intensity * 100)}%`,
     hr: hr || '--',
@@ -270,14 +275,14 @@ export function intervalCard(s, v) {
       const g = seg.grade + s.gradeOffset;
       zc = v.gradeHex(g);
       big = `${num((g * 100).toFixed(0), '%')}${word('grade for')}${left}`;
-      sub = `use your gears${cad}`;
+      sub = `${seg.aim ? `use your gears, aim ${Math.round(seg.aim.mid * v.ftp)} W` : 'use your gears'}${cad}`;
     }
     // slope profile moved with up/down: said here now that the Grade tile is gone (UX roadmap item 7)
     const off = seg.kind !== 'erg' && s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}% &middot; ` : '';
     return {
       zc,
       label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`,
-      text: off + (seg.text ? `${esc(seg.text)}${cad}` : sub),
+      text: off + (seg.text ? `${esc(seg.kind === 'sim' ? ftpWatts(seg.text, v.ftp) : seg.text)}${cad}` : sub),
       big,
       bar: `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`,
     };
@@ -286,7 +291,7 @@ export function intervalCard(s, v) {
   return { zc: v.gradeHex(s.grade), label: 'Free ride', text: 'up/down changes the grade by 1%, shift to hold your cadence', big: `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`, bar: null };
 }
 
-/** Next card: "4:00 @ 216 W" (+ cadence target); "Finish" on the last interval; `none` when there is no next step. */
+/** Next card: "4:00 @ 216 W" (+ cadence target; a slope step's aim, "60-65 rpm · ~216 W"); "Finish" on the last interval; `none` when there is no next step. */
 export function nextCard(s, next, v) {
   if (!s.segs || !s.seg) return { none: true };
   if (!next) return { none: false, finish: true, nc: 'var(--rule)', html: '<div class="rt-k">Next</div><div class="amt">Finish</div>' };
@@ -297,7 +302,7 @@ export function nextCard(s, next, v) {
   return {
     none: false, finish: false,
     nc: next.kind === 'erg' ? v.zoneHex(next.from) : v.gradeHex(next.grade), // a ramp: the zone it starts in, so the hand-off doesn't change color
-    html: `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${next.cad ? next.cad.label : ''}</div>`,
+    html: `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${[next.cad?.label, next.kind === 'sim' && next.aim ? `~${Math.round(next.aim.mid * v.ftp)} W` : ''].filter(Boolean).join(' &middot; ')}</div>`,
   };
 }
 
@@ -341,7 +346,7 @@ export function renderRide() {
   $('#r-elapsed').textContent = t.elapsed;
   $('#r-power').textContent = t.power;
   const pt = $('.tile.power');
-  pt.classList.remove('low', 'high', 'ok');
+  pt.classList.remove('low', 'high', 'ok', 'aim-ok', 'aim-bad');
   if (t.powerCls) pt.classList.add(t.powerCls);
   $('#r-target').innerHTML = t.target;
   const pctEl = $('#r-pct'); // effort: only when it isn't 100%

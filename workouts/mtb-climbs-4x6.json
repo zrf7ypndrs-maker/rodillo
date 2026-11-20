@@ -37,6 +37,7 @@
         {
           "dur": 360,
           "grade": 7,
+          "aim": 0.9,
           "cadence": "60-65",
           "label": "Climb",
           "text": "Big gear, seated, ~90% FTP",
