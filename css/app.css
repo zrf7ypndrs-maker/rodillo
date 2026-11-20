@@ -1007,17 +1007,20 @@ table.ints { margin-bottom: 14px; }
 /* ---------- week carousel ---------- */
 .week { margin-bottom: 18px; }
 .week-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.eyebrow { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); margin: 0; }
+.eyebrow { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; color: var(--ink); margin: 0; }
 .week-head .muted { font-size: 15px; }
 .week-strip { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
   /* room around the cards so a hovered card can grow without being clipped by the scroller; the negative margin keeps the layout where it was */
   padding: 6px 8px 8px; margin: -4px -8px -4px; scroll-padding-inline: 8px; }
 .week-strip::-webkit-scrollbar { display: none; } /* arrows + trackpad scroll it; no bar */
 /* seven days fill the row on a wide screen; the arrows page to week two */
-.day { flex: 0 0 calc((100% - 48px) / 7); scroll-snap-align: start; background: var(--sheet); border-radius: var(--r); padding: 9px 12px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-height: 92px; box-shadow: inset 0 4px 0 var(--c); outline: none; }
+/* round cards with the zone bar on the left (Agustín, Nov 13: like the calendar chips); no bar on strength / rest */
+.day { flex: 0 0 calc((100% - 48px) / 7); scroll-snap-align: start; position: relative; background: var(--sheet); border-radius: 14px; padding: 13px 15px 13px 26px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-height: 96px; box-shadow: var(--card-shadow); outline: none; }
+.day::before { content: ""; position: absolute; left: 12px; top: 13px; bottom: 13px; width: 4px; border-radius: 2px; background: var(--c); }
 .day:hover { background: var(--hi); }
-.day.nowo { background: var(--sheet2); box-shadow: none; }
-.day.nowo:hover { background: var(--hi); }
+.day.nowo { padding-left: 15px; box-shadow: none; }
+.day.nowo, .day.nowo:hover { background: color-mix(in srgb, var(--sheet) 55%, transparent); }
+.day.nowo::before { display: none; }
 .day.past:not(.done) { opacity: .5; }
 .day.focus { outline: 2px solid var(--ink); outline-offset: 2px; }
 /* Next days cards grow a little on hover / controller focus, same springy curve as the hero buttons */
@@ -1034,8 +1037,10 @@ table.ints { margin-bottom: 14px; }
 .d-name { font-weight: 700; font-size: 14.5px; line-height: 1.2; margin-top: 2px; }
 .d-name.muted { font-weight: 500; }
 .d-meta { font-size: 13px; color: var(--muted); }
+.d-meta .n { font-size: 16px; color: var(--ink); }
 .d-done { font-size: 13px; color: var(--good); font-weight: 650; }
 .d-missed { font-size: 13px; color: var(--muted); }
+.week-head button { border: none; background: var(--sheet2); }
 .week-head button:disabled { cursor: default; color: var(--faint); background: transparent; }
 /* plan source notice (public copy / coach plan failed to load) */
 .plan-src { margin: 0 2px 10px; padding: 9px 14px; border-radius: var(--r); background: var(--sheet); border-left: 4px solid var(--warn); color: var(--muted); font-size: 14px; line-height: 1.45; }
@@ -1454,12 +1459,14 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .seg-tg button { flex: 1; }
   .import-row { flex-wrap: wrap; }
   .week-head { gap: 8px; align-items: flex-start; }
-  .eyebrow { font-size: 18px; }
+  .eyebrow { font-size: 15px; }
   .week-head .muted { display: block; font-size: 13px; }
   .week-head > :last-child { display: flex; gap: 6px; flex-shrink: 0; }
   .week-head > .row-btns { display: none; } /* swipe */
-  .day { flex-basis: 150px; min-height: 78px; padding: 7px 10px 8px; }
-  .day.nowo { flex-basis: 88px; }
+  .day { flex-basis: 150px; min-height: 78px; padding: 12px 14px 12px 24px; border-radius: 20px; }
+  .day::before { left: 11px; top: 12px; bottom: 12px; }
+  .day.nowo { flex-basis: 88px; padding-left: 14px; }
+  .day.nowo:hover { background: var(--hi); }
   .d-name { font-size: 14px; }
   .d-meta, .d-done, .d-missed { font-size: 12.5px; }
   .rec-advice { flex-direction: column; align-items: stretch; }
@@ -1698,15 +1705,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topnav button:hover { color: var(--nav-text); }
   .topnav button.active, .topnav button.active:hover { color: var(--ink); }
 
-  /* next days: rounder cards with the zone bar on the left (Agustín, Nov 13: like the calendar chips; was a corner glow) */
-  .day { position: relative; border-radius: 20px; box-shadow: var(--card-shadow); padding: 12px 14px 12px 24px; gap: 3px; background: var(--sheet); }
-  .day::before { content: ""; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background: var(--c); }
-  .day.nowo { background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; padding-left: 14px; }
-  .day.nowo::before { display: none; }
-  .d-meta { color: var(--muted); }
-  .d-meta .n { font-size: 16px; color: var(--ink); }
-  #home .eyebrow { font-size: 15px; font-weight: 650; }
-
   /* workouts: raised segment switch, round group cards without lines */
   .seg-tg { background: var(--sheet2); padding: 4px; border-radius: 22px; }
   .seg-tg::before { top: 4px; bottom: 4px; background: var(--seg-on); box-shadow: var(--seg-shadow); }
@@ -1875,17 +1873,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
    ===================================================================== */
 @media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  /* next days: rounder cards, zone bar on the left (Agustín, like the calendar chips); no bar on strength / rest */
-  .day { position: relative; border-radius: 14px; box-shadow: var(--card-shadow); padding: 13px 15px 13px 26px; gap: 3px; min-height: 96px; background: var(--sheet); }
-  .day:hover { background: var(--hi); }
-  .day::before { content: ""; position: absolute; left: 12px; top: 13px; bottom: 13px; width: 4px; border-radius: 2px; background: var(--c); }
-  .day.nowo, .day.nowo:hover { padding-left: 15px; background: color-mix(in srgb, var(--sheet) 55%, transparent); box-shadow: none; }
-  .day.nowo::before { display: none; }
-  .d-meta { color: var(--muted); }
-  .d-meta .n { font-size: 16px; color: var(--ink); }
-  #home .eyebrow { font-size: 17px; font-weight: 650; }
-  .week-head button { border: none; background: var(--sheet2); }
-
   /* workouts: raised segment switch, round group cards without lines */
   .seg-tg { background: var(--track); padding: 4px; border-radius: 22px; }
   .seg-tg::before { top: 4px; bottom: 4px; background: var(--seg-on); box-shadow: var(--seg-shadow); }
