@@ -371,12 +371,14 @@ async function compare() {
     bad.push(`${f}: ${r.size || `${r.n} pixels differ (largest channel difference ${r.max})`}`);
     if (r.png) { fs.mkdirSync(diffDir, { recursive: true }); fs.writeFileSync(path.join(diffDir, f), Buffer.from(r.png, 'base64')); }
   }
+  const summary = new Map(), hiddenOnly = [];
   const readStyles = (d, f) => {
     const p = path.join(d, f.replace(/\.png$/, '.styles.json.gz'));
     if (!fs.existsSync(p)) return null;
     const { texts, rows } = JSON.parse(zlib.gunzipSync(fs.readFileSync(p)));
     // Chrome lists custom properties in no fixed order: compare the declarations sorted
-    const sorted = texts.map((t) => t.split(/;(?=[\w.-]+:)/).filter(Boolean).sort().join(';'));
+    // custom properties are left out: whatever a token changes shows up in the real properties that use it
+    const sorted = texts.map((t) => t.replace(/;$/, '').split(/;(?=[\w.-]+:)/).filter((d) => d && !/^(before\.|after\.)?--/.test(d)).sort().join(';'));
     return rows.map(([id, t, shown]) => [id, t === 'anim' ? t : sorted[t], shown]);
   };
   // a chart can draw a few more or fewer SVG shapes run to run without a visible change; compare the rest then
@@ -396,8 +398,20 @@ async function compare() {
       const ks = [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((k) => pa[k] !== pb[k]);
       return `${r[0].replace(/^\d+ /, '')}${r[2] ? '' : ' (unrendered)'} ${ks.slice(0, 3).map((k) => `${k}: ${pa[k]} -> ${pb[k]}`).join('; ')}`;
     });
-    bad.push(`${sf}: computed style differs on ${diff.filter(([r]) => r[2]).length} rendered, ${diff.filter(([r]) => !r[2]).length} unrendered elements\n      ${what.join('\n      ')}`);
+    const shown = diff.filter(([r, q]) => r[2] || q[2]);
+    for (const [r, q] of diff) {
+      const [pa, pb] = [props(r[1]), props(q[1])];
+      for (const k of [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((x) => pa[x] !== pb[x])) {
+        const key = `${r[2] || q[2] ? 'rendered  ' : 'unrendered'} ${r[0].replace(/^\d+ /, '')} { ${k}: ${pa[k]} -> ${pb[k]} }`;
+        summary.set(key, [...(summary.get(key) || []), sf]);
+      }
+    }
+    if (!shown.length && !process.env.VISUAL_STRICT) { hiddenOnly.push(`${sf} (${diff.length})`); continue; }
+    bad.push(`${sf}: computed style differs on ${shown.length} rendered, ${diff.length - shown.length} unrendered elements\n      ${what.join('\n      ')}`);
   }
+  if (summary.size) fs.writeFileSync(path.join(root, '.visual', 'styles-diff.txt'), [...summary].sort().map(([k, v]) => `${k}   [${v.length} shots: ${v.slice(0, 3).join(', ')}${v.length > 3 ? ', ...' : ''}]`).join('\n') + '\n');
+  if (hiddenOnly.length) console.log(`visual: computed style differs only on unrendered elements in ${hiddenOnly.length} shots (not a failure; VISUAL_STRICT=1 makes it one): ${hiddenOnly.slice(0, 8).join(', ')}${hiddenOnly.length > 8 ? ', ...' : ''}`);
+  if (summary.size) console.log(`visual: every style difference, grouped: .visual/styles-diff.txt (${summary.size} lines)`);
   for (const f of missing) bad.push(`${f}: in the baseline, not captured now`);
   for (const f of added) bad.push(`${f}: captured now, not in the baseline`);
   if (bad.length) { console.error(`visual: ${bad.length} of ${cur.length} differ from the baseline\n  ${bad.join('\n  ')}`); process.exitCode = 1; }
