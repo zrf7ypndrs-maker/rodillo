@@ -128,9 +128,14 @@ if (!compareOnly) for (const f of fs.readdirSync(outDir)) if (!only.length || on
 async function shot(page, name, look, { full = false, hover = false } = {}) {
   if (only.length && !only.some((o) => name.includes(o))) return;
   if (!look.phone && !hover) await page.mouse.move(1, 1); // nothing under the pointer: no hover states
+  // Playwright's fullPage drops the phone emulation while it captures (the page flips to the desktop layout), so the
+  // phone grows its viewport to the page's height instead, then goes back
+  const tall = full && look.phone ? await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight)) : 0;
+  if (tall > 844) await page.setViewportSize({ width: look.w, height: tall });
   await settle(page, SETTLE);
-  await page.screenshot({ path: path.join(outDir, `${name}--${look.w}-${look.theme}.png`), fullPage: full, animations: 'disabled', caret: 'hide' });
+  await page.screenshot({ path: path.join(outDir, `${name}--${look.w}-${look.theme}.png`), fullPage: full && !look.phone, animations: 'disabled', caret: 'hide' });
   await styles(page, `${name}--${look.w}-${look.theme}`);
+  if (tall > 844) { await page.setViewportSize({ width: look.w, height: 844 }); await settle(page, 300); }
   shots++;
 }
 /** Computed style of every element (and its ::before / ::after when they have content), in document order: catches what a
