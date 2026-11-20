@@ -130,9 +130,9 @@ async function shot(page, name, look, { full = false, hover = false } = {}) {
   if (!look.phone && !hover) await page.mouse.move(1, 1); // nothing under the pointer: no hover states
   // Playwright's fullPage drops the phone emulation while it captures (the page flips to the desktop layout), so the
   // phone grows its viewport to the page's height instead, then goes back
-  const tall = full && look.phone ? await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight)) : 0;
-  if (tall > 844) await page.setViewportSize({ width: look.w, height: tall });
   await settle(page, SETTLE);
+  const tall = full && look.phone ? await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight)) : 0;
+  if (tall > 844) { await page.setViewportSize({ width: look.w, height: tall }); await settle(page, SETTLE); }
   await page.screenshot({ path: path.join(outDir, `${name}--${look.w}-${look.theme}.png`), fullPage: full && !look.phone, animations: 'disabled', caret: 'hide' });
   await styles(page, `${name}--${look.w}-${look.theme}`);
   if (tall > 844) { await page.setViewportSize({ width: look.w, height: 844 }); await settle(page, 300); }
