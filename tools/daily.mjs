@@ -32,11 +32,18 @@ const mineW = readJson(path.join(dir, 'workouts', 'mine.json'), { workouts: [] }
 for (const w of mineW.workouts || []) if (!library.has(w.id)) library.set(w.id, { ...w, _mine: true });
 const plan = readJson(path.join(dir, 'coach', 'plan.json')) || readJson(path.join(root, 'plans', 'current.json'));
 
+// HARD = intensity tags, or ERG work of 2 min+ at 88%+ FTP
+function isHard(w) {
+  if (!w) return false;
+  const segs = flatten(w, plan.ftp || 200);
+  return (w.tags || []).some((t) => ['vo2', 'threshold', 'test', 'max'].includes(t)) || segs.some((s) => s.kind === 'erg' && s.dur >= 120 && (s.from + s.to) / 2 >= 0.88);
+}
+
 function describe(w) {
   const segs = flatten(w, plan.ftp || 200);
   const ergWork = segs.filter((s) => s.kind === 'erg' && s.dur >= 30).map((s) => (s.from + s.to) / 2);
   const peak = ergWork.length ? Math.max(...ergWork) : null;
-  const hard = (w.tags || []).some((t) => ['vo2', 'threshold', 'test', 'max'].includes(t)) || segs.some((s) => s.kind === 'erg' && s.dur >= 120 && (s.from + s.to) / 2 >= 0.88);
+  const hard = isHard(w);
   const sim = segs.every((s) => s.kind === 'sim');
   return `${w.name} [${w.id}${w._coach ? ', coach' : ''}] ${Math.round(totalDuration(w) / 60)} min, ~${estimateTSS(w) ?? '?'} TSS, ${sim ? 'slope mode' : `peak ${Math.round(peak * 100)}% FTP`}${hard ? ', HARD' : ''}`;
 }
@@ -112,12 +119,39 @@ const rodeToday = rides.some((r) => r.id.slice(0, 10) === today && r.durSec >= 6
 if (rodeToday) console.log(`  >> Already rode today: do NOT change today.`);
 
 // ---- Planned vs done, last 7 days
+// A day counts as ridden only when a ride used the planned workout (or a scaled copy, "<id>-<pct>").
+// Any other ride that day is a substitute, not the session.
+const ridesOn = (k) => rides.filter((r) => r.id.slice(0, 10) === k && r.durSec >= 600);
+const rodePlanned = (k, v) => ridesOn(k).some((r) => r.workoutId && (r.workoutId === v || r.workoutId.startsWith(v + '-')));
+const isOptional = (k) => (plan.optional || []).includes(k);
 console.log('\nPlan vs done, last 7 days:');
 for (let i = -7; i < 0; i++) {
   const k = addDays(today, i), v = plan.days?.[k];
   if (!v || v === 'rest' || v === 'strength') { console.log(`  ${k} ${dow(k)}  ${v || '-'}`); continue; }
-  const done = rides.filter((r) => r.id.slice(0, 10) === k && r.durSec >= 600);
-  console.log(`  ${k} ${dow(k)}  ${v}  ${done.length ? 'DONE: ' + done.map((r) => `${r.name} TSS ${r.tss}`).join(', ') : 'NOT RIDDEN'}`);
+  const done = ridesOn(k), tag = `${v}${isHard(library.get(v)) ? ' (HARD)' : ''}${isOptional(k) ? ' (optional)' : ''}`;
+  const status = rodePlanned(k, v) ? 'AS PLANNED: ' + done.map((r) => `${r.name} TSS ${r.tss}`).join(', ')
+    : done.length ? 'SUBSTITUTED, rode ' + done.map((r) => `${r.name}${r.workoutId ? ` [${r.workoutId}]` : ''} TSS ${r.tss}`).join(', ') + ' instead'
+      : 'NOT RIDDEN';
+  console.log(`  ${k} ${dow(k)}  ${tag}  ${status}`);
+}
+
+// ---- HARD sessions missed earlier this Mon-Sun week (DAILY.md "Missed sessions")
+// Not made up yet = the workout isn't ridden on a later day, nor planned again from today on, this week.
+const monday = addDays(today, -((new Date(today + 'T12:00:00Z').getUTCDay() + 6) % 7));
+const sunday = addDays(monday, 6);
+const missed = [];
+for (let k = monday; k < today; k = addDays(k, 1)) {
+  const v = plan.days?.[k];
+  if (!v || ['rest', 'strength'].includes(v) || isOptional(k) || !isHard(library.get(v)) || rodePlanned(k, v)) continue;
+  let madeUp = false;
+  for (let j = addDays(k, 1); j <= sunday; j = addDays(j, 1)) {
+    if (j < today ? rodePlanned(j, v) : plan.days?.[j] === v) madeUp = true;
+  }
+  if (!madeUp) missed.push({ k, v, subs: ridesOn(k) });
+}
+for (const m of missed) {
+  const what = m.subs.length ? `rode ${m.subs.map((r) => r.name).join(', ')} instead` : 'not ridden';
+  console.log(`  >> MISSED HARD SESSION THIS WEEK: ${dow(m.k)} ${m.k} ${m.v} (${what}). Apply DAILY.md "Missed sessions".`);
 }
 
 // ---- Next 7 days
