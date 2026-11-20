@@ -625,6 +625,12 @@ html:has(#home.active) .keys-group td { padding-top: 18px; font-size: 15px; font
 .build-id { font-size: 11.5px; font-weight: 500; margin-left: 6px; }
 
 #log-body { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: var(--log); }
+/* home look (Nov 13, Agustín: "do the changes to the log and workout editor"): paper ground, the text on one round sheet.
+   From the ride pause screen (Connections > Log) it keeps the plain look. */
+html:has(#home.active) #log.panel { background: var(--paper); border-left: none; }
+html:has(#home.active) #log .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+html:has(#home.active) #log .panel-head button { border-color: transparent; background: var(--sheet); }
+html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px; padding: 14px 16px; margin: 0; box-shadow: var(--card-shadow); }
 
 /* ---------- ride ---------- */
 #ride { padding: 16px 22px; display: none; flex-direction: column; gap: 12px; height: 100vh; position: relative; overflow: hidden; background: var(--paper); }
@@ -1348,6 +1354,33 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
 .b-foot-r { margin-left: auto; display: flex; gap: 8px; }
 .b-foot button:disabled { opacity: .5; cursor: progress; }
 #builder-body { padding-bottom: 18px; }
+/* home look (Nov 13, Agustín): paper ground, the name as a filled field, palette tiles and steps as soft cards, filled
+   inputs, no lines */
+html:has(#home.active) #builder.panel { background: var(--paper); border-left: none; }
+html:has(#home.active) #builder .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+html:has(#home.active) #builder .panel-head button { border-color: transparent; background: var(--sheet); }
+html:has(#home.active) .b-name { background: var(--sheet); border: none; border-radius: 16px; padding: 10px 14px; font-weight: 700; }
+html:has(#home.active) .b-name:focus { box-shadow: 0 0 0 2px var(--ink); }
+html:has(#home.active) .b-pal-row .b-kind { background: var(--track); }
+html:has(#home.active) .b-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
+html:has(#home.active) .b-trash { border-radius: 14px; }
+html:has(#home.active) .b-tl { border-bottom: none; border-radius: 0; background: var(--sheet); box-shadow: var(--card-shadow); } /* square corners: Agustín, Nov 13 */
+html:has(#home.active) :is(.b-step, .b-rep) { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
+html:has(#home.active) :is(.b-step, .b-rep).sel { box-shadow: 0 0 0 2px var(--ink); }
+html:has(#home.active) .brep-body { border-left-color: color-mix(in srgb, var(--rule) 70%, transparent); }
+html:has(#home.active) .brep-body .b-step { background: var(--sheet2); box-shadow: none; }
+html:has(#home.active) :is(.b-in, .b-desc) { border: none; border-radius: 10px; background: var(--sheet2); }
+html:has(#home.active) .b-desc { background: var(--sheet); border-radius: 16px; padding: 10px 12px; }
+html:has(#home.active) :is(.b-in, .b-desc):focus { box-shadow: 0 0 0 2px var(--ink); }
+html:has(#home.active) .b-in.bad, html:has(#home.active) .b-in.bad:focus { background: var(--bad-bg); box-shadow: 0 0 0 2px var(--bad); }
+html:has(#home.active) .b-dur { border-radius: 10px 0 0 10px; }
+html:has(#home.active) .b-unit { border-radius: 0 10px 10px 0; margin-left: 1px; }
+html:has(#home.active) .b-line2 .b-in { border-bottom: none; border-radius: 10px; background: var(--sheet2); }
+html:has(#home.active) .b-problems { border-radius: 16px; }
+html:has(#home.active) :is(.b-tot, .b-dur, .b-n, .b-sum) { font-stretch: 80%; font-weight: 720; }
+html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
+html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
 
 /* =====================================================================
    PHONE (touch screens only, so desktop Chrome never changes).
@@ -1633,6 +1666,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   html:has(#home.active) .devpop { border-radius: 26px; }
   html:has(#home.active) .device { border-radius: 18px; }
   html:has(#home.active) .keys { border-radius: 24px; }
+  html:has(#home.active) #log-body { border-radius: 20px; }
   /* no keyboard on the phone */
   .keys th:nth-child(3), .keys td:nth-child(3) { display: none; }
   .keys { font-size: 13px; }
@@ -1779,6 +1813,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .tl-hx { right: -11px; width: 22px; }
   .tl-hx::after { left: 9px; }
   .b-step, .b-rep { padding: 8px 6px 8px 8px; }
+  html:has(#home.active) :is(.b-step, .b-rep) { border-radius: 18px; }
   .b-line1 { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; grid-template-areas: "sw type cad acts" "sw len tgt tgt"; gap: 8px; align-items: center; }
   .b-sw { grid-area: sw; height: auto; align-self: stretch; }
   .b-type { grid-area: type; width: 100%; }
@@ -1817,74 +1852,4 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; background: var(--lens); box-shadow: var(--lens-edge); }
   .topnav button:hover { color: var(--nav-text); }
   .topnav button.active:hover { color: var(--ink); }
-}
-
-/* Workout builder and Log join the phone look (Nov 13, Agustín: "do the changes to the log and workout editor").
-   Same rules as the panels block: phone only, home screen only. */
-@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  html:has(#home.active) :is(#builder, #log).panel { background: var(--paper); border-left: none; }
-  html:has(#home.active) :is(#builder, #log) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
-  html:has(#home.active) :is(#builder, #log) .panel-head button { border-color: transparent; background: var(--sheet); }
-
-  /* log: the text on one round sheet */
-  html:has(#home.active) #log-body { background: var(--sheet); border-radius: 20px; padding: 14px 16px; margin: 0; box-shadow: var(--card-shadow); }
-
-  /* builder: name as a filled field, palette tiles and steps as soft cards, filled inputs, no lines */
-  html:has(#home.active) .b-name { background: var(--sheet); border: none; border-radius: 16px; padding: 10px 14px; font-weight: 700; }
-  html:has(#home.active) .b-name:focus { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .b-pal-row .b-kind { background: var(--track); }
-  html:has(#home.active) .b-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
-  html:has(#home.active) .b-trash { border-radius: 14px; }
-  html:has(#home.active) .b-tl { border-bottom: none; border-radius: 0; background: var(--sheet); box-shadow: var(--card-shadow); } /* square corners: Agustín, Nov 13 */
-  html:has(#home.active) :is(.b-step, .b-rep) { border: none; border-radius: 18px; background: var(--sheet); box-shadow: var(--card-shadow); }
-  html:has(#home.active) :is(.b-step, .b-rep).sel { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .brep-body { border-left-color: color-mix(in srgb, var(--rule) 70%, transparent); }
-  html:has(#home.active) .brep-body .b-step { background: var(--sheet2); box-shadow: none; }
-  html:has(#home.active) :is(.b-in, .b-desc) { border: none; border-radius: 10px; background: var(--sheet2); }
-  html:has(#home.active) .b-desc { background: var(--sheet); border-radius: 16px; padding: 10px 12px; }
-  html:has(#home.active) :is(.b-in, .b-desc):focus { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .b-in.bad, html:has(#home.active) .b-in.bad:focus { background: var(--bad-bg); box-shadow: 0 0 0 2px var(--bad); }
-  html:has(#home.active) .b-dur { border-radius: 10px 0 0 10px; }
-  html:has(#home.active) .b-unit { border-radius: 0 10px 10px 0; margin-left: 1px; }
-  html:has(#home.active) .b-line2 .b-in { border-bottom: none; border-radius: 10px; background: var(--sheet2); }
-  html:has(#home.active) .b-problems { border-radius: 16px; }
-  html:has(#home.active) :is(.b-tot, .b-dur, .b-n, .b-sum) { font-stretch: 80%; font-weight: 720; }
-  html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
-  html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
-}
-
-
-/* Desktop builder and Log: same as the phone block, home screen only. */
-@media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  html:has(#home.active) :is(#builder, #log).panel { background: var(--paper); border-left: none; }
-  html:has(#home.active) :is(#builder, #log) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
-  html:has(#home.active) :is(#builder, #log) .panel-head button { border-color: transparent; background: var(--sheet); }
-
-  /* log: the text on one round sheet */
-  html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px; padding: 14px 16px; margin: 0; box-shadow: var(--card-shadow); }
-
-  /* builder: name as a filled field, palette tiles and steps as soft cards, filled inputs, no lines */
-  html:has(#home.active) .b-name { background: var(--sheet); border: none; border-radius: 16px; padding: 10px 14px; font-weight: 700; }
-  html:has(#home.active) .b-name:focus { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .b-pal-row .b-kind { background: var(--track); }
-  html:has(#home.active) .b-tile { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
-  html:has(#home.active) .b-trash { border-radius: 14px; }
-  html:has(#home.active) .b-tl { border-bottom: none; border-radius: 0; background: var(--sheet); box-shadow: var(--card-shadow); } /* square corners: Agustín, Nov 13 */
-  html:has(#home.active) :is(.b-step, .b-rep) { border: none; border-radius: 14px; background: var(--sheet); box-shadow: var(--card-shadow); }
-  html:has(#home.active) :is(.b-step, .b-rep).sel { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .brep-body { border-left-color: color-mix(in srgb, var(--rule) 70%, transparent); }
-  html:has(#home.active) .brep-body .b-step { background: var(--sheet2); box-shadow: none; }
-  html:has(#home.active) :is(.b-in, .b-desc) { border: none; border-radius: 10px; background: var(--sheet2); }
-  html:has(#home.active) .b-desc { background: var(--sheet); border-radius: 16px; padding: 10px 12px; }
-  html:has(#home.active) :is(.b-in, .b-desc):focus { box-shadow: 0 0 0 2px var(--ink); }
-  html:has(#home.active) .b-in.bad, html:has(#home.active) .b-in.bad:focus { background: var(--bad-bg); box-shadow: 0 0 0 2px var(--bad); }
-  html:has(#home.active) .b-dur { border-radius: 10px 0 0 10px; }
-  html:has(#home.active) .b-unit { border-radius: 0 10px 10px 0; margin-left: 1px; }
-  html:has(#home.active) .b-line2 .b-in { border-bottom: none; border-radius: 10px; background: var(--sheet2); }
-  html:has(#home.active) .b-problems { border-radius: 16px; }
-  html:has(#home.active) :is(.b-tot, .b-dur, .b-n, .b-sum) { font-stretch: 80%; font-weight: 720; }
-  html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
-  html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
 }
