@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "coverage": "c8 --check-coverage --lines 90 --branches 78 --functions 85 --include 'js/**' --exclude js/app.js --exclude js/builder.js --exclude js/garage.js --exclude js/ui.js --exclude js/settings.js --reporter text-summary npm test",
     "smoke": "node test/smoke.mjs",
-    "check": "npm run lint && npm run coverage && npm run smoke"
+    "check": "npm run lint && npm run coverage && npm run smoke",
+    "visual": "node test/visual.mjs"
   },
   "keywords": [],
   "author": "",
