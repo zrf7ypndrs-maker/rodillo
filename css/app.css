@@ -105,7 +105,10 @@
 /* Home screens (premium look: phone Nov 12, desktop Nov 13, Agustín; mocks: project doc claude/rodillo-premium-look.md):
    lighter paper, near-black dark, soft card shadows, the raised segment track. Only while the home screen is up
    (`html:has(#home.active)`), so the ride screen and the panels its pause screen opens keep the tokens above.
-   --glass, --glass-sheen, --lens, --lens-edge and --nav-text are the phone nav pill's liquid glass (desktop keeps text tabs). */
+   --glass, --glass-sheen, --lens, --lens-edge and --nav-text are the phone nav pill's liquid glass (desktop keeps text tabs).
+   The rules below are the desktop look; the phone block overrides them. Not carried over to the desktop (Agustín agreed):
+   the recovery card (the call stays in the hero line), the glass nav pill, glows under calendar chips, 24-28 px corners
+   (16 there). */
 html:not([data-theme="dark"]):has(#home.active) {
   --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa; --track: #e2e6e1;
   --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
@@ -412,10 +415,17 @@ button.danger:hover { border-color: var(--bad); }
 .empty-list { padding: 14px 18px; margin: 0; font-size: 14px; }
 .card { background: var(--sheet); border-radius: var(--r); padding: 18px 20px; }
 .card p { font-size: 14px; line-height: 1.5; }
+#home .card { border-radius: 16px; padding: 22px 24px; box-shadow: var(--card-shadow); } /* home cards are round and soft; the ride page keeps .card */
 
 .ride-table table, table.ints { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ride-table td, .ride-table th, table.ints td, table.ints th { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: left; font-variant-numeric: tabular-nums; }
 .ride-table th, table.ints th { color: var(--muted); font-weight: 500; font-size: 13px; }
+/* the rides table (desktop; the phone shows .ride-list): no hairlines, rows as soft bands */
+.ride-table td, .ride-table th { border-bottom: none; padding: 10px 10px; }
+.ride-table th { font-size: 12.5px; font-weight: 600; }
+.ride-table tr[data-ride] td:first-child { border-radius: 12px 0 0 12px; }
+.ride-table tr[data-ride] td:last-child { border-radius: 0 12px 12px 0; }
+.ride-table tr[data-ride]:nth-child(odd) td { background: color-mix(in srgb, var(--sheet2) 55%, transparent); }
 table.ints { margin-bottom: 14px; }
 .nowrap { white-space: nowrap; }
 .pct { font-weight: 750; font-size: 1.1em; }
@@ -424,7 +434,13 @@ table.ints { margin-bottom: 14px; }
 .sync-status button { margin-left: 8px; }
 /* signed out: ride history is private, only the sign-in line shows */
 #tab-training.locked > :not(#sync-status) { display: none; }
-.stats.tcards { grid-template-columns: repeat(6, 1fr); margin: 0 0 14px; }
+/* Training: the six numbers on one round card (premium look) */
+.stats.tcards { grid-template-columns: repeat(6, 1fr); margin: 0 0 18px; padding: 20px 8px; border: none; border-radius: 16px; background: var(--sheet); box-shadow: var(--card-shadow); }
+.stats.tcards > .stat { position: relative; }
+.stats.tcards > .stat:nth-child(n) { border: none; padding: 0 18px 0 20px; }
+.stats.tcards .stat .v { font-size: 36px; }
+.stats.tcards .stat .l { font-size: 13px; color: var(--ink); font-weight: 600; margin-top: 4px; }
+.stats.tcards .info { top: 0; right: 14px; }
 .stat .sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .tgrid .wide { grid-column: 1 / -1; }
@@ -444,9 +460,17 @@ table.ints { margin-bottom: 14px; }
 .zb-n span { color: var(--muted); font-size: 12.5px; margin-left: 8px; }
 .zb-bar { height: 12px; min-width: 40px; background: var(--underlay); border-radius: 2px; overflow: hidden; }
 .zb-bar i { display: block; height: 100%; }
+#home .zb-bar { height: 10px; border-radius: 5px; background: var(--sheet2); overflow: visible; }
+#home .zb-bar i { border-radius: 5px; } /* no glow (Nov 16) */
 .zb-t { text-align: right; font-weight: 700; }
 .zb-p { text-align: right; font-size: 12.5px; color: var(--muted); }
 .svgchart { width: 100%; height: auto; display: block; font-family: var(--num); }
+/* power curve legend, on the card's title row */
+.pc-legend { display: flex; justify-content: flex-end; gap: 14px; margin: -30px 0 18px; font-size: 12px; color: var(--muted); }
+.pc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pc-legend i { display: inline-block; width: 14px; }
+.pc-legend i.solid { height: 2.5px; border-radius: 2px; background: var(--z5); }
+.pc-legend i.dash { border-top: 2px dashed var(--muted); }
 
 /* ---------- panels ---------- */
 .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 470px; max-width: 100vw; background: var(--sheet); border-left: 1px solid var(--rule); padding: 20px; overflow: auto; z-index: 32; box-shadow: -24px 0 48px var(--shadow); }
@@ -817,12 +841,8 @@ table.ints { margin-bottom: 14px; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 22px 0; background: var(--sheet); border-radius: var(--r); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .stat { padding: 12px 14px; border-left: 1px solid var(--rule); }
 .stats > .stat:nth-child(4n+1) { border-left: none; }
-.stats.tcards > .stat { border-left: 1px solid var(--rule); }
-.stats.tcards > .stat:first-child { border-left: none; }
-.stats.tcards { border: none; }
 .stat .v { font-size: 38px; font-weight: 850; line-height: 1.05; }
 .stat .l { font-size: 13px; color: var(--muted); }
-.stats.tcards > .stat { position: relative; }
 .info { position: absolute; top: 9px; right: 10px; z-index: 6; }
 .info:hover, .info.open, .info:focus-within { z-index: 7; }
 .info-btn { width: 17px; height: 17px; padding: 0; border-radius: 50%; border: 1.5px solid var(--muted); background: transparent; color: var(--muted);
@@ -1506,10 +1526,21 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .cal-detail h3 { font-size: 13px; }
   .cal-detail .wo-name { font-size: 21px; }
   .cal-detail .wo-meta .n { font-size: 15px; }
-  .stats.tcards { grid-template-columns: repeat(2, 1fr); }
-  .stats.tcards > .stat:nth-child(even) .tip { left: auto; right: -8px; }
-  .stats.tcards > .stat:nth-child(odd) { border-left: none; }
-  .stats.tcards > .stat:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .stats.tcards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; padding: 18px; border-radius: 24px; margin-bottom: 14px; }
+  .stats.tcards > .stat:nth-child(n) { padding: 0 16px 0 0; }
+  .stats.tcards .stat .v { font-size: 26px; }
+  .stats.tcards .stat .l { font-size: 12.5px; font-weight: 550; margin-top: 3px; }
+  .stats.tcards .stat .sub { font-size: 11.5px; }
+  .stats.tcards .info { right: 0; }
+  .stats.tcards > .stat:nth-child(n) .tip { left: -8px; right: auto; }
+  .stats.tcards > .stat:nth-child(3n + 2) .tip { left: -110px; }
+  .stats.tcards > .stat:nth-child(3n) .tip { left: auto; right: -8px; }
+  #home .card { border-radius: 24px; padding: 18px; }
+  #home .zb-bar { height: 8px; border-radius: 4px; }
+  #home .zb-bar i { border-radius: 4px; }
+  .pc-legend { gap: 12px; font-size: 11px; }
+  .pc-legend span { gap: 5px; }
+  .pc-legend i { width: 12px; }
   .tgrid { grid-template-columns: 1fr; }
   .zcols { grid-template-columns: 1fr; }
   .zbars { gap: 6px 8px; font-size: 13px; }
@@ -1730,24 +1761,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topnav button:hover { color: var(--nav-text); }
   .topnav button.active, .topnav button.active:hover { color: var(--ink); }
 
-  /* training: one stats card, round cards, phone rides list */
-  .stats.tcards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; padding: 18px; border-radius: 24px; background: var(--sheet); box-shadow: var(--card-shadow); }
-  .stats.tcards > .stat:nth-child(n) { border: none; padding: 0 16px 0 0; }
-  .stats.tcards .stat .v { font-size: 26px; }
-  .stats.tcards .stat .l { font-size: 12.5px; color: var(--ink); font-weight: 550; margin-top: 3px; }
-  .stats.tcards .stat .sub { font-size: 11.5px; }
-  .stats.tcards .info { top: 0; right: 0; }
-  .stats.tcards > .stat:nth-child(n) .tip { left: -8px; right: auto; }
-  .stats.tcards > .stat:nth-child(3n + 2) .tip { left: -110px; }
-  .stats.tcards > .stat:nth-child(3n) .tip { left: auto; right: -8px; }
-  #home .card { border-radius: 24px; padding: 18px; box-shadow: var(--card-shadow); }
-  #home .zb-bar { height: 8px; border-radius: 4px; background: var(--sheet2); overflow: visible; }
-  #home .zb-bar i { border-radius: 4px; } /* no glow (Nov 13) */
-  .pc-legend { display: flex; justify-content: flex-end; gap: 12px; margin: -30px 0 18px; font-size: 11px; color: var(--muted); } /* on the title row */
-  .pc-legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .pc-legend i { display: inline-block; width: 12px; }
-  .pc-legend i.solid { height: 2.5px; border-radius: 2px; background: var(--z5); }
-  .pc-legend i.dash { border-top: 2px dashed var(--muted); }
+  /* training: the phone rides list instead of the table */
   .ride-table table { display: none; }
   .ride-list { display: flex; flex-direction: column; gap: 4px; }
   .rl { padding: 10px 0; cursor: pointer; }
@@ -1853,34 +1867,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
 }
 
-
-/* =====================================================================
-   PREMIUM LOOK, DESKTOP (Nov 13, Agustín; mocks: canvas pages "Desktop: ..." and project doc claude/rodillo-premium-look.md).
-   The phone look carried over where it fits a wide screen. Not carried over (Agustín agreed): the recovery card (the call stays
-   in the hero line), the glass nav pill (text tabs stay), glows under calendar chips, 24-28 px corners (16 here).
-   Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
-   ===================================================================== */
-@media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  /* training: one stats card, round cards, bars without glow (Nov 16), table without hairlines */
-  .stats.tcards { padding: 20px 8px; border-radius: 16px; background: var(--sheet); box-shadow: var(--card-shadow); margin-bottom: 18px; }
-  .stats.tcards > .stat:nth-child(n) { border: none; padding: 0 18px 0 20px; }
-  .stats.tcards .stat .v { font-size: 36px; }
-  .stats.tcards .stat .l { font-size: 13px; color: var(--ink); font-weight: 600; margin-top: 4px; }
-  .stats.tcards .info { top: 0; right: 14px; }
-  #home .card { border-radius: 16px; padding: 22px 24px; box-shadow: var(--card-shadow); }
-  #home .zb-bar { height: 10px; border-radius: 5px; background: var(--sheet2); overflow: visible; }
-  #home .zb-bar i { border-radius: 5px; } /* no glow (Nov 16, as on the phone) */
-  .pc-legend { display: flex; justify-content: flex-end; gap: 14px; margin: -30px 0 18px; font-size: 12px; color: var(--muted); }
-  .pc-legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .pc-legend i { display: inline-block; width: 14px; }
-  .pc-legend i.solid { height: 2.5px; border-radius: 2px; background: var(--z5); }
-  .pc-legend i.dash { border-top: 2px dashed var(--muted); }
-  .ride-table td, .ride-table th { border-bottom: none; padding: 10px 10px; }
-  .ride-table th { font-size: 12.5px; font-weight: 600; }
-  .ride-table tr[data-ride] td:first-child { border-radius: 12px 0 0 12px; }
-  .ride-table tr[data-ride] td:last-child { border-radius: 0 12px 12px 0; }
-  .ride-table tr[data-ride]:nth-child(odd) td { background: color-mix(in srgb, var(--sheet2) 55%, transparent); }
-}
 
 /* Desktop panels (Settings, Garage, Connections, Controls): same as the phone block, 16 px corners, Garage keeps plain tabs.
    Only while the home screen is up, so the panels opened from the ride pause screen keep the ride look. */
