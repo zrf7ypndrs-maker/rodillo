@@ -20,6 +20,7 @@ const root = path.resolve(new URL('..', import.meta.url).pathname);
 const args = process.argv.slice(2);
 const only = args.flatMap((a, i) => (a === '--only' ? [args[i + 1]] : []));
 const baselineRun = args.includes('--baseline');
+const compareOnly = args.includes('--compare'); // no capture: compare what .visual/current holds
 const outDir = path.join(root, '.visual', baselineRun ? 'baseline' : 'current');
 const baseDir = path.join(root, '.visual', 'baseline');
 const diffDir = path.join(root, '.visual', 'diff');
@@ -123,7 +124,7 @@ const errors = [];
 let shots = 0;
 const SETTLE = +(process.env.VISUAL_SETTLE || 700); // ms after the last action: panels that slid in need their layer settled
 fs.mkdirSync(outDir, { recursive: true });
-for (const f of fs.readdirSync(outDir)) if (!only.length || only.some((o) => f.split('--')[0].includes(o))) fs.rmSync(path.join(outDir, f)); // .png and .styles.json // --only replaces just those scenes
+if (!compareOnly) for (const f of fs.readdirSync(outDir)) if (!only.length || only.some((o) => f.split('--')[0].includes(o))) fs.rmSync(path.join(outDir, f)); // .png and .styles.json // --only replaces just those scenes
 async function shot(page, name, look, { full = false, hover = false } = {}) {
   if (only.length && !only.some((o) => name.includes(o))) return;
   if (!look.phone && !hover) await page.mouse.move(1, 1); // nothing under the pointer: no hover states
@@ -323,6 +324,7 @@ async function rideScenes(look) {
 // ---------------------------------------------------------------- capture, then compare
 const LOOKS = [{ w: 1280, theme: 'light' }, { w: 1280, theme: 'dark' }, { w: 390, theme: 'light' }, { w: 390, theme: 'dark' }];
 try {
+  if (compareOnly) { await compare(); process.exit(process.exitCode || 0); }
   for (const look of LOOKS) {
     look.phone = look.w === 390;
     await homeScenes(look);
@@ -373,13 +375,19 @@ async function compare() {
     const p = path.join(d, f.replace(/\.png$/, '.styles.json.gz'));
     if (!fs.existsSync(p)) return null;
     const { texts, rows } = JSON.parse(zlib.gunzipSync(fs.readFileSync(p)));
-    return rows.map(([id, t, shown]) => [id, t === 'anim' ? t : texts[t], shown]);
+    // Chrome lists custom properties in no fixed order: compare the declarations sorted
+    const sorted = texts.map((t) => t.split(/;(?=[\w.-]+:)/).filter(Boolean).sort().join(';'));
+    return rows.map(([id, t, shown]) => [id, t === 'anim' ? t : sorted[t], shown]);
   };
+  // a chart can draw a few more or fewer SVG shapes run to run without a visible change; compare the rest then
+  const SVG_TAGS = /^\d+ (svg|g|path|line|polyline|polygon|rect|circle|ellipse|text|tspan|defs|lineargradient|radialgradient|stop|pattern|clippath|mask|use|title)\b/;
+  const outsideSvg = (rows) => rows.filter((r) => !SVG_TAGS.test(r[0])).map((r, i) => [r[0].replace(/^\d+/, i), r[1], r[2]]);
   const props = (t) => Object.fromEntries(t.split(/;(?=[\w.-]+:)/).filter(Boolean).map((x) => [x.slice(0, x.indexOf(':')), x.slice(x.indexOf(':') + 1)]));
   for (const f of cur.filter((x) => old.includes(x))) {
-    const [a, b] = [readStyles(baseDir, f), readStyles(outDir, f)];
+    let [a, b] = [readStyles(baseDir, f), readStyles(outDir, f)];
     if (!a || !b) continue;
     const sf = f.replace(/\.png$/, '');
+    if (a.length !== b.length || a.some((r, i) => r[0] !== b[i][0])) [a, b] = [outsideSvg(a), outsideSvg(b)];
     if (a.length !== b.length || a.some((r, i) => r[0] !== b[i][0])) { const i = a.findIndex((r, k) => r[0] !== b[k]?.[0]); bad.push(`${sf}: the DOM differs (${a.length} -> ${b.length} elements; first at ${a[i]?.[0]} / ${b[i]?.[0]})`); continue; }
     const diff = a.map((r, i) => [r, b[i]]).filter(([r, q]) => r[1] !== 'anim' && q[1] !== 'anim' && r[1] !== q[1]);
     if (!diff.length) continue;
