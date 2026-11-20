@@ -10,6 +10,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { chromium } from 'playwright-core';
 import { buildRide } from '../js/stats.js';
 import { flatten } from '../js/engine/workout.js';
@@ -131,28 +132,29 @@ async function shot(page, name, look, { full = false, hover = false } = {}) {
   await styles(page, `${name}--${look.w}-${look.theme}`);
   shots++;
 }
-/** Computed-style fingerprint of every element (and its ::before / ::after when they have content), in document order:
- *  catches what a screenshot can't see (below a panel's fold, hidden states, a property that happens to draw the same).
- *  Elements with a running animation are marked "anim" (their values move). VISUAL_STYLES_FULL=1 keeps the full text. */
+/** Computed style of every element (and its ::before / ::after when they have content), in document order: catches what a
+ *  screenshot can't see (below a panel's fold, hidden states, a property that happens to draw the same). Elements with a
+ *  running animation are marked "anim" (their values move). The server's port and auto-numbered SVG ids are normalized
+ *  (they change from run to run); stored gzipped, so a difference names the property. */
 async function styles(page, file) {
-  const full = !!process.env.VISUAL_STYLES_FULL;
-  const dump = await page.evaluate((keep) => {
-    const hash = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
-    const text = (cs) => { let s = ''; for (let k = 0; k < cs.length; k++) s += `${cs[k]}:${cs.getPropertyValue(cs[k])};`; return s; };
+  const dump = await page.evaluate(() => {
+    const norm = (v) => v.replace(/https?:\/\/127\.0\.0\.1:\d+/g, '').replace(/#([a-z-]+?)\d+\b/gi, '#$1N');
+    const text = (cs, pre = '') => { let s = ''; for (let k = 0; k < cs.length; k++) s += `${pre}${cs[k]}:${cs.getPropertyValue(cs[k])};`; return s; };
     // inside an <svg> (chart bars, gradients: half the elements) only what CSS here sets on SVG shapes
     const SVG = ['display', 'visibility', 'opacity', 'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin',
       'transform', 'transform-origin', 'filter', 'color', 'font-family', 'font-size', 'font-weight', 'font-stretch', 'stop-color', 'stop-opacity', 'vector-effect', 'pointer-events', 'cursor', 'animation-name'];
-    const svgText = (cs) => SVG.map((k) => cs.getPropertyValue(k)).join(';');
+    const svgText = (cs) => SVG.map((k) => `${k}:${cs.getPropertyValue(k)};`).join('');
     return [...document.querySelectorAll('body *')].map((el, i) => {
-      const id = `${i} ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : ''}`;
-      if (el.getAnimations().some((a) => a.playState === 'running')) return [id, 'anim', 0];
-      if (el.ownerSVGElement) return [id, keep ? svgText(getComputedStyle(el)) : hash(svgText(getComputedStyle(el))), el.getClientRects().length ? 1 : 0];
+      const id = norm(`${i} ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).filter((c) => c !== 'ink-ready').join('.') : ''}`);
+      const shown = el.getClientRects().length ? 1 : 0;
+      if (el.getAnimations().some((a) => a.playState === 'running')) return [id, 'anim', shown];
+      if (el.ownerSVGElement) return [id, norm(svgText(getComputedStyle(el))), shown];
       let s = text(getComputedStyle(el));
-      for (const p of ['::before', '::after']) { const c = getComputedStyle(el, p); if (c.content !== 'none' && c.content !== 'normal') s += p + text(c); }
-      return [id, keep ? s : hash(s), el.getClientRects().length ? 1 : 0];
+      for (const p of ['::before', '::after']) { const c = getComputedStyle(el, p); if (c.content !== 'none' && c.content !== 'normal') s += text(c, p.slice(2) + '.'); }
+      return [id, norm(s), shown];
     });
-  }, full);
-  fs.writeFileSync(path.join(outDir, `${file}.styles.json`), JSON.stringify(dump));
+  });
+  fs.writeFileSync(path.join(outDir, `${file}.styles.json.gz`), zlib.gzipSync(JSON.stringify(dump)));
 }
 const want = (...names) => !only.length || names.some((n) => only.some((o) => n.includes(o) || o.startsWith(n))); // a scene group runs when --only names it or one of its scenes
 const tab = async (page, t) => { await page.click(`#tabs button[data-tab="${t}"]`); await settle(page, 400); };
@@ -364,15 +366,21 @@ async function compare() {
     bad.push(`${f}: ${r.size || `${r.n} pixels differ (largest channel difference ${r.max})`}`);
     if (r.png) { fs.mkdirSync(diffDir, { recursive: true }); fs.writeFileSync(path.join(diffDir, f), Buffer.from(r.png, 'base64')); }
   }
+  const readStyles = (d, f) => { const p = path.join(d, f.replace(/\.png$/, '.styles.json.gz')); return fs.existsSync(p) ? JSON.parse(zlib.gunzipSync(fs.readFileSync(p))) : null; };
+  const props = (t) => Object.fromEntries(t.split(/;(?=[\w.-]+:)/).filter(Boolean).map((x) => [x.slice(0, x.indexOf(':')), x.slice(x.indexOf(':') + 1)]));
   for (const f of cur.filter((x) => old.includes(x))) {
-    const sf = f.replace(/\.png$/, '.styles.json');
-    if (!fs.existsSync(path.join(baseDir, sf)) || !fs.existsSync(path.join(outDir, sf))) continue;
-    const [a, b] = [baseDir, outDir].map((d) => JSON.parse(fs.readFileSync(path.join(d, sf), 'utf8')));
-    if (a.length !== b.length || a.some((r, i) => r[0] !== b[i][0])) { bad.push(`${sf}: the DOM differs (${a.length} -> ${b.length} elements)`); continue; }
-    const diff = a.filter((r, i) => r[1] !== 'anim' && b[i][1] !== 'anim' && r[1] !== b[i][1]);
+    const [a, b] = [readStyles(baseDir, f), readStyles(outDir, f)];
+    if (!a || !b) continue;
+    const sf = f.replace(/\.png$/, '');
+    if (a.length !== b.length || a.some((r, i) => r[0] !== b[i][0])) { const i = a.findIndex((r, k) => r[0] !== b[k]?.[0]); bad.push(`${sf}: the DOM differs (${a.length} -> ${b.length} elements; first at ${a[i]?.[0]} / ${b[i]?.[0]})`); continue; }
+    const diff = a.map((r, i) => [r, b[i]]).filter(([r, q]) => r[1] !== 'anim' && q[1] !== 'anim' && r[1] !== q[1]);
     if (!diff.length) continue;
-    const shown = diff.filter((r) => r[2]), hidden = diff.filter((r) => !r[2]);
-    bad.push(`${sf}: computed style differs on ${shown.length} rendered, ${hidden.length} unrendered elements: ${[...shown, ...hidden].slice(0, 6).map((r) => r[0].replace(/^\d+ /, '')).join(', ')}`);
+    const what = diff.slice(0, 4).map(([r, q]) => {
+      const [pa, pb] = [props(r[1]), props(q[1])];
+      const ks = [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((k) => pa[k] !== pb[k]);
+      return `${r[0].replace(/^\d+ /, '')}${r[2] ? '' : ' (unrendered)'} ${ks.slice(0, 3).map((k) => `${k}: ${pa[k]} -> ${pb[k]}`).join('; ')}`;
+    });
+    bad.push(`${sf}: computed style differs on ${diff.filter(([r]) => r[2]).length} rendered, ${diff.filter(([r]) => !r[2]).length} unrendered elements\n      ${what.join('\n      ')}`);
   }
   for (const f of missing) bad.push(`${f}: in the baseline, not captured now`);
   for (const f of added) bad.push(`${f}: captured now, not in the baseline`);
