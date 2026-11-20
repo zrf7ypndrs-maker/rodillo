@@ -420,7 +420,8 @@ button.danger:hover { border-color: var(--bad); }
 .ride-table table, table.ints { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ride-table td, .ride-table th, table.ints td, table.ints th { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: left; font-variant-numeric: tabular-nums; }
 .ride-table th, table.ints th { color: var(--muted); font-weight: 500; font-size: 13px; }
-/* the rides table (desktop; the phone shows .ride-list): no hairlines, rows as soft bands */
+/* the rides table (desktop; the phone shows .ride-list instead): no hairlines, rows as soft bands */
+.ride-list { display: none; }
 .ride-table td, .ride-table th { border-bottom: none; padding: 10px 10px; }
 .ride-table th { font-size: 12.5px; font-weight: 600; }
 .ride-table tr[data-ride] td:first-child { border-radius: 12px 0 0 12px; }
@@ -1547,6 +1548,21 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .zb-n span { display: block; margin-left: 0; font-size: 11.5px; }
   .card { padding: 14px; }
   .ride-table { overflow-x: auto; }
+  /* the rides as a list of small cards instead of the table */
+  .ride-table table { display: none; }
+  .ride-list { display: flex; flex-direction: column; gap: 4px; }
+  .rl { padding: 10px 0; cursor: pointer; }
+  .rl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  .rl-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
+  .rl-date { font-size: 11.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .rl-right { flex: none; font-size: 12px; }
+  .rl-right b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); }
+  .rl-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+  .rl-s { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .rl-s .v { font-size: 16px; }
+  .rl-s .v small { font-family: Archivo, system-ui, sans-serif; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .rl-s .l { font-size: 10.5px; color: var(--muted); }
+  .rl-btns { display: flex; gap: 8px; margin-top: 8px; }
   .panel { width: 100vw; padding: calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)); }
   #garage.panel { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); padding: 14px; }
   .settings-form .gar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -1744,29 +1760,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; background: var(--lens); box-shadow: var(--lens-edge); }
   .topnav button:hover { color: var(--nav-text); }
   .topnav button.active:hover { color: var(--ink); }
-}
-
-/* =====================================================================
-   PREMIUM LOOK, phone home screens only (Nov 12, Agustín; mocks: project doc claude/rodillo-premium-look.md).
-   Desktop never sees any of this: the phone-only markup (.rec-card, .ride-list) is hidden outside the phone query.
-   ===================================================================== */
-.ride-list { display: none; }
-@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  /* training: the phone rides list instead of the table */
-  .ride-table table { display: none; }
-  .ride-list { display: flex; flex-direction: column; gap: 4px; }
-  .rl { padding: 10px 0; cursor: pointer; }
-  .rl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
-  .rl-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
-  .rl-date { font-size: 11.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  .rl-right { flex: none; font-size: 12px; }
-  .rl-right b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); }
-  .rl-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
-  .rl-s { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .rl-s .v { font-size: 16px; }
-  .rl-s .v small { font-family: Archivo, system-ui, sans-serif; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  .rl-s .l { font-size: 10.5px; color: var(--muted); }
-  .rl-btns { display: flex; gap: 8px; margin-top: 8px; }
 }
 
 /* Panels join the phone look (Nov 13, Agustín, mocked on the canvas page "Panels"): Settings, Garage, Connections, Controls.
