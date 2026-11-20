@@ -144,15 +144,18 @@ async function styles(page, file) {
     const SVG = ['display', 'visibility', 'opacity', 'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin',
       'transform', 'transform-origin', 'filter', 'color', 'font-family', 'font-size', 'font-weight', 'font-stretch', 'stop-color', 'stop-opacity', 'vector-effect', 'pointer-events', 'cursor', 'animation-name'];
     const svgText = (cs) => SVG.map((k) => `${k}:${cs.getPropertyValue(k)};`).join('');
-    return [...document.querySelectorAll('body *')].map((el, i) => {
+    const uniq = new Map(); // most rows, bars and labels share their computed style: send each text once
+    const ref = (t) => { if (!uniq.has(t)) uniq.set(t, uniq.size); return uniq.get(t); };
+    const rows = [...document.querySelectorAll('body *')].map((el, i) => {
       const id = norm(`${i} ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).filter((c) => c !== 'ink-ready').join('.') : ''}`);
       const shown = el.getClientRects().length ? 1 : 0;
       if (el.getAnimations().some((a) => a.playState === 'running')) return [id, 'anim', shown];
-      if (el.ownerSVGElement) return [id, norm(svgText(getComputedStyle(el))), shown];
+      if (el.ownerSVGElement) return [id, ref(norm(svgText(getComputedStyle(el)))), shown];
       let s = text(getComputedStyle(el));
       for (const p of ['::before', '::after']) { const c = getComputedStyle(el, p); if (c.content !== 'none' && c.content !== 'normal') s += text(c, p.slice(2) + '.'); }
-      return [id, norm(s), shown];
+      return [id, ref(norm(s)), shown];
     });
+    return { texts: [...uniq.keys()], rows };
   });
   fs.writeFileSync(path.join(outDir, `${file}.styles.json.gz`), zlib.gzipSync(JSON.stringify(dump)));
 }
@@ -366,7 +369,12 @@ async function compare() {
     bad.push(`${f}: ${r.size || `${r.n} pixels differ (largest channel difference ${r.max})`}`);
     if (r.png) { fs.mkdirSync(diffDir, { recursive: true }); fs.writeFileSync(path.join(diffDir, f), Buffer.from(r.png, 'base64')); }
   }
-  const readStyles = (d, f) => { const p = path.join(d, f.replace(/\.png$/, '.styles.json.gz')); return fs.existsSync(p) ? JSON.parse(zlib.gunzipSync(fs.readFileSync(p))) : null; };
+  const readStyles = (d, f) => {
+    const p = path.join(d, f.replace(/\.png$/, '.styles.json.gz'));
+    if (!fs.existsSync(p)) return null;
+    const { texts, rows } = JSON.parse(zlib.gunzipSync(fs.readFileSync(p)));
+    return rows.map(([id, t, shown]) => [id, t === 'anim' ? t : texts[t], shown]);
+  };
   const props = (t) => Object.fromEntries(t.split(/;(?=[\w.-]+:)/).filter(Boolean).map((x) => [x.slice(0, x.indexOf(':')), x.slice(x.indexOf(':') + 1)]));
   for (const f of cur.filter((x) => old.includes(x))) {
     const [a, b] = [readStyles(baseDir, f), readStyles(outDir, f)];
