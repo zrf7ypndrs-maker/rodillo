@@ -1728,21 +1728,22 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .b-foot button { padding: 9px 14px; }
 }
 
-/* phone: the main nav floats at the bottom as a translucent pill, always visible on the home screens.
-   The sliding ink (::after) becomes a filled pill behind the active section. */
+/* phone: the main nav floats at the bottom as a liquid glass pill, always visible on the home screens.
+   The sliding ink (::after) becomes a brighter glass lens behind the active section. */
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
   #home { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .topbar .topnav { position: fixed; z-index: 30; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    margin: 0; gap: 0; padding: 5px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
-    background: color-mix(in srgb, var(--sheet) 70%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
-    box-shadow: 0 10px 30px var(--shadow); }
+    margin: 0; gap: 0; padding: 5px; border-radius: 999px; border: none; background: var(--glass); box-shadow: var(--glass-edge);
+    -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
+  .topbar .topnav::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .7;
+    background: radial-gradient(70% 120% at 18% -30%, var(--glass-sheen) 0%, transparent 55%), radial-gradient(60% 90% at 90% 140%, var(--glass-sheen) 0%, transparent 60%); }
   .topnav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px;
-    padding: 7px 10px 6px; font-size: 11.5px; font-weight: 650; color: var(--muted); border-radius: 999px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  .topnav button.active { color: var(--sheet); }
+    padding: 7px 10px 6px; font-size: 11.5px; font-weight: 650; color: var(--nav-text); border-radius: 999px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .topnav button.active { color: var(--ink); }
   .topnav svg { display: block; width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; }
-  .topnav button:hover { color: var(--muted); }
-  .topnav button.active:hover { color: var(--sheet); }
+  .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; background: var(--lens); box-shadow: var(--lens-edge); }
+  .topnav button:hover { color: var(--nav-text); }
+  .topnav button.active:hover { color: var(--ink); }
 }
 
 /* =====================================================================
@@ -1751,16 +1752,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    ===================================================================== */
 .ride-list { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  /* liquid glass nav pill; the active section is a brighter glass lens */
-  .topbar .topnav { border: none; background: var(--glass); box-shadow: var(--glass-edge);
-    -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
-  .topbar .topnav::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .7;
-    background: radial-gradient(70% 120% at 18% -30%, var(--glass-sheen) 0%, transparent 55%), radial-gradient(60% 90% at 90% 140%, var(--glass-sheen) 0%, transparent 60%); }
-  .topbar .topnav::after { background: var(--lens); box-shadow: var(--lens-edge); }
-  .topnav button { color: var(--nav-text); }
-  .topnav button:hover { color: var(--nav-text); }
-  .topnav button.active, .topnav button.active:hover { color: var(--ink); }
-
   /* training: the phone rides list instead of the table */
   .ride-table table { display: none; }
   .ride-list { display: flex; flex-direction: column; gap: 4px; }
