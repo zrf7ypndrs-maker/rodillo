@@ -147,6 +147,14 @@ b { font-weight: 650; }
 .rp-target, .seg-r .big, .seg-name .big, .t-pct, .cal-num, .wo-meta, .pct {
   font-family: var(--num); font-stretch: 68%; font-variant-numeric: tabular-nums;
 }
+/* ...but on the home screens halfway between that heavy condensed voice and a wide semibold (Nov 12, 11:18 pm, Agustín
+   picked 80% / 720 from a side-by-side of 100/620, 80/720 and 68/800). The rides list is the phone's (.rl-s), the table
+   the desktop's (#ride-table td: its date and name columns stay text); each is hidden on the other layout. */
+#home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rc-v, .rl-s .v, #ride-table td) {
+  font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+}
+#home #ride-table td:nth-child(2) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; }
+#home #ride-table td:nth-child(1) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 500; color: var(--muted); }
 
 /* ---------- buttons ---------- */
 button { cursor: pointer; border-radius: 999px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 9px 18px; font-weight: 600; transition: background .12s, border-color .12s, color .12s; }
@@ -1600,12 +1608,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    ===================================================================== */
 .hero-nums, .rec-card, .ride-list { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  /* numbers on the home screens: halfway between the ride screen's heavy condensed voice and a wide semibold
-     (Nov 12, 11:18 pm, Agustín picked 80% / 720 from a side-by-side of 100/620, 80/720 and 68/800) */
-  #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rl-s .v, .rc-v) {
-    font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
-  }
-
   /* liquid glass nav pill; the active section is a brighter glass lens */
   .topbar .topnav { border: none; background: var(--glass); box-shadow: var(--glass-edge);
     -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
@@ -1873,12 +1875,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
    ===================================================================== */
 @media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rc-v, #ride-table td) {
-    font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
-  }
-  #home #ride-table td:nth-child(2) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 600; letter-spacing: -0.01em; }
-  #home #ride-table td:nth-child(1) { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-weight: 500; color: var(--muted); }
-
   /* today: dome on a rounder card, no lift shadow, main set as big numbers */
   .hero { border-radius: 16px; padding: 26px 30px 22px; box-shadow: var(--hero-shadow); }
   :root[data-theme="dark"] .hero:not(.nowo):not(.done) { box-shadow: var(--hero-shadow); }
