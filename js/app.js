@@ -1260,20 +1260,13 @@ function renderSegList(s) {
   }
 }
 
-/** Next card: "4:00 @ 216 W" (+ cadence target); "Finish" on the last interval; hidden when there is no next step. */
-function renderNextCard(s, next, setHTML) {
-  const el = $('#r-next');
-  const none = !s.segs || !s.seg;
-  el.classList.toggle('none', none);
-  if (none) return;
-  el.classList.toggle('finish', !next);
-  if (!next) { el.style.setProperty('--nc', 'var(--rule)'); setHTML(el, '<div class="rt-k">Next</div><div class="amt">Finish</div>'); return; }
-  el.style.setProperty('--nc', next.kind === 'erg' ? zoneHex(next.from) : gradeHex(next.grade)); // a ramp: the zone it starts in, so the hand-off doesn't change color
-  const w = (f) => Math.round(f * app.settings.ftp * s.intensity);
-  const tgt = next.kind === 'erg'
-    ? `<span class="num">${next.from === next.to ? w(next.from) : `${w(next.from)}-${w(next.to)}`}</span><span class="u">W</span>`
-    : `<span class="num">${((next.grade + s.gradeOffset) * 100).toFixed(0)}</span><span class="u">%</span>`;
-  setHTML(el, `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${next.cad ? next.cad.label : ''}</div>`);
+function renderNextCard(s, next, setHTML, v) {
+  const el = $('#r-next'), c = nextCard(s, next, v);
+  el.classList.toggle('none', c.none);
+  if (c.none) return;
+  el.classList.toggle('finish', c.finish);
+  el.style.setProperty('--nc', c.nc);
+  setHTML(el, c.html);
 }
 
 /**
@@ -1362,12 +1355,121 @@ function segRows(s) {
   return { rows, cur, doneN };
 }
 
-function gearViz(gb) {
+/** Gear tile's sub line: cogs (easiest first) and rings with the ones in use in ink, and the ratio. `look` = { INK, RULE }. */
+function gearViz(gb, { INK, RULE }) {
   if (gb.seq) return `gear ${gb.rear + 1}/${gb.nRear} &middot; ratio ${gb.ratio.toFixed(2)}`;
   const cogs = gb.cogsEasyFirst, max = cogs[0];
   const bars = cogs.map((c, i) => `<rect x="${i * 9}" y="${22 - (c / max) * 20}" width="6" height="${(c / max) * 20}" rx="1.5" fill="${i === gb.rear ? INK : RULE}"/>`).join('');
   const rings = gb.d.rings.map((r, i) => `<circle cx="${cogs.length * 9 + 10 + i * 14}" cy="12" r="${3 + (r / gb.d.rings.at(-1)) * 6}" fill="none" stroke="${i === gb.front ? INK : RULE}" stroke-width="2.5"/>`).join('');
   return `<svg class="gearviz" viewBox="0 0 ${cogs.length * 9 + 14 + gb.d.rings.length * 14} 24">${bars}${rings}</svg><span>ratio ${gb.ratio.toFixed(2)}</span>`;
+}
+
+// ---- what the desktop ride screen says, as pure functions of the session (unit tests: test/ride.mjs).
+// `v` = rideView(s), built once per draw: { ftp, riderKg, hrBpm, track, zoneHex, gradeHex, INK, RULE }.
+// `track` is the road of a slope-only workout (cached per session), null otherwise.
+const rideView = (s) => (ensureTokens(), {
+  ftp: app.settings.ftp, riderKg: app.settings.riderKg, hrBpm: app.hr?.bpm,
+  track: s.segs && isTrack(s.segs) ? rideTrack(s) : null, zoneHex, gradeHex, INK, RULE,
+});
+
+/** The tiles (power, HR, cadence, gear, Climbed / To the top, speed) and the clock: text or markup for each. */
+function rideTiles(s, v) {
+  const td = s.trainer.data || {};
+  const hr = Math.round(v.hrBpm || td.hr || 0);
+  const p = Math.round(s.powerShown);
+  const r = s.target ? p / s.target : 0;
+  const hrs = s.samples.filter((x) => x.hr).slice(-600);
+  const cs = s.cadStatus;
+  // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
+  // Real climbs say what's left (the chart header already counts what's done).
+  let up = s.climbed || 0, upSub = '', upLabel = 'Climbed';
+  if (v.track) {
+    const tr = v.track, d = trackDist(tr, s.segs, s.chartPos);
+    up = Math.max(0, tr.ascent - trackClimbed(tr, d)); upLabel = 'To the top';
+    upSub = `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`;
+  }
+  return {
+    elapsed: fmtTime(s.elapsed),
+    power: p,
+    powerCls: !s.target ? '' : r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok',
+    target: s.target ? `target <b style="color:var(--text)">${s.target}</b> W` : `${(p / v.riderKg).toFixed(1)} W/kg`,
+    effortShown: !(s.mode !== 'erg' || Math.abs(s.intensity - 1) < 0.001),
+    effort: `${Math.round(s.intensity * 100)}%`,
+    hr: hr || '--',
+    hrAvg: hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '',
+    cad: Math.round(td.cadence || 0),
+    cadState: cs === 'ok' ? 'ok' : cs === 'low' || cs === 'high' ? 'bad' : '',
+    cadTarget: !s.seg?.cad ? '' : cs === 'low' ? '<b>&#9650; Pedal faster</b>' : cs === 'high' ? '<b>&#9660; Pedal slower</b>' : `target ${s.seg.cad.label}`,
+    gearDim: s.mode === 'erg',
+    gear: s.gb.seq ? s.gb.label : s.gb.label.replace('x', '×'),
+    gearCombo: !s.gb.seq,
+    ratio: s.mode === 'erg' ? 'ERG: gears not used' : gearViz(s.gb, v),
+    climbLabel: upLabel,
+    climb: `${Math.round(up)}<span class="unit">m</span>`,
+    climbSub: upSub,
+    speed: (s.bike.v * 3.6).toFixed(1),
+    dist: `${(s.bike.dist / 1000).toFixed(2)} km`,
+    trip: `<b>${(s.bike.dist / 1000).toFixed(1)}</b> km · <b>${(s.bike.v * 3.6).toFixed(1)}</b> km/h`,
+  };
+}
+
+/**
+ * Interval card: color (`zc`), label, small line, the big sentence ("Hold 216 W for 4:00", "Ramp to 140 W in 9:30",
+ * "6% grade for 150 m", "Done. Nice work.", "2.0% grade") and the progress bar's width (null: no bar).
+ */
+function intervalCard(s, v) {
+  const seg = s.seg;
+  const num = (x, u = '') => `<span class="num">${x}</span>${u ? `<span class="u">${u}</span>` : ''}`;
+  const word = (w) => `<span class="w">${w}</span>`;
+  if (seg) {
+    const rem = s.segRemaining;
+    const left = rem.sec !== undefined ? num(fmtTime(rem.sec)) : num(fmtDist(rem.m).replace(/ (k?m)$/, ''), rem.m < 1000 ? 'm' : 'km');
+    const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
+    let big, sub, zc;
+    if (seg.kind === 'erg') {
+      const tgt = segTarget(seg, s.segProgress);
+      const w = s.target || Math.round(tgt * v.ftp * s.intensity);
+      zc = v.zoneHex(tgt);
+      if (seg.from === seg.to) {
+        big = `${word('Hold')}${num(w, 'W')}${word('for')}${left}`;
+        sub = `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`;
+      } else {
+        big = `${word('Ramp to')}${num(Math.round(seg.to * v.ftp * s.intensity), 'W')}${word('in')}${left}`;
+        sub = `now ${w} W${cad}`;
+      }
+    } else {
+      const g = seg.grade + s.gradeOffset;
+      zc = v.gradeHex(g);
+      big = `${num((g * 100).toFixed(0), '%')}${word('grade for')}${left}`;
+      sub = `use your gears${cad}`;
+    }
+    // slope profile moved with up/down: said here now that the Grade tile is gone (UX roadmap item 7)
+    const off = seg.kind !== 'erg' && s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}% &middot; ` : '';
+    return {
+      zc,
+      label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`,
+      text: off + (seg.text ? `${esc(seg.text)}${cad}` : sub),
+      big,
+      bar: `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`,
+    };
+  }
+  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', text: 'keep riding or hold B to finish', big: '<span class="msg">Done. Nice work.</span>', bar: null };
+  return { zc: v.gradeHex(s.grade), label: 'Free ride', text: 'up/down changes the grade by 1%, shift to hold your cadence', big: `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`, bar: null };
+}
+
+/** Next card: "4:00 @ 216 W" (+ cadence target); "Finish" on the last interval; `none` when there is no next step. */
+function nextCard(s, next, v) {
+  if (!s.segs || !s.seg) return { none: true };
+  if (!next) return { none: false, finish: true, nc: 'var(--rule)', html: '<div class="rt-k">Next</div><div class="amt">Finish</div>' };
+  const w = (f) => Math.round(f * v.ftp * s.intensity);
+  const tgt = next.kind === 'erg'
+    ? `<span class="num">${next.from === next.to ? w(next.from) : `${w(next.from)}-${w(next.to)}`}</span><span class="u">W</span>`
+    : `<span class="num">${((next.grade + s.gradeOffset) * 100).toFixed(0)}</span><span class="u">%</span>`;
+  return {
+    none: false, finish: false,
+    nc: next.kind === 'erg' ? v.zoneHex(next.from) : v.gradeHex(next.grade), // a ramp: the zone it starts in, so the hand-off doesn't change color
+    html: `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${next.cad ? next.cad.label : ''}</div>`,
+  };
 }
 
 function renderPaused(s) {
@@ -1411,104 +1513,46 @@ function renderRide() {
   if (!isPhone()) slideNextIn(s); // before pulseCard: a slide pulses the card when it lands, not now
   pulseCard(s, isPhone() ? $('#rp-hero') : $('#r-interval'));
   if (isPhone()) { renderPhone(s); renderPaused(s); return; }
-  const td = s.trainer.data || {};
-  const hr = Math.round(app.hr?.bpm || td.hr || 0);
-  $('#r-elapsed').textContent = fmtTime(s.elapsed);
-  const p = Math.round(s.powerShown);
-  $('#r-power').textContent = p;
+  const v = rideView(s), t = rideTiles(s, v);
+  $('#r-elapsed').textContent = t.elapsed;
+  $('#r-power').textContent = t.power;
   const pt = $('.tile.power');
   pt.classList.remove('low', 'high', 'ok');
-  if (s.target) {
-    $('#r-target').innerHTML = `target <b style="color:var(--text)">${s.target}</b> W`;
-    const r = p / s.target;
-    pt.classList.add(r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok');
-  } else {
-    $('#r-target').textContent = `${(p / app.settings.riderKg).toFixed(1)} W/kg`;
-  }
+  if (t.powerCls) pt.classList.add(t.powerCls);
+  $('#r-target').innerHTML = t.target;
   const pctEl = $('#r-pct'); // effort: only when it isn't 100%
-  pctEl.classList.toggle('hidden', s.mode !== 'erg' || Math.abs(s.intensity - 1) < 0.001);
-  const effHtml = `${Math.round(s.intensity * 100)}%`;
-  if (pctEl.innerHTML !== effHtml) pctEl.innerHTML = effHtml;
-  $('#r-hr').textContent = hr || '--';
-  const hrs = s.samples.filter((x) => x.hr).slice(-600);
-  $('#r-hrzone').textContent = hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '';
-  $('#r-cad').textContent = Math.round(td.cadence || 0);
-  const cs = s.cadStatus, ct = $('.tile.cad');
-  ct.classList.toggle('ok', cs === 'ok');
-  ct.classList.toggle('bad', cs === 'low' || cs === 'high');
-  $('#r-cadtarget').innerHTML = !s.seg?.cad ? '' : cs === 'low' ? '<b>&#9650; Pedal faster</b>' : cs === 'high' ? '<b>&#9660; Pedal slower</b>' : `target ${s.seg.cad.label}`;
-  const gearTile = $('.tile.gear');
-  gearTile.classList.toggle('dim', s.mode === 'erg');
-  $('#r-gear').textContent = s.gb.seq ? s.gb.label : s.gb.label.replace('x', '\u00d7');
-  $('#r-gear').classList.toggle('combo', !s.gb.seq);
-  $('#r-ratio').innerHTML = s.mode === 'erg' ? 'ERG: gears not used' : gearViz(s.gb);
-  // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
-  // Real climbs say what's left (the chart header already counts what's done).
-  let up = s.climbed || 0, upSub = '', upLabel = 'Climbed';
-  if (s.segs && isTrack(s.segs)) {
-    const tr = rideTrack(s), d = trackDist(tr, s.segs, s.chartPos);
-    up = Math.max(0, tr.ascent - trackClimbed(tr, d)); upLabel = 'To the top';
-    upSub = `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`;
-  }
-  $('#r-climb-label').textContent = upLabel;
-  $('#r-climb').innerHTML = `${Math.round(up)}<span class="unit">m</span>`;
-  $('#r-climbsub').textContent = upSub;
-  $('#r-speed').textContent = (s.bike.v * 3.6).toFixed(1);
-  $('#r-dist').textContent = `${(s.bike.dist / 1000).toFixed(2)} km`;
-  $('#r-trip').innerHTML = `<b>${(s.bike.dist / 1000).toFixed(1)}</b> km \u00b7 <b>${(s.bike.v * 3.6).toFixed(1)}</b> km/h`;
+  pctEl.classList.toggle('hidden', !t.effortShown);
+  if (pctEl.innerHTML !== t.effort) pctEl.innerHTML = t.effort;
+  $('#r-hr').textContent = t.hr;
+  $('#r-hrzone').textContent = t.hrAvg;
+  $('#r-cad').textContent = t.cad;
+  const ct = $('.tile.cad');
+  ct.classList.toggle('ok', t.cadState === 'ok');
+  ct.classList.toggle('bad', t.cadState === 'bad');
+  $('#r-cadtarget').innerHTML = t.cadTarget;
+  $('.tile.gear').classList.toggle('dim', t.gearDim);
+  $('#r-gear').textContent = t.gear;
+  $('#r-gear').classList.toggle('combo', t.gearCombo);
+  $('#r-ratio').innerHTML = t.ratio;
+  $('#r-climb-label').textContent = t.climbLabel;
+  $('#r-climb').innerHTML = t.climb;
+  $('#r-climbsub').textContent = t.climbSub;
+  $('#r-speed').textContent = t.speed;
+  $('#r-dist').textContent = t.dist;
+  $('#r-trip').innerHTML = t.trip;
 
   // interval card
   $('.tiles').classList.toggle('erg', s.mode === 'erg');
-  const seg = s.seg;
   const card = $('#r-interval'), bar = $('#r-int-bar');
-  const num = (v, u = '') => `<span class="num">${v}</span>${u ? `<span class="u">${u}</span>` : ''}`;
-  const word = (w) => `<span class="w">${w}</span>`;
-  const setHTML = (el, v) => { if (el.innerHTML !== v) el.innerHTML = v; };
-  if (seg) {
-    const rem = s.segRemaining;
-    const left = rem.sec !== undefined ? num(fmtTime(rem.sec)) : num(fmtDist(rem.m).replace(/ (k?m)$/, ''), rem.m < 1000 ? 'm' : 'km');
-    const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
-    let big, sub;
-    if (seg.kind === 'erg') {
-      const tgt = segTarget(seg, s.segProgress);
-      const w = s.target || Math.round(tgt * app.settings.ftp * s.intensity);
-      setZc(card, zoneHex(tgt));
-      if (seg.from === seg.to) {
-        big = `${word('Hold')}${num(w, 'W')}${word('for')}${left}`;
-        sub = `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`;
-      } else {
-        big = `${word('Ramp to')}${num(Math.round(seg.to * app.settings.ftp * s.intensity), 'W')}${word('in')}${left}`;
-        sub = `now ${w} W${cad}`;
-      }
-    } else {
-      const g = seg.grade + s.gradeOffset;
-      setZc(card, gradeHex(g));
-      big = `${num((g * 100).toFixed(0), '%')}${word('grade for')}${left}`;
-      sub = `use your gears${cad}`;
-    }
-    setHTML($('#r-int-label'), `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`);
-    // slope profile moved with up/down: said here now that the Grade tile is gone (UX roadmap item 7)
-    const off = seg.kind !== 'erg' && s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}% &middot; ` : '';
-    setHTML($('#r-int-text'), off + (seg.text ? `${esc(seg.text)}${cad}` : sub));
-    setHTML($('#r-int-big'), big);
-    bar.classList.remove('hidden');
-    bar.firstElementChild.style.width = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
-    renderNextCard(s, s.segs[s.segIndex + 1], setHTML);
-  } else if (s.segs) {
-    setZc(card, 'var(--ok-bg)');
-    setHTML($('#r-int-label'), 'Workout complete');
-    setHTML($('#r-int-text'), 'keep riding or hold B to finish');
-    setHTML($('#r-int-big'), '<span class="msg">Done. Nice work.</span>');
-    bar.classList.add('hidden');
-    renderNextCard(s, undefined, setHTML);
-  } else {
-    setZc(card, gradeHex(s.grade));
-    setHTML($('#r-int-label'), 'Free ride');
-    setHTML($('#r-int-text'), 'up/down changes the grade by 1%, shift to hold your cadence');
-    setHTML($('#r-int-big'), `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`);
-    bar.classList.add('hidden');
-    renderNextCard(s, undefined, setHTML);
-  }
+  const setHTML = (el, html) => { if (el.innerHTML !== html) el.innerHTML = html; };
+  const c = intervalCard(s, v);
+  setZc(card, c.zc);
+  setHTML($('#r-int-label'), c.label);
+  setHTML($('#r-int-text'), c.text);
+  setHTML($('#r-int-big'), c.big);
+  bar.classList.toggle('hidden', c.bar === null);
+  if (c.bar !== null) bar.firstElementChild.style.width = c.bar;
+  renderNextCard(s, s.seg ? s.segs[s.segIndex + 1] : undefined, setHTML, v);
   renderSegList(s);
 
   renderPaused(s);
@@ -1526,6 +1570,35 @@ function renderRide() {
 }
 
 // ------------------------------------------------------------------ chart
+// Geometry of the ride chart, pure (unit tests: test/ride.mjs). Canvas pixels: y grows down, `bot` is the baseline.
+/** Power to y: 0 W on `bot`, the top of the plot at FTP x 1.6 (`base`) or the last 20 minutes' peak + 20 W if higher. */
+function powerScale(samples, base, bot, plotH) {
+  const maxP = Math.max(base, ...samples.slice(-1200).map((x) => x.power + 20));
+  return { maxP, Yp: (p) => bot - (Math.min(p, maxP) / maxP) * plotH };
+}
+/** Workout time to x: the whole workout fills the width (or the ride so far, once it runs past the end). */
+function workoutX(s, W) {
+  const T = Math.max(s.segs[s.segs.length - 1].end, s.chartPos + 1);
+  return (t) => (t / T) * W;
+}
+/** Height of a grade bar (fraction, -3% sits on the baseline, 12% fills `k` of the plot), at least `min`. */
+const gradeBarH = (g, plotH, k, min) => Math.max(min, ((g + 0.03) / 0.15) * plotH * k);
+/** An ERG step's block: baseline, its start and end targets in watts (a ramp slopes), baseline. */
+function ergShape(g, X, Yp, ftp, intensity, bot) {
+  return [[X(g.start), bot], [X(g.start), Yp(g.from * ftp * intensity)], [X(g.end), Yp(g.to * ftp * intensity)], [X(g.end), bot]];
+}
+/**
+ * A slope-only ride's road on the chart: distance to x over the stretch in view (`view` = trackView()), elevation to y
+ * in the top `area` of the plot over at least `elevMin` metres, a 6% floor kept clear under the lowest point.
+ */
+function trackFrame(tr, view, { W, top, bot, area, elevMin }) {
+  const plotH = bot - top, v0 = view.v0, VD = tr.D - v0;
+  const X = (d) => ((d - v0) / VD) * W;
+  const rng = Math.max(view.hi - view.lo, elevMin), aTop = bot - plotH * area, floor = plotH * 0.06;
+  const Y = (h) => aTop + (1 - (h - view.lo) / rng) * (bot - floor - aTop);
+  return { v0, VD, X, Y };
+}
+
 const canvas = $('#r-chart');
 function sizeChart() {
   const r = canvas.getBoundingClientRect();
@@ -1546,13 +1619,11 @@ function drawChart() {
   ctx.font = `600 ${12 * dpr}px ${NUM_FONT}`;
 
   const ftp = app.settings.ftp;
-  const maxP = Math.max(ftp * 1.6, ...s.samples.slice(-1200).map((x) => x.power + 20));
-  const Yp = (p) => H - pad - (Math.min(p, maxP) / maxP) * plotH;
+  const { Yp } = powerScale(s.samples, ftp * 1.6, H - pad, plotH);
 
   if (s.segs && isTrack(s.segs)) return drawTrack(ctx, s, { W, H, dpr, top: pad, bot: H - pad, area: 0.6, compact: false });
   if (s.segs) {
-    const T = Math.max(s.segs[s.segs.length - 1].end, s.chartPos + 1);
-    const X = (t) => (t / T) * W;
+    const X = workoutX(s, W);
     for (const g of s.segs) {
       if (g.kind === 'erg') {
         const a = g.end <= s.chartPos ? '66' : 'cc';
@@ -1562,12 +1633,13 @@ function drawChart() {
           for (const [o, c] of rampStops(g.from, g.to)) gr.addColorStop(o, c + a);
           ctx.fillStyle = gr;
         }
-        ctx.beginPath(); ctx.moveTo(X(g.start), H - pad);
-        ctx.lineTo(X(g.start), Yp(g.from * ftp * s.intensity)); ctx.lineTo(X(g.end), Yp(g.to * ftp * s.intensity));
-        ctx.lineTo(X(g.end), H - pad); ctx.closePath(); ctx.fill();
+        const [p0, p1, p2, p3] = ergShape(g, X, Yp, ftp, s.intensity, H - pad);
+        ctx.beginPath(); ctx.moveTo(...p0);
+        ctx.lineTo(...p1); ctx.lineTo(...p2);
+        ctx.lineTo(...p3); ctx.closePath(); ctx.fill();
       } else {
         ctx.fillStyle = gradeHex(g.grade) + (g.end <= s.chartPos ? '66' : 'cc');
-        const h = Math.max(6 * dpr, ((g.grade + 0.03) / 0.15) * plotH * 0.6);
+        const h = gradeBarH(g.grade, plotH, 0.6, 6 * dpr);
         ctx.fillRect(X(g.start), H - pad - h, X(g.end) - X(g.start), h);
       }
     }
@@ -1596,7 +1668,7 @@ function drawChart() {
   const X = (i) => (i / win) * W;
   // each second in its grade color, like the phone chart, slope workouts and the ride page (was one flat UNDERLAY gray)
   data.forEach((x, i) => {
-    const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.6);
+    const g = (x.grade || 0) / 100, h = gradeBarH(g, plotH, 0.6, 2 * dpr);
     const x0 = Math.floor(X(i)); ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect(x0, H - pad - h, Math.floor(X(i + 1)) - x0, h); // edge to edge: overlapping see-through bars leave stripes
   });
   ctx.strokeStyle = FTP_LINE; ctx.setLineDash([4 * dpr, 4 * dpr]);
@@ -1635,11 +1707,8 @@ function trackView(s, tr) {
 function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
   const segs = s.segs, tr = rideTrack(s), ftp = app.settings.ftp, plotH = bot - top;
   const pos = trackDist(tr, segs, s.chartPos), hNow = trackHeight(tr, pos);
-  const view = trackView(s, tr), v0 = view.v0, VD = tr.D - v0;
-  const X = (d) => ((d - v0) / VD) * W;
+  const view = trackView(s, tr), { v0, VD, X, Y } = trackFrame(tr, view, { W, top, bot, area, elevMin: ELEV_MIN });
   const xOf = (x) => X(trackDist(tr, segs, x.wx ?? x.wt));
-  const rng = Math.max(view.hi - view.lo, ELEV_MIN), aTop = bot - plotH * area, floor = plotH * 0.06;
-  const Y = (h) => aTop + (1 - (h - view.lo) / rng) * (bot - floor - aTop);
 
   // the road: ridden part faded, the rest at full strength
   segs.forEach((g, i) => {
@@ -1665,8 +1734,7 @@ function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
   }
 
   // FTP line, power and heart rate over the ridden part
-  const maxP = Math.max(ftp * (compact ? 1.4 : 1.6), ...s.samples.slice(-1200).map((x) => x.power + 20));
-  const Yp = (p) => bot - (Math.min(p, maxP) / maxP) * plotH;
+  const { Yp } = powerScale(s.samples, ftp * (compact ? 1.4 : 1.6), bot, plotH);
   ctx.strokeStyle = FTP_LINE; ctx.lineWidth = dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.beginPath(); ctx.moveTo(0, Yp(ftp)); ctx.lineTo(W, Yp(ftp)); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = MUTED; ctx.fillText(`FTP ${ftp}`, (compact ? 2 : 6) * dpr, Math.max(10 * dpr, Yp(ftp) - 4 * dpr));
