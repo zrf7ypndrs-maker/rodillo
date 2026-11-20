@@ -101,6 +101,36 @@
   --today-end: #181b19; --today-shadow: rgba(255, 255, 255, .32);
   color-scheme: dark;
 }
+
+/* Home screens (premium look: phone Nov 12, desktop Nov 13, Agustín; mocks: project doc claude/rodillo-premium-look.md):
+   lighter paper, near-black dark, soft card shadows, the raised segment track. Only while the home screen is up
+   (`html:has(#home.active)`), so the ride screen and the panels its pause screen opens keep the tokens above.
+   --glass, --glass-sheen, --lens, --lens-edge and --nav-text are the phone nav pill's liquid glass (desktop keeps text tabs). */
+html:not([data-theme="dark"]):has(#home.active) {
+  --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa; --track: #e2e6e1;
+  --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
+  --card-drop: drop-shadow(0 6px 16px rgba(22, 24, 27, .07));
+  --seg-on: #ffffff; --seg-shadow: 0 1px 2px rgba(22, 24, 27, .08), 0 2px 8px rgba(22, 24, 27, .08);
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, .52) 0%, rgba(255, 255, 255, .26) 100%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 12px 32px rgba(22, 24, 27, .14), 0 1px 3px rgba(22, 24, 27, .1);
+  --glass-sheen: rgba(255, 255, 255, .6);
+  --lens: linear-gradient(180deg, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .55) 100%);
+  --lens-edge: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(22, 24, 27, .05), 0 2px 10px rgba(22, 24, 27, .12);
+  --nav-text: #3c4247;
+  --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
+}
+html[data-theme="dark"]:has(#home.active) {
+  --paper: #050606; --sheet: #111413; --sheet2: #1b1f1d; --rule: #202523; --hi: #1f2422; --underlay: #1c201e; --today-end: #111413; --track: #111413;
+  --card-shadow: none; --card-drop: none;
+  --seg-on: #2a302d; --seg-shadow: none;
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, .05) 100%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .08), inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 12px 32px rgba(0, 0, 0, .5);
+  --glass-sheen: rgba(255, 255, 255, .14);
+  --lens: linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, .1) 100%);
+  --lens-edge: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(0, 0, 0, .2), 0 2px 10px rgba(0, 0, 0, .35);
+  --nav-text: #c3c9c4;
+  --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); }
 body { -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.4; }
@@ -1570,33 +1600,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    ===================================================================== */
 .hero-nums, .rec-card, .ride-list { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  /* tokens: lighter paper, near-black dark, soft card shadows, glass */
-  html:not([data-theme="dark"]):has(#home.active) {
-    --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa;
-    --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
-    --card-drop: drop-shadow(0 6px 16px rgba(22, 24, 27, .07));
-    --seg-on: #ffffff; --seg-shadow: 0 1px 2px rgba(22, 24, 27, .08), 0 2px 8px rgba(22, 24, 27, .08);
-    --glass: linear-gradient(180deg, rgba(255, 255, 255, .52) 0%, rgba(255, 255, 255, .26) 100%);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 12px 32px rgba(22, 24, 27, .14), 0 1px 3px rgba(22, 24, 27, .1);
-    --glass-sheen: rgba(255, 255, 255, .6);
-    --lens: linear-gradient(180deg, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .55) 100%);
-    --lens-edge: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(22, 24, 27, .05), 0 2px 10px rgba(22, 24, 27, .12);
-    --nav-text: #3c4247;
-    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
-  }
-  html[data-theme="dark"]:has(#home.active) {
-    --paper: #050606; --sheet: #111413; --sheet2: #1b1f1d; --rule: #202523; --hi: #1f2422; --underlay: #1c201e; --today-end: #111413;
-    --card-shadow: none; --card-drop: none;
-    --seg-on: #2a302d; --seg-shadow: none;
-    --glass: linear-gradient(180deg, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, .05) 100%);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .08), inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 12px 32px rgba(0, 0, 0, .5);
-    --glass-sheen: rgba(255, 255, 255, .14);
-    --lens: linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, .1) 100%);
-    --lens-edge: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(0, 0, 0, .2), 0 2px 10px rgba(0, 0, 0, .35);
-    --nav-text: #c3c9c4;
-    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
-  }
-
   /* numbers on the home screens: halfway between the ride screen's heavy condensed voice and a wide semibold
      (Nov 12, 11:18 pm, Agustín picked 80% / 720 from a side-by-side of 100/620, 80/720 and 68/800) */
   #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rl-s .v, .rc-v) {
@@ -1777,9 +1780,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    Phone only, and only while the home screen is up (`html:has(#home.active)`): Connections, Settings, Controls and Gearing
    also open from the ride pause screen, which keeps the ride look. Builder and Log are not restyled here. */
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  html:not([data-theme="dark"]):has(#home.active) { --track: #e2e6e1; }
-  html[data-theme="dark"]:has(#home.active) { --track: #111413; }
-
   /* panels: paper ground, content on round sheets, no hairlines */
   html:has(#home.active) :is(#settings, #controls, #garage).panel { background: var(--paper); border-left: none; }
   html:has(#home.active) :is(#settings, #controls, #garage) .panel-head h3 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
@@ -1873,23 +1873,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
    ===================================================================== */
 @media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  html:not([data-theme="dark"]):has(#home.active) {
-    --paper: #eceeeb; --sheet: #fbfcfa; --sheet2: #eef1ed; --rule: #dfe3de; --hi: #ffffff; --today-end: #fbfcfa;
-    --card-shadow: 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
-    --card-drop: drop-shadow(0 6px 16px rgba(22, 24, 27, .07));
-    --seg-on: #ffffff; --seg-shadow: 0 1px 2px rgba(22, 24, 27, .08), 0 2px 8px rgba(22, 24, 27, .08);
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(255, 255, 255, .45), inset 0 0 0 .5px rgba(255, 255, 255, .6), 0 12px 32px rgba(22, 24, 27, .14), 0 1px 3px rgba(22, 24, 27, .1);
-    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 1px 2px rgba(22, 24, 27, .04), 0 10px 30px rgba(22, 24, 27, .06);
-  }
-  html[data-theme="dark"]:has(#home.active) {
-    --paper: #050606; --sheet: #111413; --sheet2: #1b1f1d; --rule: #202523; --hi: #1f2422; --underlay: #1c201e; --today-end: #111413;
-    --card-shadow: none; --card-drop: none; --seg-on: #2a302d; --seg-shadow: none;
-    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .08), inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 12px 32px rgba(0, 0, 0, .5);
-    --hero-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
-  }
-  html:not([data-theme="dark"]):has(#home.active) { --track: #e2e6e1; }
-  html[data-theme="dark"]:has(#home.active) { --track: #111413; }
-
   #home :is(.stat .v, .hs .v, .cal-num, .wo-meta .n, .d-meta .n, .hero-nums .v, .rc-v, #ride-table td) {
     font-family: var(--num); font-stretch: 80%; font-weight: 720; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
   }
