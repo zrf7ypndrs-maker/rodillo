@@ -81,18 +81,19 @@ const GH = { 'index.json': { rides: [VO2, ...OLDER] }, 'whoop/daily.json': { day
 
 // before any page script: theme, sign-in, the cached copies of rodillo-data (so the first draw has them), and a
 // seeded Math.random (mulberry32) so the demo trainer's noise and the launch puffs are the same every run
-function seed([theme, gh]) {
+function seed([theme, gh, signedOut]) {
   let a = 0x5eed;
   Math.random = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   if (sessionStorage.getItem('visual.seeded')) return; // once per context: the app's own writes stand after that
   sessionStorage.setItem('visual.seeded', '1');
   localStorage.setItem('rodillo.theme', JSON.stringify(theme));
+  if (signedOut) return;
   localStorage.setItem('rodillo.sync', JSON.stringify({ token: 'visual-token' }));
   localStorage.setItem('rodillo.remoteIndex', JSON.stringify(gh['index.json'].rides));
   localStorage.setItem('rodillo.whoop', JSON.stringify(gh['whoop/daily.json'].days));
 }
 
-async function context(look, { index = GH['index.json'].rides, clock = 'fixed', at = NOW } = {}) {
+async function context(look, { index = GH['index.json'].rides, clock = 'fixed', at = NOW, signedOut = false } = {}) {
   const phone = look.w === 390;
   const ctx = await browser.newContext({ viewport: { width: look.w, height: phone ? 844 : 800 }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone, timezoneId: 'America/Chicago', locale: 'en-US' });
   const gh = { ...GH, 'index.json': { rides: index } };
@@ -103,7 +104,7 @@ async function context(look, { index = GH['index.json'].rides, clock = 'fixed', 
     return f === undefined ? r.fulfill({ status: 404, body: '' })
       : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sha: 'visual', content: Buffer.from(JSON.stringify(f)).toString('base64') }) });
   });
-  await ctx.addInitScript(seed, [look.theme, gh]);
+  await ctx.addInitScript(seed, [look.theme, gh, signedOut]);
   if (clock === 'paused') await ctx.clock.install({ time: at });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${look.w} ${look.theme}: ${e.message}`));
@@ -119,17 +120,41 @@ const settle = async (page, ms = 700) => {
 };
 const errors = [];
 let shots = 0;
-const SETTLE = +(process.env.VISUAL_SETTLE || 1500); // ms after the last action: panels that slid in need their layer settled
-fs.rmSync(outDir, { recursive: true, force: true });
+const SETTLE = +(process.env.VISUAL_SETTLE || 700); // ms after the last action: panels that slid in need their layer settled
 fs.mkdirSync(outDir, { recursive: true });
-async function shot(page, name, look, { full = false } = {}) {
+for (const f of fs.readdirSync(outDir)) if (!only.length || only.some((o) => f.split('--')[0].includes(o))) fs.rmSync(path.join(outDir, f)); // .png and .styles.json // --only replaces just those scenes
+async function shot(page, name, look, { full = false, hover = false } = {}) {
   if (only.length && !only.some((o) => name.includes(o))) return;
-  if (!look.phone) await page.mouse.move(1, 1); // nothing under the pointer: no hover states
+  if (!look.phone && !hover) await page.mouse.move(1, 1); // nothing under the pointer: no hover states
   await settle(page, SETTLE);
   await page.screenshot({ path: path.join(outDir, `${name}--${look.w}-${look.theme}.png`), fullPage: full, animations: 'disabled', caret: 'hide' });
+  await styles(page, `${name}--${look.w}-${look.theme}`);
   shots++;
 }
-const want = (...names) => !only.length || names.some((n) => only.some((o) => n.includes(o)));
+/** Computed-style fingerprint of every element (and its ::before / ::after when they have content), in document order:
+ *  catches what a screenshot can't see (below a panel's fold, hidden states, a property that happens to draw the same).
+ *  Elements with a running animation are marked "anim" (their values move). VISUAL_STYLES_FULL=1 keeps the full text. */
+async function styles(page, file) {
+  const full = !!process.env.VISUAL_STYLES_FULL;
+  const dump = await page.evaluate((keep) => {
+    const hash = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+    const text = (cs) => { let s = ''; for (let k = 0; k < cs.length; k++) s += `${cs[k]}:${cs.getPropertyValue(cs[k])};`; return s; };
+    // inside an <svg> (chart bars, gradients: half the elements) only what CSS here sets on SVG shapes
+    const SVG = ['display', 'visibility', 'opacity', 'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin',
+      'transform', 'transform-origin', 'filter', 'color', 'font-family', 'font-size', 'font-weight', 'font-stretch', 'stop-color', 'stop-opacity', 'vector-effect', 'pointer-events', 'cursor', 'animation-name'];
+    const svgText = (cs) => SVG.map((k) => cs.getPropertyValue(k)).join(';');
+    return [...document.querySelectorAll('body *')].map((el, i) => {
+      const id = `${i} ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : ''}`;
+      if (el.getAnimations().some((a) => a.playState === 'running')) return [id, 'anim', 0];
+      if (el.ownerSVGElement) return [id, keep ? svgText(getComputedStyle(el)) : hash(svgText(getComputedStyle(el))), el.getClientRects().length ? 1 : 0];
+      let s = text(getComputedStyle(el));
+      for (const p of ['::before', '::after']) { const c = getComputedStyle(el, p); if (c.content !== 'none' && c.content !== 'normal') s += p + text(c); }
+      return [id, keep ? s : hash(s), el.getClientRects().length ? 1 : 0];
+    });
+  }, full);
+  fs.writeFileSync(path.join(outDir, `${file}.styles.json`), JSON.stringify(dump));
+}
+const want = (...names) => !only.length || names.some((n) => only.some((o) => n.includes(o) || o.startsWith(n))); // a scene group runs when --only names it or one of its scenes
 const tab = async (page, t) => { await page.click(`#tabs button[data-tab="${t}"]`); await settle(page, 400); };
 const rowOf = (page, list, name) => page.$$eval(`${list} .wo`, (rows, n) => rows.find((r) => r.querySelector('.wo-name').childNodes[0].textContent.trim() === n)?.dataset.i, name);
 
@@ -163,6 +188,17 @@ async function homeScenes(look) {
     await page.click('#rd [data-rd="back"]');
   }
   await tab(page, 'today');
+  if (!look.phone && want('hover-')) { // hover states (desktop only): a Next days card, the hero's Free ride, a library row, a calendar day
+    const hov = async (sel, n) => { await page.$eval(sel, (el) => el.scrollIntoView({ block: 'center' })); await page.hover(sel); await shot(page, n, look, { hover: true }); };
+    await hov('#week-strip .day:nth-child(3)', 'hover-day');
+    await hov('#btn-free', 'hover-hero-free');
+    await tab(page, 'workouts');
+    await hov(`#workout-list .wo[data-i="${ss}"] .wo-name`, 'hover-wo');
+    await tab(page, 'calendar');
+    await hov('.cal-cell:nth-child(12)', 'hover-cal-cell');
+    await tab(page, 'today');
+    await page.evaluate(() => window.scrollTo(0, 0));
+  }
 
   // panels, from the top bar on Today
   if (want('panel-settings')) {
@@ -172,6 +208,7 @@ async function homeScenes(look) {
       await shot(page, `panel-settings-${t}`, look);
     }
     await page.click('#set-tabs [data-stab="rider"]');
+    if (want('focus-settings')) { await page.focus('#settings-form input'); await shot(page, 'focus-settings-input', look); await page.evaluate(() => document.activeElement.blur()); }
     await page.click('#settings [data-close]');
   }
   if (want('panel-garage')) {
@@ -215,10 +252,17 @@ async function homeScenes(look) {
 
 // Today on the day after a ride (done hero) and on a coach rest day
 async function todayStates(look) {
-  if (!want('home-today-done', 'home-today-rest', 'home-today-free')) return;
+  if (!want('home-today-done', 'home-today-rest', 'home-today-free', 'home-signedout')) return;
   for (const [name, at, index] of [['home-today-done', DAY_AT.done, [VO2, ...OLDER]], ['home-today-rest', DAY_AT.rest, [VO2, ...OLDER]], ['home-today-free', NOW, [FREE, VO2, ...OLDER]]]) {
     const { ctx, page } = await context(look, { at, index });
     await shot(page, name, look, { full: true });
+    await ctx.close();
+  }
+  if (want('home-signedout')) { // public plan, no history: the locked Training tab, no Mine
+    const { ctx, page } = await context(look, { signedOut: true });
+    await shot(page, 'home-signedout-today', look, { full: true });
+    await tab(page, 'training');
+    await shot(page, 'home-signedout-training', look, { full: true });
     await ctx.close();
   }
 }
@@ -242,11 +286,26 @@ async function rideScenes(look) {
     await run(secs * 1000);
     return { ctx, page, run };
   };
-  const shotRide = async (page, run, n) => { await run(500); await page.mouse.move(1, 1).catch(() => {}); await page.screenshot({ path: path.join(outDir, `${n}--${look.w}-${look.theme}.png`), animations: 'disabled', caret: 'hide' }); shots++; };
+  const shotRide = async (page, run, n) => { await run(500); if (only.length && !only.some((o) => n.includes(o))) return; await page.mouse.move(1, 1).catch(() => {}); await page.screenshot({ path: path.join(outDir, `${n}--${look.w}-${look.theme}.png`), animations: 'disabled', caret: 'hide' }); await styles(page, `${n}--${look.w}-${look.theme}`); shots++; };
   if (want('ride-erg', 'ride-paused')) {
     const { ctx, page, run } = await ride('erg', 'Sweet spot 3 x 12', 400);
-    if (want('ride-erg')) await shotRide(page, run, 'ride-erg');
-    if (want('ride-paused')) { await page.keyboard.press(' '); await run(1500); await shotRide(page, run, 'ride-paused'); }
+    await shotRide(page, run, 'ride-erg'); // always run its tick: the pause screens are timed after it
+    if (want('ride-paused')) {
+      await page.keyboard.press(' '); await run(1500); await shotRide(page, run, 'ride-paused');
+      // the pause screen's panels keep the ride look (the premium look is home only)
+      const open = async (btn, n, close) => { await page.click(btn); await run(800); await shotRide(page, run, n); if (close) { await page.click(close); await run(800); } };
+      await open('#pz-devices', 'ride-paused-connections');
+      await open('#btn-log', 'ride-paused-log', '#log [data-close]');
+      if (await page.isVisible('#devpop')) { await page.click('#devpop-close'); await run(800); }
+      await open('#pz-controls', 'ride-paused-controls', '#controls [data-close]');
+      await open('#pz-bike', 'ride-paused-garage-bikes');
+      await page.click('#gar-tabs [data-gtab="gearing"]'); await run(800);
+      await shotRide(page, run, 'ride-paused-garage-gearing');
+      await page.click('#gar-tabs [data-gtab="bikes"]'); await page.click('#garage [data-close]'); await run(800);
+      await open('#pz-settings', 'ride-paused-settings-rider');
+      for (const t of ['trainer', 'sync']) { await page.click(`#set-tabs [data-stab="${t}"]`); await run(800); await shotRide(page, run, `ride-paused-settings-${t}`); }
+      await page.click('#set-tabs [data-stab="rider"]'); await page.click('#settings [data-close]'); await run(800);
+    }
     await ctx.close();
   }
   if (want('ride-slope')) {
@@ -277,7 +336,7 @@ try {
 async function compare() {
   if (!fs.existsSync(baseDir)) { console.log('no .visual/baseline yet: run npm run visual -- --baseline on the commit to compare against'); return; }
   fs.rmSync(diffDir, { recursive: true, force: true });
-  const cur = fs.readdirSync(outDir).filter((f) => f.endsWith('.png')).sort();
+  const cur = fs.readdirSync(outDir).filter((f) => f.endsWith('.png') && (!only.length || only.some((o) => f.split('--')[0].includes(o)))).sort();
   const old = fs.readdirSync(baseDir).filter((f) => f.endsWith('.png') && (!only.length || only.some((o) => f.split('--')[0].includes(o))));
   const missing = old.filter((f) => !cur.includes(f)), added = cur.filter((f) => !old.includes(f));
   const page = await browser.newPage();
@@ -304,6 +363,16 @@ async function compare() {
     if (!r.n && !r.size) continue;
     bad.push(`${f}: ${r.size || `${r.n} pixels differ (largest channel difference ${r.max})`}`);
     if (r.png) { fs.mkdirSync(diffDir, { recursive: true }); fs.writeFileSync(path.join(diffDir, f), Buffer.from(r.png, 'base64')); }
+  }
+  for (const f of cur.filter((x) => old.includes(x))) {
+    const sf = f.replace(/\.png$/, '.styles.json');
+    if (!fs.existsSync(path.join(baseDir, sf)) || !fs.existsSync(path.join(outDir, sf))) continue;
+    const [a, b] = [baseDir, outDir].map((d) => JSON.parse(fs.readFileSync(path.join(d, sf), 'utf8')));
+    if (a.length !== b.length || a.some((r, i) => r[0] !== b[i][0])) { bad.push(`${sf}: the DOM differs (${a.length} -> ${b.length} elements)`); continue; }
+    const diff = a.filter((r, i) => r[1] !== 'anim' && b[i][1] !== 'anim' && r[1] !== b[i][1]);
+    if (!diff.length) continue;
+    const shown = diff.filter((r) => r[2]), hidden = diff.filter((r) => !r[2]);
+    bad.push(`${sf}: computed style differs on ${shown.length} rendered, ${hidden.length} unrendered elements: ${[...shown, ...hidden].slice(0, 6).map((r) => r[0].replace(/^\d+ /, '')).join(', ')}`);
   }
   for (const f of missing) bad.push(`${f}: in the baseline, not captured now`);
   for (const f of added) bad.push(`${f}: captured now, not in the baseline`);
