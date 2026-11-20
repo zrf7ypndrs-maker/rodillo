@@ -1437,7 +1437,7 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   body { -webkit-tap-highlight-color: transparent; }
 
   /* ---------- home ---------- */
-  #home { padding: calc(12px + env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom)); }
+  #home { padding: calc(12px + env(safe-area-inset-top)) 14px calc(96px + env(safe-area-inset-bottom)); } /* room for the nav pill */
   .topbar { margin-bottom: 14px; }
   .brand { font-size: 21px; }
   .top-actions { gap: 0; }
@@ -1458,6 +1458,20 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   @media (max-width: 340px) { .brand { font-size: 0; gap: 0; } }
   .tabs { margin: 0 -14px 12px; padding: 0 14px; gap: 18px; }
   .tabs button { white-space: nowrap; font-size: 15px; }
+  /* the main nav floats at the bottom as a liquid glass pill, always visible on the home screens; the sliding ink
+     (::after) becomes a brighter glass lens behind the active section */
+  .topbar .topnav { position: fixed; z-index: 30; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    margin: 0; gap: 0; padding: 5px; border-radius: 999px; border: none; background: var(--glass); box-shadow: var(--glass-edge);
+    -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
+  .topbar .topnav::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .7;
+    background: radial-gradient(70% 120% at 18% -30%, var(--glass-sheen) 0%, transparent 55%), radial-gradient(60% 90% at 90% 140%, var(--glass-sheen) 0%, transparent 60%); }
+  .topnav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px;
+    padding: 7px 10px 6px; font-size: 11.5px; font-weight: 650; color: var(--nav-text); border-radius: 999px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .topnav button.active { color: var(--ink); }
+  .topnav svg { display: block; width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; background: var(--lens); box-shadow: var(--lens-edge); }
+  .topnav button:hover { color: var(--nav-text); }
+  .topnav button.active:hover { color: var(--ink); }
   .wo { grid-template-columns: minmax(0, 1fr) 104px; grid-template-areas: "name prof" "meta prof" "more more"; padding: 11px 16px 11px 18px; row-gap: 3px; column-gap: 12px; }
   .wo-name { font-size: 15px; }
   .wo-meta { font-size: 12.5px; text-align: left; }
@@ -1676,6 +1690,39 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .callout { flex-direction: column; align-items: stretch; }
   table.ints { font-size: 12.5px; }
 
+  /* workout builder: each step is two rows (type, rpm, buttons / length, target) */
+  .mine-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .panel.builder { width: 100vw; padding-bottom: 0; }
+  .b-tl { height: 120px; }
+  .b-pal-hint { display: none; }
+  .b-tile { padding: 8px 11px 8px 8px; font-size: 14px; }
+  .tl-hy { height: 26px; }
+  .tl-hy[data-h="from"], .tl-hy[data-h="to"] { width: 30px; }
+  .tl-hx { right: -11px; width: 22px; }
+  .tl-hx::after { left: 9px; }
+  .b-step, .b-rep { padding: 8px 6px 8px 8px; }
+  html:has(#home.active) :is(.b-step, .b-rep) { border-radius: 18px; }
+  .b-line1 { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; grid-template-areas: "sw type cad acts" "sw len tgt tgt"; gap: 8px; align-items: center; }
+  .b-sw { grid-area: sw; height: auto; align-self: stretch; }
+  .b-type { grid-area: type; width: 100%; }
+  .b-cad { grid-area: cad; width: 64px; }
+  .b-acts { grid-area: acts; margin-left: 0; }
+  .b-len { grid-area: len; }
+  .b-tgt { grid-area: tgt; flex-wrap: wrap; row-gap: 2px; }
+  .b-in, .b-desc, .b-name { font-size: 16px; } /* under 16px iOS zooms the page on focus */
+  .b-n, .b-dur { font-size: 17px; }
+  .b-n { width: 52px; }
+  .b-dur { width: 66px; }
+  .b-unit { width: 50px; }
+  .b-ico { padding: 6px; }
+  .b-line2 { grid-template-columns: 1fr 1fr; margin-left: 14px; }
+  .b-line2 .b-in { font-size: 16px; padding: 4px 2px; }
+  .brep-head { flex-wrap: wrap; row-gap: 6px; }
+  .brep-head .b-acts { margin-left: auto; }
+  .brep-body { margin-left: 2px; padding-left: 6px; }
+  .b-foot { margin: auto -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+  .b-foot button { padding: 9px 14px; }
+
   /* ---------- ride: hide the desktop layout, show .rp ---------- */
   #ride { padding: 0; height: 100dvh; }
   #ride > :not(.rp):not(.toast):not(.paused-overlay):not(.hold) { display: none !important; }
@@ -1799,57 +1846,4 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rp-btns { grid-area: btns; }
   .rp-btns button { padding: 9px 8px; }
   .rp-m.bad { animation: none; }
-}
-
-/* workout builder on the phone: each step is two rows (type, rpm, buttons / length, target); desktop untouched */
-@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  .mine-head { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .panel.builder { width: 100vw; padding-bottom: 0; }
-  .b-tl { height: 120px; }
-  .b-pal-hint { display: none; }
-  .b-tile { padding: 8px 11px 8px 8px; font-size: 14px; }
-  .tl-hy { height: 26px; }
-  .tl-hy[data-h="from"], .tl-hy[data-h="to"] { width: 30px; }
-  .tl-hx { right: -11px; width: 22px; }
-  .tl-hx::after { left: 9px; }
-  .b-step, .b-rep { padding: 8px 6px 8px 8px; }
-  html:has(#home.active) :is(.b-step, .b-rep) { border-radius: 18px; }
-  .b-line1 { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto auto; grid-template-areas: "sw type cad acts" "sw len tgt tgt"; gap: 8px; align-items: center; }
-  .b-sw { grid-area: sw; height: auto; align-self: stretch; }
-  .b-type { grid-area: type; width: 100%; }
-  .b-cad { grid-area: cad; width: 64px; }
-  .b-acts { grid-area: acts; margin-left: 0; }
-  .b-len { grid-area: len; }
-  .b-tgt { grid-area: tgt; flex-wrap: wrap; row-gap: 2px; }
-  .b-in, .b-desc, .b-name { font-size: 16px; } /* under 16px iOS zooms the page on focus */
-  .b-n, .b-dur { font-size: 17px; }
-  .b-n { width: 52px; }
-  .b-dur { width: 66px; }
-  .b-unit { width: 50px; }
-  .b-ico { padding: 6px; }
-  .b-line2 { grid-template-columns: 1fr 1fr; margin-left: 14px; }
-  .b-line2 .b-in { font-size: 16px; padding: 4px 2px; }
-  .brep-head { flex-wrap: wrap; row-gap: 6px; }
-  .brep-head .b-acts { margin-left: auto; }
-  .brep-body { margin-left: 2px; padding-left: 6px; }
-  .b-foot { margin: auto -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
-  .b-foot button { padding: 9px 14px; }
-}
-
-/* phone: the main nav floats at the bottom as a liquid glass pill, always visible on the home screens.
-   The sliding ink (::after) becomes a brighter glass lens behind the active section. */
-@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-  #home { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-  .topbar .topnav { position: fixed; z-index: 30; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    margin: 0; gap: 0; padding: 5px; border-radius: 999px; border: none; background: var(--glass); box-shadow: var(--glass-edge);
-    -webkit-backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); backdrop-filter: blur(14px) saturate(1.9) brightness(1.04); }
-  .topbar .topnav::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .7;
-    background: radial-gradient(70% 120% at 18% -30%, var(--glass-sheen) 0%, transparent 55%), radial-gradient(60% 90% at 90% 140%, var(--glass-sheen) 0%, transparent 60%); }
-  .topnav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px;
-    padding: 7px 10px 6px; font-size: 11.5px; font-weight: 650; color: var(--nav-text); border-radius: 999px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  .topnav button.active { color: var(--ink); }
-  .topnav svg { display: block; width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .topbar .topnav::after { top: 5px; bottom: 5px; left: 0; height: auto; border-radius: 999px; z-index: 0; background: var(--lens); box-shadow: var(--lens-edge); }
-  .topnav button:hover { color: var(--nav-text); }
-  .topnav button.active:hover { color: var(--ink); }
 }
