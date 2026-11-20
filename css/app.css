@@ -328,16 +328,48 @@ button.danger:hover { border-color: var(--bad); }
 .tag.warn { color: var(--warn); border-color: var(--warn-line); }
 .import-row { margin-top: 14px; display: flex; gap: 12px; align-items: center; font-size: 13.5px; }
 
-/* rider overview: one slim row under the hero, split by rules */
-.overview { margin: 0 0 24px; }
-.overview > .stat { position: relative; padding: 9px 16px 10px; }
-.overview .stat .v { font-size: 30px; }
-.overview .stat .v .of { font-size: 18px; color: var(--muted); font-weight: 750; }
-.overview .stat .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
-.overview .stat .l b { color: var(--ink); font-weight: 650; }
-.overview .stat .sub { font-size: inherit; margin: 0; }
-.overview .stat .sub::before { content: " \00b7  "; }
+/* rider overview (Agustín, Nov 13): one card of four tiles under the hero, each a label on top, the number, one small
+   visual (recovery bar, week dots, form scale, FTP trend) and a line under it; markup: overviewHtml() in js/today.js.
+   The phone shows the recovery as a card with a ring above three tiles (phone block). */
+.overview.stats { gap: 0; background: var(--sheet); border: none; border-radius: 16px; margin: 16px 0 28px; box-shadow: var(--card-shadow); }
 .overview:empty { display: none; }
+.rec-card { display: none; } /* phone only (phone block) */
+.overview > .stat { position: relative; }
+.overview.stats > .stat.ov2 { border: none; display: flex; flex-direction: column; gap: 6px; padding: 16px 20px 16px; }
+.overview.stats > .stat:nth-child(n + 2) { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--rule) 70%, transparent); }
+.overview .info { top: 12px; right: 12px; }
+.ov2 .ol { font-size: 13px; font-weight: 600; color: var(--muted); }
+.overview .ov2 .v { font-size: 34px; line-height: 1; }
+.overview .ov2 .v .of { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.ov2 .v .of b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); font-size: 17px; }
+.ov2 .os { font-size: 12.5px; color: var(--muted); }
+.ov2 .os b { font-family: var(--num); font-stretch: 80%; font-weight: 720; font-size: 14px; color: var(--ink); }
+.ov2 .os b.up { color: var(--good); }
+.ov2 .none { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 22px; font-weight: 600; color: var(--muted); }
+.ov-bar { height: 6px; border-radius: 3px; background: var(--sheet2); overflow: hidden; margin-top: 4px; }
+.ov-bar i { display: block; height: 100%; border-radius: 3px; background: var(--good); }
+.ov-bar.yellow i { background: var(--warn); }
+.ov-bar.red i { background: var(--bad); }
+/* this week, Monday to Sunday: a ring in the planned workout's color, filled once ridden; strength / rest = a small dot */
+.ov-week { display: flex; justify-content: space-between; margin-top: 2px; max-width: 220px; }
+.wd { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.wd i { width: 12px; height: 12px; border-radius: 50%; }
+.wd.plan i { border: 2px solid var(--c); }
+.wd.done i { background: var(--c); }
+.wd.off i { width: 5px; height: 5px; margin: 3.5px 0; background: var(--faint); }
+.wd em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.wd.today em { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+.ov-form { position: relative; height: 6px; border-radius: 3px; background: var(--sheet2); margin: 7px 0 4px; }
+.ov-form .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.ov-form .zero { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--muted); }
+.ov-form .mk { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--sheet); }
+.ov-form .mk.fit { background: var(--fitness); }
+.ov-form .mk.fat { background: var(--fatigue); }
+.ov-ftp { position: relative; height: 24px; margin-top: 6px; }
+.ov-ftp svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.ov-ftp path { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.ov-ftp path.ar { fill: color-mix(in srgb, var(--ink) 7%, transparent); stroke: none; }
+.ov-ftp i { position: absolute; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--ink); transform: translateY(-50%); box-shadow: 0 0 0 2px var(--sheet); }
 /* Free ride bicycle (inline SVG in BIKE_ICO, currentColor so it follows both themes).
    Hover / controller focus: the bike tilts back onto its rear wheel and the crank spins.
    The spin is paused rather than removed on leave, so the crank stops where it is instead of snapping back. */
@@ -1374,19 +1406,50 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .hero.done .hero-prof { display: none; }
   .hero.done .hero-btns { flex: none; }
   .hero.done .hero-btns button { flex: 1 1 0; height: 48px; padding: 0 12px; }
-  /* overview: one row of four, value over a short label */
-  .overview { margin-bottom: 18px; }
-  .overview.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .overview.stats > .stat:nth-child(n) { border-left: 1px solid var(--rule); border-top: none; padding: 8px 8px 8px 10px; }
-  .overview.stats > .stat:nth-child(1) { border-left: none; }
-  .overview .wide-only { display: none; }
-  .overview .stat .v { font-size: 23px; }
-  .overview .stat .v .of { font-size: 14px; }
-  .overview .stat .l { font-size: 12.5px; padding-right: 0; }
-  .overview .stat .sub { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
-  .overview .stat .sub::before { content: none; }
-  .overview .info { top: 6px; right: 6px; }
+  /* overview: the recovery card with a ring on top, then This week / Form / FTP as one card (one shadow for the joined
+     tiles, no seams); the tiles are the desktop's, smaller, and the week has no day letters (too crowded, Agustín) */
+  .overview.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); background: transparent; border-radius: 0; margin: 22px 0 18px; box-shadow: none; filter: var(--card-drop); }
+  .overview > .rec-card { order: -1; grid-column: 1 / -1; margin-bottom: 12px; }
+  .overview.stats > .stat.rec-tile { display: none; } /* beats the tiles' display: flex */
+  .overview.stats > .stat:not(.rec-tile):nth-child(n) { background: var(--sheet); padding: 14px 12px 14px 14px; gap: 5px; box-shadow: none; }
+  .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; }
+  .overview.stats > .stat:nth-child(4) { border-radius: 0 24px 24px 0; }
+  .ov2 .ol { font-size: 12.5px; }
+  .overview .ov2 .v { font-size: 25px; white-space: nowrap; }
+  .overview .ov2 .v .of { font-size: 14px; }
+  .ov2 .os { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .overview .info { right: 8px; }
   .overview > .stat:nth-child(n+3) .tip { left: auto; right: -8px; }
+  .ov-week { align-items: flex-start; margin-top: 6px; padding-right: 4px; max-width: none; }
+  .wd { gap: 4px; width: 10px; }
+  .wd i { width: 10px; height: 10px; }
+  .wd.off i { width: 4px; height: 4px; margin: 3px 0; }
+  .wd em { display: none; }
+  .wd.today::after { content: ""; width: 10px; height: 2px; border-radius: 1px; background: var(--ink); } /* today: a short ink tick */
+  .ov-form { height: 5px; margin: 8px 0 5px; }
+  .ov-form .mk { width: 11px; height: 11px; }
+  .ov-ftp { height: 20px; margin-top: 4px; margin-right: 4px; }
+  .ov-ftp i { right: -4px; width: 8px; height: 8px; }
+  .rec-card { display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: var(--sheet); border-radius: 24px; }
+  .rc-ring { position: relative; width: 64px; height: 64px; flex: none; }
+  .rec-ring { width: 64px; height: 64px; transform: rotate(-90deg); overflow: visible; display: block; }
+  .rec-ring circle { fill: none; stroke-width: 5; }
+  .rec-ring .trk { stroke: color-mix(in srgb, var(--ink) 8%, transparent); }
+  /* no glow on the ring (Agustín, Nov 13: phone glow only on the hero and the calendar day detail) */
+  .rec-ring .arc { stroke: var(--good); stroke-linecap: round; }
+  .rec-ring.yellow .arc { stroke: var(--warn); }
+  .rec-ring.red .arc { stroke: var(--bad); }
+  .rc-v { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 21px; }
+  .rc-v small { font-size: 11px; font-weight: 500; color: var(--muted); margin: 3px 0 0 1px; }
+  .rc-v .none { font-family: Archivo, system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+  .rc-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .rc-l, .rc-sub { font-size: 12.5px; color: var(--muted); }
+  .rc-sub:empty { display: none; }
+  .rc-call { display: flex; flex-direction: column; gap: 8px; font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+  .rc-call .rdot { display: none; }
+  .rc-call .coach-call { margin: 0; font-weight: 500; }
+  .rc-call .row-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+
   .seg-tg { display: flex; }
   .seg-tg button { flex: 1; }
   .import-row { flex-wrap: wrap; }
@@ -1623,7 +1686,7 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    PREMIUM LOOK, phone home screens only (Nov 12, Agustín; mocks: project doc claude/rodillo-premium-look.md).
    Desktop never sees any of this: the phone-only markup (.rec-card, .ride-list) is hidden outside the phone query.
    ===================================================================== */
-.rec-card, .ride-list { display: none; }
+.ride-list { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
   /* liquid glass nav pill; the active section is a brighter glass lens */
   .topbar .topnav { border: none; background: var(--glass); box-shadow: var(--glass-edge);
@@ -1634,63 +1697,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   .topnav button { color: var(--nav-text); }
   .topnav button:hover { color: var(--nav-text); }
   .topnav button.active, .topnav button.active:hover { color: var(--ink); }
-
-  /* overview: recovery card with a ring, then This week / Form / FTP as one card */
-  .overview.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: transparent; border: none; border-radius: 0; margin-bottom: 18px; filter: var(--card-drop); } /* one shadow for the joined tiles, no seams */
-  .overview > .rec-card { order: -1; grid-column: 1 / -1; margin-bottom: 12px; }
-  .overview > .stat.rec-tile { display: none; }
-  /* the desktop tile, smaller (Agustín, Nov 13): label on top, number, one small visual, all left-aligned */
-  .overview.stats > .stat:not(.rec-tile):nth-child(n) { border: none; background: var(--sheet); padding: 14px 12px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
-  .ov2 .ol { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-  .overview .ov2 .v { font-size: 25px; line-height: 1; white-space: nowrap; }
-  .overview .ov2 .v .of { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  .ov2 .os { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* week: just the seven dots, no day letters (too crowded at this width, Agustín); today = a short ink tick under its dot */
-  .ov-week { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 6px; padding-right: 4px; }
-  .wd { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 10px; }
-  .wd i { width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
-  .wd.plan i { border: 2px solid var(--c); }
-  .wd.done i { background: var(--c); }
-  .wd.off i { width: 4px; height: 4px; margin: 3px 0; background: var(--faint); }
-  .wd em { display: none; }
-  .wd.today::after { content: ""; width: 10px; height: 2px; border-radius: 1px; background: var(--ink); }
-  .ov-form { position: relative; height: 5px; border-radius: 3px; background: var(--sheet2); margin: 8px 0 5px; }
-  .ov-form .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 10%, transparent); }
-  .ov-form .zero { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--muted); }
-  .ov-form .mk { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--sheet); }
-  .ov-form .mk.fit { background: var(--fitness); }
-  .ov-form .mk.fat { background: var(--fatigue); }
-  .ov-ftp { position: relative; height: 20px; margin-top: 4px; margin-right: 4px; }
-  .ov-ftp svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .ov-ftp path { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
-  .ov-ftp path.ar { fill: color-mix(in srgb, var(--ink) 7%, transparent); stroke: none; }
-  .ov-ftp i { position: absolute; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); transform: translateY(-50%); box-shadow: 0 0 0 2px var(--sheet); }
-  .overview.stats > .stat:nth-child(2) { border-radius: 24px 0 0 24px; }
-  .overview.stats > .stat:nth-child(4) { border-radius: 0 24px 24px 0; }
-  .overview .stat .v { font-size: 25px; }
-  .overview .stat .v .of { font-size: 14px; font-weight: 500; }
-  .overview .stat .l { font-size: 12.5px; margin-top: 3px; }
-  .overview .stat .l b { font-weight: 550; }
-  .overview .info { top: 12px; right: 8px; }
-  .rec-card { display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: var(--sheet); border-radius: 24px; }
-  .rc-ring { position: relative; width: 64px; height: 64px; flex: none; }
-  .rec-ring { width: 64px; height: 64px; transform: rotate(-90deg); overflow: visible; display: block; }
-  .rec-ring circle { fill: none; stroke-width: 5; }
-  .rec-ring .trk { stroke: color-mix(in srgb, var(--ink) 8%, transparent); }
-  /* no glow on the ring (Agustín, Nov 13: phone glow only on the hero and the calendar day detail) */
-  .rec-ring .arc { stroke: var(--good); stroke-linecap: round; }
-  .rec-ring.yellow .arc { stroke: var(--warn); }
-  .rec-ring.red .arc { stroke: var(--bad); }
-  .rc-v { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 21px; }
-  .rc-v small { font-size: 11px; font-weight: 500; color: var(--muted); margin: 3px 0 0 1px; }
-  .rc-v .none { font-family: Archivo, system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--muted); }
-  .rc-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .rc-l, .rc-sub { font-size: 12.5px; color: var(--muted); }
-  .rc-sub:empty { display: none; }
-  .rc-call { display: flex; flex-direction: column; gap: 8px; font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
-  .rc-call .rdot { display: none; }
-  .rc-call .coach-call { margin: 0; font-weight: 500; }
-  .rc-call .row-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 
   /* next days: rounder cards with the zone bar on the left (Agustín, Nov 13: like the calendar chips; was a corner glow) */
   .day { position: relative; border-radius: 20px; box-shadow: var(--card-shadow); padding: 12px 14px 12px 24px; gap: 3px; background: var(--sheet); }
@@ -1869,15 +1875,6 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
    Query = the exact complement of PHONE_MQ, so phone and desktop never touch each other.
    ===================================================================== */
 @media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  /* overview: one slim card of four tiles (recovery stays in the hero line on desktop) */
-  .overview.stats { gap: 0; background: var(--sheet); border: none; border-radius: 16px; margin: 16px 0 28px; box-shadow: var(--card-shadow); }
-  .overview.stats > .stat:nth-child(n) { border: none; padding: 16px 18px 15px; }
-  .overview.stats > .stat:nth-child(n + 2) { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--rule) 70%, transparent); }
-  .overview .stat .v { font-size: 32px; }
-  .overview .stat .v .of { font-size: 17px; font-weight: 500; }
-  .overview .stat .l b { font-weight: 600; }
-  .overview .info { top: 12px; right: 12px; }
-
   /* next days: rounder cards, zone bar on the left (Agustín, like the calendar chips); no bar on strength / rest */
   .day { position: relative; border-radius: 14px; box-shadow: var(--card-shadow); padding: 13px 15px 13px 26px; gap: 3px; min-height: 96px; background: var(--sheet); }
   .day:hover { background: var(--hi); }
@@ -2035,42 +2032,4 @@ body.b-drag-y, body.b-drag-y * { cursor: ns-resize !important; user-select: none
   html:has(#home.active) .b-foot { border-top: none; background: color-mix(in srgb, var(--paper) 86%, transparent);
     -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
   html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent; background: var(--sheet); }
-}
-
-/* Today's four metrics (Agustín, Nov 13): label on top, number, one small visual each (recovery bar, week dots, form scale, FTP trend).
-   Markup from renderOverview()'s desktop branch (.ov2 tiles). */
-@media not (((pointer: coarse) and (max-width: 760px)) or ((pointer: coarse) and (max-height: 520px))) {
-  .overview.stats > .stat.ov2 { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px 16px; }
-  .ov2 .ol { font-size: 13px; font-weight: 600; color: var(--muted); }
-  .overview .ov2 .v { font-size: 34px; line-height: 1; }
-  .overview .ov2 .v .of { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  .ov2 .os { font-size: 12.5px; color: var(--muted); }
-  .ov2 .none { font-family: Archivo, system-ui, sans-serif; font-stretch: 100%; font-size: 22px; font-weight: 600; color: var(--muted); }
-  .ov-bar { height: 6px; border-radius: 3px; background: var(--sheet2); overflow: hidden; margin-top: 4px; }
-  .ov-bar i { display: block; height: 100%; border-radius: 3px; background: var(--good); }
-  .ov-bar.yellow i { background: var(--warn); }
-  .ov-bar.red i { background: var(--bad); }
-  .ov-week { display: flex; gap: 0; justify-content: space-between; margin-top: 2px; max-width: 220px; }
-  .wd { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .wd i { width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; }
-  .wd.plan i { border: 2px solid var(--c); }
-  .wd.done i { background: var(--c); }
-  .wd.off i { width: 5px; height: 5px; margin: 3.5px 0; background: var(--faint); }
-  .wd em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--muted); }
-  .wd.today em { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
-  .ov-form { position: relative; height: 6px; border-radius: 3px; background: var(--sheet2); margin: 7px 0 4px; }
-  .ov-form .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 10%, transparent); }
-  .ov-form .zero { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--muted); }
-  .ov-form .mk { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--sheet); }
-  .ov-form .mk.fit { background: var(--fitness); }
-  .ov-form .mk.fat { background: var(--fatigue); }
-  .ov2 .v .of b { font-family: var(--num); font-stretch: 80%; font-weight: 720; color: var(--ink); font-size: 17px; }
-  .ov2 .os b { font-family: var(--num); font-stretch: 80%; font-weight: 720; font-size: 14px; color: var(--ink); }
-  .ov2 .os b.up { color: var(--good); }
-  .ov-ftp { position: relative; height: 24px; margin-top: 6px; }
-  .ov-ftp svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .ov-ftp path { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
-  .ov-ftp path.ar { fill: color-mix(in srgb, var(--ink) 7%, transparent); stroke: none; }
-  .ov-ftp i { position: absolute; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--ink); transform: translateY(-50%); box-shadow: 0 0 0 2px var(--sheet); }
-
 }
