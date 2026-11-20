@@ -1053,6 +1053,17 @@ async function run(viewport, label) {
   await page.waitForSelector('#today', { state: 'attached' });
   ok(`${label}: app loads`);
 
+  // css/app.css: every media query that splits phone from desktop is PHONE_MQ (js/app.js) or its exact complement,
+  // so no screen gets both looks or neither (pointer: none, a 760.5 px window); this layout gets exactly one of them
+  const phoneQ = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8').match(/PHONE_MQ = matchMedia\('([^']+)'\)/)[1];
+  const deskQ = `not (${phoneQ.split(', ').map((q) => `(${q})`).join(' or ')})`;
+  const queries = [...fs.readFileSync(path.join(root, 'css/app.css'), 'utf8').matchAll(/@media ([^{]+?) \{/g)].map((m) => m[1]).filter((q) => /pointer|761|760/.test(q));
+  const stray = queries.filter((q) => q !== phoneQ && q !== deskQ && !q.startsWith('(pointer: coarse) and (max-height: 520px) and'));
+  if (stray.length) throw new Error(`css: media queries that are neither PHONE_MQ nor its complement: ${stray.join(' | ')}`);
+  const mq = await page.evaluate(([p, d]) => [matchMedia(p).matches, matchMedia(d).matches], [phoneQ, deskQ]);
+  if (mq[0] === mq[1] || mq[0] !== phone) throw new Error(`css (${label}): phone query ${mq[0]}, desktop query ${mq[1]}`);
+  ok(`${label}: phone and desktop CSS queries are exact complements, this layout gets one`);
+
   for (const tab of ['workouts', 'calendar', 'training', 'today']) {
     await page.click(`#tabs button[data-tab="${tab}"]`);
     await page.waitForTimeout(150);
