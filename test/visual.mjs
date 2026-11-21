@@ -3,8 +3,8 @@
 //   npm run visual                 capture into .visual/current and compare with .visual/baseline, pixel for pixel
 //   npm run visual -- --only ride  only scenes whose name contains "ride" (any number of --only)
 // Every home tab (and a few states of them), every panel, the builder, the ride page and the ride screen (ERG, slope,
-// paused), at desktop 1280 and phone 390, light and dark. Fixed clock (Wed Nov 18 2026, 9:00), seeded rides, plan,
-// WHOOP and workouts, seeded Math.random (demo trainer noise), no network, CSS animations and transitions finished
+// paused, a real climb, a free ride; the phone's list view and ··· sheet), at desktop 1280 and phone 390, light and
+// dark. Fixed clock (Wed Nov 18 2026, 9:00), seeded rides, plan, WHOOP and workouts, seeded Math.random (demo trainer noise), no network, CSS animations and transitions finished
 // before each shot (Playwright animations: 'disabled'), caret hidden. Captures run one at a time: real-time animations
 // lag under load. Exit 1 on any differing pixel; diff images (changed pixels red over a faded copy) go to .visual/diff.
 import http from 'node:http';
@@ -286,21 +286,31 @@ async function rideScenes(look) {
     const run = (ms) => page.clock.runFor(ms);
     await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 1000));
     await page.click('#btn-devices'); await page.click('#btn-demo'); await page.keyboard.press('Escape');
-    await page.click('#tabs button[data-tab="workouts"]');
-    await page.click(`#wo-kind button[data-kind="${kind}"]`);
-    const list = kind === 'erg' ? '#workout-list' : '#slope-list';
-    const i = await rowOf(page, list, name);
-    await page.click(`${list} .wo[data-i="${i}"] .wo-name`);
-    await run(800);
-    await page.click(`${list} button[data-start="${i}"]`);
+    // free ride: its launch animation (real time, random dust) skipped with reduced motion, so the ride starts on the same tick
+    if (kind === 'free') { await page.emulateMedia({ reducedMotion: 'reduce' }); await page.click('#btn-free'); await page.emulateMedia({ reducedMotion: 'no-preference' }); }
+    else {
+      await page.click('#tabs button[data-tab="workouts"]');
+      await page.click(`#wo-kind button[data-kind="${kind}"]`);
+      const list = kind === 'erg' ? '#workout-list' : '#slope-list';
+      const i = await rowOf(page, list, name);
+      await page.click(`${list} .wo[data-i="${i}"] .wo-name`);
+      await run(800);
+      await page.click(`${list} button[data-start="${i}"]`);
+    }
     for (let k = 0; k < 60 && !(await page.evaluate(() => document.querySelector('#ride.active') && window.rodillo.session?.started && !window.rodillo.launching)); k++) { await run(250); await page.waitForTimeout(40); }
     await run(secs * 1000);
     return { ctx, page, run };
   };
   const shotRide = async (page, run, n) => { await run(500); if (only.length && !only.some((o) => n.includes(o))) return; await page.mouse.move(1, 1).catch(() => {}); await page.screenshot({ path: path.join(outDir, `${n}--${look.w}-${look.theme}.png`), animations: 'disabled', caret: 'hide' }); await styles(page, `${n}--${look.w}-${look.theme}`); shots++; };
-  if (want('ride-erg', 'ride-paused')) {
+  if (want('ride-erg', 'ride-paused', 'ride-phone')) {
     const { ctx, page, run } = await ride('erg', 'Sweet spot 3 x 12', 400);
     await shotRide(page, run, 'ride-erg'); // always run its tick: the pause screens are timed after it
+    if (look.phone && want('ride-phone')) { // the phone's list view and ··· sheet (timed after ride-erg, before the pause)
+      await page.click('#rp-view-tg button[data-view="list"]'); await shotRide(page, run, 'ride-phone-list');
+      await page.click('#rp-view-tg button[data-view="chart"]');
+      await page.click('#rp-more'); await shotRide(page, run, 'ride-phone-sheet');
+      await page.click('#rp-sheet-close'); await run(500);
+    }
     if (want('ride-paused')) {
       await page.keyboard.press(' '); await run(1500); await shotRide(page, run, 'ride-paused');
       // the pause screen's panels keep the ride look (the premium look is home only)
@@ -322,6 +332,20 @@ async function rideScenes(look) {
   if (want('ride-slope')) {
     const { ctx, page, run } = await ride('slope', 'Climb repeats 4 x 6 min at 6%', 400);
     await shotRide(page, run, 'ride-slope');
+    await ctx.close();
+  }
+  if (want('ride-climb')) { // a real climb: distance steps, the road past the warm-up roll
+    const { ctx, page, run } = await ride('slope', 'El Durazno to the Buitrera (RKF Clásico)', 720);
+    await page.waitForTimeout(1500); // a stretch can start near the shot: let its slide (real time) land
+    await shotRide(page, run, 'ride-climb');
+    await ctx.close();
+  }
+  if (want('ride-free')) {
+    const { ctx, page, run } = await ride('free', '', 0);
+    for (let k = 0; k < 3; k++) { await page.keyboard.press('ArrowUp'); await run(300); }
+    await run(300000);
+    await page.waitForTimeout(1500);
+    await shotRide(page, run, 'ride-free');
     await ctx.close();
   }
 }
