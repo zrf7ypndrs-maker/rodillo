@@ -91,15 +91,79 @@ const rowSel = async (page, list, name) => {
 };
 /** Point at stretch k of an open row's big chart (mouse on desktop, a tap on the phone) and return the readout. */
 async function readout(page, row, k, phone) {
-  await page.$eval(`${row} .wo-prof`, (el) => el.scrollIntoView({ block: 'center' })); // clear of the phone's nav pill
-  const b = await page.locator(`${row} .wo-prof svg [data-i="${k}"]`).boundingBox();
-  if (phone) await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height * 0.75);
-  else await page.mouse.move(b.x + b.width / 2, b.y + b.height * 0.75);
-  await page.waitForFunction((r) => document.querySelector(`${r} .wo-prof.hov`), row, { timeout: 3000 });
-  const tip = await page.$eval(`${row} .prof-tip`, (t) => Object.fromEntries(['lbl', 'tgt', 'time'].map((k) => [k, t.querySelector(`.pt-${k}`).textContent.replace(/\s+/g, ' ').trim()])));
-  const on = await page.$$eval(`${row} .wo-prof svg .on`, (els) => els.map((e) => e.dataset.i));
-  if (on.join() !== String(k)) throw new Error(`library: readout highlights stretches ${on.join()} instead of ${k}`);
-  return tip;
+  const { lbl, tgt, time, on } = await profReadout(page, `${row} .wo-prof`, k, phone);
+  if (on !== String(k)) throw new Error(`library: readout highlights stretches ${on} instead of ${k}`);
+  return { lbl, tgt, time };
+}
+
+// ---- workout profile readouts (bindProfileHover: Today's hero, a Calendar day, an open library row)
+const fmtDistM = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
+const isTrackSegs = (segs) => segs.length > 0 && segs.every((g) => g.kind === 'sim');
+/**
+ * Point at stretch k of a profile chart (`box` = its .prof-hover element; mouse on desktop, a tap on the phone, `top`:
+ * near the top of the chart instead of inside the filled area) and return what shows: the readout's three lines, the
+ * highlighted stretches, and whether the readout sits inside the chart.
+ */
+async function profReadout(page, box, k, phone, { top = false } = {}) {
+  await page.$eval(box, (el) => el.scrollIntoView({ block: 'center' })); // clear of the phone's nav pill
+  const b = await page.locator(`${box} svg [data-i="${k}"]`).boundingBox(), c = await page.locator(`${box} svg`).boundingBox();
+  const x = b.x + b.width / 2, y = top ? c.y + 2 : b.y + b.height * 0.75;
+  if (phone) await page.touchscreen.tap(x, y); else await page.mouse.move(x, y);
+  await page.waitForFunction((s) => document.querySelector(`${s}.hov`), box, { timeout: 3000 });
+  return page.$eval(box, (el) => {
+    const t = el.querySelector('.prof-tip'), tr = t.getBoundingClientRect(), br = el.getBoundingClientRect();
+    return {
+      ...Object.fromEntries(['lbl', 'tgt', 'time'].map((n) => [n, t.querySelector(`.pt-${n}`).textContent.replace(/\s+/g, ' ').trim()])),
+      on: [...el.querySelectorAll('svg .on')].map((e) => e.dataset.i).join(), inside: tr.left >= br.left - 0.5 && tr.right <= br.right + 0.5,
+    };
+  });
+}
+/** What the readout over stretch k of `segs` (flattened at `ftp`) should say, worked out here, not by the app. */
+function wantReadout(segs, k, ftp) {
+  const g = segs[k], tr = isTrackSegs(segs) ? track(segs) : null;
+  const a = Math.round(g.from * ftp), b = Math.round(g.to * ftp), pc = (f) => Math.round(f * 100);
+  const tgt = g.kind === 'sim' ? (g.free ? 'Free ride' : `${+(g.grade * 100).toFixed(1)}% grade`) : `${a === b ? a : `${a}-${b}`} W ${g.from === g.to ? pc(g.from) : `${pc(g.from)}-${pc(g.to)}`}% FTP`;
+  const m = tr ? Math.round(tr.parts[k].h1 - tr.parts[k].h0) : 0, rise = m ? ` ${m > 0 ? '+' : '−'}${Math.abs(m)} m` : '';
+  return {
+    lbl: `${g.label}${g.rep ? ` · ${g.rep.i} of ${g.rep.of}` : ''}`, tgt: tgt + rise,
+    time: `${g.dist ? `${fmtDistM(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur)}${g.cadence !== '' ? ` · ${g.cadence} rpm` : ''}${fmtTime(g.start)} to ${fmtTime(g.end)}`,
+    on: String(k), inside: true,
+  };
+}
+/** The readout over stretch k matches wantReadout(); the chart is the workout `w` at `ftp`. */
+async function checkReadout(page, box, w, k, ftp, phone, fail, what) {
+  const got = await profReadout(page, box, k, phone), want = wantReadout(flatten(w, ftp), k, ftp);
+  if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${what} readout ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+}
+/**
+ * How the readout comes and goes. Mouse: only over the filled area (not the empty space above a low stretch), gone
+ * when the pointer leaves the chart. Finger: anywhere in a stretch's column counts, and the readout stays after the
+ * finger lifts, until a tap elsewhere (`elsewhere` = a selector outside the chart).
+ */
+async function checkReadoutComesAndGoes(page, box, k, phone, elsewhere, fail, what) {
+  const hov = () => page.$eval(box, (el) => el.classList.contains('hov'));
+  if (phone) {
+    const r = await profReadout(page, box, k, phone, { top: true });
+    if (r.on !== String(k)) fail(`${what}: a tap high in stretch ${k}'s column shows ${r.on}`);
+    await page.waitForTimeout(400);
+    if (!(await hov())) fail(`${what}: the readout went when the finger lifted`);
+    await page.locator(elsewhere).scrollIntoViewIfNeeded();
+    const e = await page.locator(elsewhere).boundingBox();
+    await page.touchscreen.tap(e.x + e.width / 2, e.y + e.height / 2);
+    await page.waitForTimeout(200);
+    if (await hov() || await page.$eval(box, (el) => el.querySelectorAll('svg .on').length)) fail(`${what}: a tap elsewhere left the readout up`);
+    return;
+  }
+  await profReadout(page, box, k, phone);
+  const c = await page.locator(`${box} svg`).boundingBox();
+  const b = await page.locator(`${box} svg [data-i="${k}"]`).boundingBox();
+  await page.mouse.move(b.x + b.width / 2, c.y + 1); // above the curve, still in the chart
+  await page.waitForTimeout(100);
+  if (await hov() || await page.$eval(box, (el) => el.querySelectorAll('svg .on').length)) fail(`${what}: the mouse above the curve keeps the readout`);
+  await profReadout(page, box, k, phone);
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(100);
+  if (await hov()) fail(`${what}: the readout stays after the mouse leaves`);
 }
 
 // Workouts library (groups, rows, the open row, the ERG / Slope switch, a real climb's detail slider), signed out
@@ -157,6 +221,8 @@ async function libraryStep(page, label) {
   const tip = await readout(page, ss, 1, phone);
   const wantTip = { lbl: `${rep.label} · 1 of 3`, tgt: `${Math.round(rep.from * ftp)} W ${Math.round(rep.from * 100)}% FTP`, time: `${fmtTime(rep.dur)}${rep.cadence ? ` · ${rep.cadence} rpm` : ''}${fmtTime(rep.start)} to ${fmtTime(rep.end)}` };
   if (JSON.stringify(tip) !== JSON.stringify(wantTip)) fail(`readout ${JSON.stringify(tip)}, expected ${JSON.stringify(wantTip)}`);
+  await checkReadout(page, `${ss} .wo-prof`, SS, 0, ftp, phone, fail, 'open row stretch 0');
+  await checkReadoutComesAndGoes(page, `${ss} .wo-prof`, 0, phone, '#wo-kind button.on', fail, 'open row');
   // another row closes this one; tapping it again closes it too
   const other = `#workout-list .wo[data-i="${(await listOf(page, '#workout-list')).flatMap((s) => s.rows).find((r) => r.name !== SS.name).i}"]`;
   await page.click(`${other} .wo-name`);
@@ -392,13 +458,11 @@ async function todayRun(viewport, label) {
   // big numbers (premium look, phone Nov 12, desktop Nov 13) replace the meta line on both layouts
   if (!(await vis('#today .hero-nums')) || await vis('#today .hero-meta')) fail('hero shows the meta line instead of the big numbers');
   if (hero.main?.replace(/W$/, '') !== set.match(/at ([\d/]+) W/)[1]) fail(`hero main watts ${hero.main}, set "${set}"`);
-  // the profile readout (mouse on desktop, a tap on the phone) on the first interval
-  await page.$eval('#today .hero-prof', (el) => el.scrollIntoView({ block: 'center' }));
-  const b0 = await page.locator('#today .hero-prof svg [data-i="0"]').boundingBox();
-  if (phone) await page.touchscreen.tap(b0.x + b0.width / 2, b0.y + b0.height * 0.8); else await page.mouse.move(b0.x + b0.width / 2, b0.y + b0.height * 0.8);
-  await page.waitForSelector('#today .hero-prof.hov', { timeout: 3000 });
-  if (await text('#today .hero-prof .pt-lbl') !== flatten(ss, ftp)[0].label) fail(`hero readout "${await text('#today .hero-prof .pt-lbl')}"`);
-  if (!phone) await page.mouse.move(5, 5);
+  // the profile readout (mouse on desktop, a tap on the phone): the first interval (a ramp, the readout kept inside
+  // the chart), the first rep, the last step; how it comes and goes
+  const ssSegs = flatten(ss, ftp);
+  for (const k of [0, ssSegs.findIndex((g) => g.rep), ssSegs.length - 1]) await checkReadout(page, '#today .hero-prof', ss, k, ftp, phone, fail, `hero stretch ${k}`);
+  await checkReadoutComesAndGoes(page, '#today .hero-prof', 0, phone, '#today .hero-name', fail, 'hero');
   // a free ride this morning: the workout stays open (Start still first) with a done line, and the recovery call goes
   await seed(RIDES);
   await at(DAY_AT.workout);
@@ -435,12 +499,16 @@ async function todayRun(viewport, label) {
   const want = [['2026-11-19', 'Rest', ''], ['2026-11-20', 'Strength', ''], ['2026-11-21', W('sim-rolling-45').name, ''], ['2026-11-22', W('z2-90').name, 'Optional'], ['2026-11-23', 'Nothing planned', '']];
   if (strip.length !== 13 || JSON.stringify(strip.slice(0, 5)) !== JSON.stringify(want)) fail(`Next days ${JSON.stringify(strip.slice(0, 5))} (${strip.length} cards)`);
   if (!(await page.isDisabled('#week [data-scroll="-1"]'))) fail('Next days starts scrolled');
-  ok(`${label}: Today on a workout day (fixed clock): hero, recovery call, readout, a free ride done, overview tiles, Next days`);
+  ok(`${label}: Today on a workout day (fixed clock): hero, recovery call, profile readout (ramp, rep, last step, comes and goes), a free ride done, overview tiles, Next days`);
 
   // a Next days card opens that day in the Calendar
   await page.click('#week-strip .day[data-day="2026-11-21"]');
   await page.waitForFunction(() => document.querySelector('#home').dataset.tab === 'calendar' && document.querySelector('.cal-cell.sel')?.dataset.day === '2026-11-21', null, { timeout: 3000 });
   if (!/^Saturday, November 21/.test(await text('#cal-detail h3')) || await text('#cal-detail .wo-name') !== W('sim-rolling-45').name || await text('#cal-detail [data-startday]') !== 'Ride it now') fail('Next days card opened the wrong Calendar day');
+  // a slope day's elevation profile in the day detail: grade and height gained or lost per stretch, by distance or time
+  const roll = W('sim-rolling-45'), rollSegs = flatten(roll, ftp);
+  for (const k of [0, rollSegs.findIndex((g, i) => i && g.grade > 0), rollSegs.findIndex((g) => g.grade < 0), rollSegs.length - 1]) await checkReadout(page, '#cal-detail .cal-prof', roll, k, ftp, phone, fail, `Calendar slope day stretch ${k}`);
+  await checkReadoutComesAndGoes(page, '#cal-detail .cal-prof', 1, phone, '#cal-detail h3', fail, 'Calendar slope day');
 
   // ---- Calendar (same fixed day): month grid, chips, today's detail, then a done, a missed and a rest day opened
   await page.click('#cal-today');
@@ -465,6 +533,9 @@ async function todayRun(viewport, label) {
   let dd = await det();
   if (!/^Wednesday, November 18/.test(dd.h) || dd.name !== ss.name || dd.start !== 'Start' || !dd.startPrimary || !dd.text.includes(`Coach: ${PLAN.notes['2026-11-18']}`) || dd.bars !== flatten(ss, ftp).length) fail(`today's detail ${JSON.stringify(dd)}`);
   if (!dd.whoop.some((x) => /WHOOP: recovery 25%/.test(x)) || !dd.whoop.some((x) => /Free ride .*TSS 15.*See ride/.test(x))) fail(`today's detail rides / WHOOP ${JSON.stringify(dd.whoop)}`);
+  // today's detail chart reads out too (its own copy of the profile, bound when the day opens)
+  for (const k of [ssSegs.findIndex((g) => g.rep), ssSegs.length - 1]) await checkReadout(page, '#cal-detail .cal-prof', ss, k, ftp, phone, fail, `Calendar today stretch ${k}`);
+  await checkReadoutComesAndGoes(page, '#cal-detail .cal-prof', 0, phone, '#cal-detail h3', fail, 'Calendar today');
   // a done day: the result first (no Start, no plan note), the ride's numbers, See ride opens it and Back returns here
   await page.click('.cal-cell[data-day="2026-11-17"]');
   dd = await det();
@@ -488,7 +559,7 @@ async function todayRun(viewport, label) {
   if (await text('#cal-title') !== 'November 2026' || !/^Sunday, November 1/.test((await det()).h)) fail('a next-month cell did not move the month');
   await page.click('#cal-today');
   if (await text('#cal-title') !== 'November 2026' || !/^Wednesday, November 18/.test((await det()).h)) fail('Today button');
-  ok(`${label}: Calendar (fixed clock): month grid and chips, a day opened from Next days, done / missed / rest days, ride page and back, month switch`);
+  ok(`${label}: Calendar (fixed clock): month grid and chips, a day opened from Next days (its elevation profile readout), today's profile readout, done / missed / rest days, ride page and back, month switch`);
 
   // ---- rest day (Thu Nov 19): no workout, free ride is the main button, the coach's call
   await page.click('#tabs button[data-tab="today"]');
@@ -511,8 +582,15 @@ async function todayRun(viewport, label) {
   });
   if (!done.cls.includes('done') || done.name !== `Done. ${W('vo2-30-15').name}` || done.desc !== 'Weakest rep at 93% of target.' || done.start) fail(`done day hero ${JSON.stringify(done)}`);
   if (done.stats.join() !== 'Time,NP,TSS,IF,Avg HR,Intervals' || done.btns.join() !== 'hero-see,btn-free' || done.bars !== flatten(W('vo2-30-15'), ftp).length) fail(`done hero stats / buttons ${JSON.stringify(done)}`);
+  // the done hero keeps the workout's profile on desktop, and it reads out (bound only when the ride was this
+  // workout); the phone's done card has no profile
+  if (phone) { if (await vis('#today .hero-prof')) fail('the phone\'s done hero shows a profile'); } else {
+    const vo2w = W('vo2-30-15'), vo2Segs = flatten(vo2w, ftp);
+    for (const k of [vo2Segs.findIndex((g) => g.rep), vo2Segs.findLastIndex((g) => g.rep)]) await checkReadout(page, '#today .hero-prof', vo2w, k, ftp, phone, fail, `done hero stretch ${k}`);
+    await page.mouse.move(5, 5);
+  }
   await toRideAndBack('#hero-see', 'today');
-  ok(`${label}: Today on a rest day and a done day (fixed clock): free ride first, coach call, the ride's numbers, See ride and back`);
+  ok(`${label}: Today on a rest day and a done day (fixed clock): free ride first, coach call, the ride's numbers, the done hero's profile readout (desktop; none on the phone), See ride and back`);
   await ctx.close();
 }
 
