@@ -1,3 +1,4 @@
+// @ts-check
 // Bike weight presets and a simple estimator (Settings > Rider).
 // Only slope mode uses the bike's weight (rider + bike = the mass that climbs and coasts); ERG ignores it.
 //

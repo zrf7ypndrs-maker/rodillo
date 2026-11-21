@@ -41,6 +41,7 @@
  * @property {string} drivetrain Preset id or 'custom'.
  * @property {CustomDrivetrain | null} [customDrivetrain]
  * @property {string} [shiftStyle]
+ * @property {boolean} [builtin] One of BUILTIN_GEARINGS (never stored).
  */
 
 /**
@@ -53,6 +54,7 @@
  * @property {number} crr
  * @property {number} wheelCirc
  * @property {number} realDev
+ * @property {number} [gradeTrim] Learned closed-loop grade trim (fraction), saved after a slope ride (Session.learned()).
  * @property {number} trainerMassKg
  * @property {number} maxSendGrade
  * @property {number} minSendGrade

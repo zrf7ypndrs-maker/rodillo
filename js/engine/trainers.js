@@ -1,3 +1,4 @@
+// @ts-check
 // Smart trainers and the grade range each one can simulate (maker's spec, as fractions).
 // Rodillo never sends a grade outside the range of the chosen trainer (Settings > Trainer).
 // Brake trainers can't push the rider downhill: below 0% they only get as light as they can,

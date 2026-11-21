@@ -1,3 +1,4 @@
+// @ts-check
 // Real climbs (Farellones, Antenas, El Durazno...): the workout carries the climb's full elevation profile and the
 // app cuts it into slope steps at the detail the rider picks (Nov 11, asked for by Agustín: a slider with a Default).
 //

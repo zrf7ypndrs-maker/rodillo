@@ -1,3 +1,4 @@
+// @ts-check
 // Workout model, parsers and the interval player.
 //
 // Workout JSON format (what the coach pushes to /workouts):
@@ -33,10 +34,18 @@
 // Distance steps time their messages on the estimated duration.
 
 import { speedForPower } from './physics.js?v=202611102147';
+/** @typedef {import('../types.js').Workout} Workout */
+/** @typedef {import('../types.js').Segment} Segment */
+/** @typedef {import('../types.js').Track} Track */
 
 const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
 const EST_W = 180; // steady power behind every estimate (durations of distance steps, distances of time steps)
 
+/**
+ * @param {Workout} workout
+ * @param {number} [ftp] Turns absolute watts steps into fractions of FTP.
+ * @returns {Segment[]}
+ */
 export function flatten(workout, ftp = 200) {
   const out = [];
   const walk = (steps, rep) => {
@@ -78,7 +87,11 @@ export function flatten(workout, ftp = 200) {
   return retime(out);
 }
 
-/** Sets start/end of every segment from the durations. */
+/**
+ * Sets start/end of every segment from the durations.
+ * @param {Segment[]} segs
+ * @returns {Segment[]}
+ */
 export function retime(segs) {
   let t = 0;
   for (const s of segs) { s.start = t; t += s.dur; s.end = t; }
@@ -128,7 +141,11 @@ export function parseAim(aim, text = '') {
   return m ? band(+m[1] / 100 - 0.05, +m[1] / 100 + 0.05) : null;
 }
 
-/** Fills {watts} {ftp} {rep} {of} {left} {name} in a message; on slope steps "90% FTP" reads in watts. */
+/**
+ * Fills {watts} {ftp} {rep} {of} {left} {name} in a message; on slope steps "90% FTP" reads in watts.
+ * @param {string} text
+ * @param {{ seg?: Segment | null, watts?: number | null, ftp?: number | null, name?: string }} ctx
+ */
 export function fillMessage(text, { seg, watts, ftp, name = '' }) {
   if (seg?.kind === 'sim') text = ftpWatts(text, ftp);
   const nm = String(name || '').trim();
@@ -197,7 +214,11 @@ function defaultLabel(s) {
   return 'Anaerobic';
 }
 
-/** Cadence target: 90 -> 85..95 (±5 rpm), "80-90" -> range, "100+" -> floor. null if none. */
+/**
+ * Cadence target: 90 -> 85..95 (±5 rpm), "80-90" -> range, "100+" -> floor. null if none.
+ * @param {number | string | null | undefined} c
+ * @returns {import("../types.js").CadenceTarget | null}
+ */
 export function parseCadence(c) {
   if (c === undefined || c === null || c === '') return null;
   const str = String(c).trim();
@@ -208,6 +229,9 @@ export function parseCadence(c) {
   return null;
 }
 
+/**
+ * @param {Workout} workout
+ */
 export function totalDuration(workout) {
   const segs = flatten(workout);
   return segs.length ? segs[segs.length - 1].end : 0;
@@ -222,6 +246,11 @@ const keep = (s) => s.replace(/ /g, '\u00a0'); // one phrase never wraps inside;
  *  Work blocks = runs of steady steps at Z3+ (76%+ FTP), so an over-under is one block; the blocks holding the
  *  top power are the main set; a gap more than 3x the shortest gap starts a new set. When over half the ride is
  *  steady Zone 2 (56-75%), that leads. Empty for tests, slope sessions and rides with no main set. */
+/**
+ * @param {Workout} workout
+ * @param {number} ftp
+ * @returns {string}
+ */
 export function mainSet(workout, ftp) {
   if (!workout || (workout.tags || []).includes('test')) return '';
   const all = flatten(workout, ftp);
@@ -260,26 +289,41 @@ export function mainSet(workout, ftp) {
   return keep(hard);
 }
 
+/**
+ * @param {Segment} seg
+ * @param {number} p Progress through the step, 0..1.
+ */
 export function segTarget(seg, p) {
   if (seg.kind !== 'erg') return null;
   const x = Math.min(1, Math.max(0, p));
   return seg.from + (seg.to - seg.from) * x;
 }
 
+/**
+ * @param {Workout} w
+ */
 export const hasDistance = (w) => flatten(w).some((s) => s.dist);
 
 // ------------------------------------------------------------------ slope workouts as a road
 // A workout made only of slope steps is drawn as an elevation profile over distance (Nov 11, Agustín picked it
 // over grade-height bars). Distance steps keep their length; time steps get the distance covered at EST_W.
 
-/** True when every step is a slope step: the workout is a road with an elevation profile. */
+/**
+ * True when every step is a slope step: the workout is a road with an elevation profile.
+ * @param {Segment[]} segs
+ */
 export const isTrack = (segs) => segs.length > 0 && segs.every((g) => g.kind === 'sim');
-/** Every climb (2%+) is a distance step, so its metres are known, not estimated from a steady 180 W (real climbs). */
+/**
+ * Every climb (2%+) is a distance step, so its metres are known, not estimated from a steady 180 W (real climbs).
+ * @param {Segment[]} segs
+ */
 export const climbsByDist = (segs) => segs.some((g) => (g.grade || 0) >= 0.02) && segs.every((g) => (g.grade || 0) < 0.02 || g.dist);
 
 /**
  * Lay slope segments out as a road: per segment d0/d1 (m from the start) and h0/h1 (m, start = 0).
  * Also the total length D, the lowest and highest point, and the total climbing.
+ * @param {Segment[]} segs
+ * @returns {Track}
  */
 export function track(segs) {
   let d = 0, h = 0, lo = 0, hi = 0, up = 0;
@@ -293,7 +337,12 @@ export function track(segs) {
   return { parts, D: d, lo, hi, ascent: up };
 }
 
-/** Metres along the road for a position on the workout's time axis (Session.chartPos, sample.wx). */
+/**
+ * Metres along the road for a position on the workout's time axis (Session.chartPos, sample.wx).
+ * @param {Track} tr
+ * @param {Segment[]} segs
+ * @param {number} t
+ */
 export function trackDist(tr, segs, t) {
   for (let i = 0; i < segs.length; i++) {
     const g = segs[i], p = tr.parts[i];
@@ -302,13 +351,21 @@ export function trackDist(tr, segs, t) {
   return tr.D;
 }
 
-/** Elevation (m) at metres d along the road. */
+/**
+ * Elevation (m) at metres d along the road.
+ * @param {Track} tr
+ * @param {number} d
+ */
 export function trackHeight(tr, d) {
   for (const p of tr.parts) if (d < p.d1) return p.h0 + ((Math.max(d, p.d0) - p.d0) / ((p.d1 - p.d0) || 1)) * (p.h1 - p.h0);
   return tr.parts.length ? tr.parts[tr.parts.length - 1].h1 : 0;
 }
 
-/** Climbing done up to metres d. */
+/**
+ * Climbing done up to metres d.
+ * @param {Track} tr
+ * @param {number} d
+ */
 export function trackClimbed(tr, d) {
   let up = 0;
   for (const p of tr.parts) {
@@ -318,7 +375,13 @@ export function trackClimbed(tr, d) {
   return up;
 }
 
-/** The top of the climb segment i is part of (consecutive uphill segments count as one climb), from metres d. */
+/**
+ * The top of the climb segment i is part of (consecutive uphill segments count as one climb), from metres d.
+ * @param {Track} tr
+ * @param {Segment[]} segs
+ * @param {number} i
+ * @param {number} d
+ */
 export function climbAhead(tr, segs, i, d) {
   let j = i;
   while (j + 1 < segs.length && (segs[j + 1].grade || 0) > 0) j++;
@@ -326,12 +389,19 @@ export function climbAhead(tr, segs, i, d) {
   return { top: top.d1, m: Math.max(0, top.d1 - d), rise: Math.max(0, top.h1 - trackHeight(tr, d)), h: top.h1 };
 }
 
+/**
+ * @param {Segment[]} segs
+ * @param {number} t
+ */
 export function segmentAt(segs, t) {
   for (let i = 0; i < segs.length; i++) if (t < segs[i].end) return i;
   return -1;
 }
 
-/** Simple training stress estimate for the library (ERG parts only). */
+/**
+ * Simple training stress estimate for the library (ERG parts only).
+ * @param {Workout} workout
+ */
 export function estimateTSS(workout) {
   const segs = flatten(workout);
   let sum = 0, T = 0;
@@ -356,6 +426,9 @@ function attrs(str) {
   return o;
 }
 
+/**
+ * @param {string} xml
+ */
 export function parseZwo(xml) {
   const name = (xml.match(/<name>([\s\S]*?)<\/name>/) || [])[1] || 'Imported workout';
   const desc = (xml.match(/<description>([\s\S]*?)<\/description>/) || [])[1] || '';

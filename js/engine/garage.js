@@ -1,3 +1,4 @@
+// @ts-check
 // Bike garage and gearings (Nov 12, Agustín: "bike could just mean weight and wheel size").
 //
 // A bike is what can't change during a ride: weight and wheel. Picking one copies bikeKg, bikeSpec and wheelCirc
@@ -14,6 +15,10 @@ import { cleanSpec } from './bikes.js?v=202611102147';
 
 // Known bikes. Weight = maker's claim for size M plus pedals, when the pedals are known. drivetrain + shiftStyle
 // are the bike's stock gearing (a built-in gearing). Ids are saved in settings: never rename one.
+/** @typedef {import('../types.js').Settings} Settings */
+/** @typedef {import('../types.js').GarageBike} GarageBike */
+/** @typedef {import('../types.js').Gearing} Gearing */
+/** @typedef {GarageBike & { drivetrain?: string, customDrivetrain?: any, shiftStyle?: string }} OldBike A bike saved before Nov 12, with its gearing. */
 export const BIKE_MODELS = {
   'canyon-lux-trail-cf-7': {
     name: 'Canyon Lux Trail CF 7', short: 'Lux Trail CF 7',
@@ -72,24 +77,36 @@ export function cleanBike(b) {
   };
 }
 
-/** The garage from settings, cleaned. A missing garage is the default one; an empty list stays empty. */
+/**
+ * The garage from settings, cleaned. A missing garage is the default one; an empty list stays empty.
+ * @param {Partial<Settings>} [settings]
+ */
 export function garageOf(settings = {}) {
   const g = Array.isArray(settings.garage) ? settings.garage : DEFAULT_GARAGE;
   const seen = new Set();
   return g.map(cleanBike).filter((b) => b && !seen.has(b.id) && seen.add(b.id)).slice(0, MAX_BIKES);
 }
 
-/** The bike in use, or null. */
+/**
+ * The bike in use, or null.
+ * @param {Partial<Settings>} [settings]
+ */
 export function currentBike(settings = {}) {
   return garageOf(settings).find((b) => b.id === settings.bike) || null;
 }
 
-/** The settings a bike sets. */
+/**
+ * The settings a bike sets.
+ * @param {GarageBike} b
+ */
 export function bikeSetup(b) {
   return { bikeKg: b.bikeKg, bikeSpec: b.bikeSpec || null, wheelCirc: b.wheel };
 }
 
-/** Settings changes that put a bike in use ('' = no bike: keep the current weight and wheel). */
+/**
+ * Settings changes that put a bike in use ('' = no bike: keep the current weight and wheel).
+ * @param {Partial<Settings>} settings
+ */
 export function selectBike(settings, id) {
   const b = garageOf(settings).find((x) => x.id === id);
   return b ? { bike: b.id, ...bikeSetup(b) } : { bike: '' };
@@ -110,20 +127,26 @@ export function wheelShort(w) {
   return name.replace(/^(Road|Gravel|MTB) /, '');
 }
 
-/** Short line about a bike: "13.1 kg · 29 x 2.4". */
+/**
+ * Short line about a bike: "13.1 kg · 29 x 2.4".
+ * @param {GarageBike} b
+ */
 export function bikeLine(b) {
   return `${b.bikeKg.toFixed(1)} kg · ${wheelShort(b.wheel)}`;
 }
 
 // ---------------------------------------------------------------- gearings
 
-/** Built-in gearings: each known bike's stock drivetrain, then Zwift's virtual 24. Ids never renamed. */
+/** @type {Gearing[]} Built-in gearings: each known bike's stock drivetrain, then Zwift's virtual 24. Ids never renamed. */
 export const BUILTIN_GEARINGS = [
   ...Object.entries(BIKE_MODELS).map(([k, m]) => ({ id: k, name: m.short, drivetrain: m.drivetrain, customDrivetrain: null, shiftStyle: m.shiftStyle, builtin: true })),
   { id: 'zwift-24', name: 'Zwift virtual', drivetrain: 'zwift-24', customDrivetrain: null, shiftStyle: 'sram', builtin: true },
 ];
 
-/** One of the rider's gearings, cleaned; null if its teeth don't work. */
+/**
+ * One of the rider's gearings, cleaned; null if its teeth don't work.
+ * @returns {Gearing | null}
+ */
 export function cleanGearing(g) {
   if (!g || typeof g !== 'object' || !g.id) return null;
   const custom = g.drivetrain === CUSTOM ? checkSpec(g.customDrivetrain || {}).spec : null;
@@ -138,20 +161,29 @@ export function cleanGearing(g) {
   };
 }
 
-/** The rider's own gearings (settings.gearings), cleaned. */
+/**
+ * The rider's own gearings (settings.gearings), cleaned.
+ * @param {Partial<Settings>} [settings]
+ */
 export function myGearings(settings = {}) {
   const seen = new Set(BUILTIN_GEARINGS.map((g) => g.id));
   return (Array.isArray(settings.gearings) ? settings.gearings : [])
     .map(cleanGearing).filter((g) => g && !seen.has(g.id) && seen.add(g.id)).slice(0, MAX_GEARINGS);
 }
 
-/** Every gearing to pick from: built-ins first, then the rider's own. */
+/**
+ * Every gearing to pick from: built-ins first, then the rider's own.
+ * @param {Partial<Settings>} [settings]
+ */
 export function gearingsOf(settings = {}) {
   return [...BUILTIN_GEARINGS, ...myGearings(settings)];
 }
 
 const sameDt = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-/** True when the settings ride this gearing (same preset, or the same custom teeth). */
+/**
+ * True when the settings ride this gearing (same preset, or the same custom teeth).
+ * @param {Partial<Settings>} settings
+ */
 export function usesGearing(settings, g) {
   if (settings.drivetrain !== g.drivetrain) return false;
   if (g.drivetrain !== CUSTOM) return true;
@@ -159,13 +191,19 @@ export function usesGearing(settings, g) {
   return !!s && sameDt([s.rings, s.cogs], [g.customDrivetrain.rings, g.customDrivetrain.cogs]);
 }
 
-/** The gearing in use (the rider's own win over a built-in with the same teeth), or null for a loose preset. */
+/**
+ * The gearing in use (the rider's own win over a built-in with the same teeth), or null for a loose preset.
+ * @param {Partial<Settings>} [settings]
+ */
 export function currentGearing(settings = {}) {
   const all = gearingsOf(settings);
   return [...all.filter((g) => !g.builtin), ...all.filter((g) => g.builtin)].find((g) => usesGearing(settings, g)) || null;
 }
 
-/** Settings changes that put a gearing in use. */
+/**
+ * Settings changes that put a gearing in use.
+ * @param {Partial<Settings>} settings
+ */
 export function selectGearing(settings, id) {
   const g = gearingsOf(settings).find((x) => x.id === id);
   return g ? { drivetrain: g.drivetrain, customDrivetrain: g.customDrivetrain || null, shiftStyle: g.shiftStyle } : {};
@@ -181,7 +219,10 @@ export function presetStyle(id, prev) {
   return shiftStyleFor(prev, false);
 }
 
-/** Settings changes that put a preset from the full list in use. */
+/**
+ * Settings changes that put a preset from the full list in use.
+ * @param {Partial<Settings>} settings
+ */
 export function selectPreset(settings, id) {
   return DRIVETRAINS[id] ? { drivetrain: id, customDrivetrain: null, shiftStyle: presetStyle(id, settings.shiftStyle) } : {};
 }
@@ -194,7 +235,10 @@ export function gearingLine(g) {
   return `${d.rings.length}x${d.cogs.length}, ${[...d.rings].reverse().join('/')} + ${d.cogs[0]}-${d.cogs.at(-1)}`;
 }
 
-/** Name of what the settings ride: the gearing's name, else the preset's. */
+/**
+ * Name of what the settings ride: the gearing's name, else the preset's.
+ * @param {Partial<Settings>} [settings]
+ */
 export function gearingName(settings = {}) {
   const g = currentGearing(settings);
   if (g) return g.name;
@@ -207,11 +251,12 @@ export function gearingName(settings = {}) {
  * Bikes saved before gearing left the bike carry drivetrain / shiftStyle. Returns the settings changes that
  * move them over (custom bikes' gearings become the rider's own gearings, named after the bike), or null when
  * there's nothing to move. The gearing in use doesn't change.
+ * @param {Partial<Settings>} [settings]
  */
 export function migrateGarage(settings = {}) {
   if (!Array.isArray(settings.garage) || !settings.garage.some((b) => b && typeof b === 'object' && 'drivetrain' in b)) return null;
   const mine = myGearings(settings), all = gearingsOf(settings);
-  for (const b of settings.garage) {
+  for (const b of /** @type {OldBike[]} */ (settings.garage)) {
     if (!b?.drivetrain || BIKE_MODELS[b.model]?.drivetrain === b.drivetrain) continue;
     const g = cleanGearing({ id: `g-${b.id}`, name: b.name, drivetrain: b.drivetrain, customDrivetrain: b.customDrivetrain, shiftStyle: b.shiftStyle });
     if (!g || [...all, ...mine].some((x) => x.id === g.id || usesGearing(g, x))) continue;

@@ -1,3 +1,4 @@
+// @ts-check
 // Virtual drivetrains: real chainring/cassette combos (or Zwift's 24 sequential ratios).
 
 const SEQ24 = [
@@ -32,6 +33,7 @@ const C = {
 };
 
 /** Wheel circumference (m) by tire. */
+/** @type {[number, string][]} Wheel circumference (m) and its name. */
 export const WHEELS = [
   [2.105, 'Road 700 x 25c'], [2.136, 'Road 700 x 28c'], [2.155, '700 x 32c'],
   [2.2, 'Gravel 700 x 40c'], [2.298, 'MTB 29 x 2.2'], [2.32, 'MTB 29 x 2.4'],
@@ -111,7 +113,10 @@ export function parseTeeth(text) {
   return parts.map(Number);
 }
 
-/** Checks a chainring/cog spec. Returns { spec } with sorted teeth, or { error }. */
+/**
+ * Checks a chainring/cog spec. Returns { spec } with sorted teeth, or { error }.
+ * @param {{ rings?: any, cogs?: any, wheel?: number }} spec Teeth as numbers or typed text.
+ */
 export function checkSpec({ rings, cogs, wheel }) {
   if (!rings?.length) return { error: 'Chainrings: type the teeth, like 50/34 or 40.' };
   if (rings.length > 2) return { error: 'Chainrings: one or two rings.' };
@@ -155,10 +160,14 @@ export function resolveDrivetrain(settings = {}) {
 }
 
 export class Gearbox {
-  /** id: a preset id, or a spec { rings, cogs, wheel } (custom). */
+  /**
+   * id: a preset id, or a spec { rings, cogs, wheel } (custom).
+   * @param {string | { rings: number[], cogs: number[], wheel?: number, name?: string }} [id]
+   */
   constructor(id = DEFAULT_DRIVETRAIN) {
-    const spec = typeof id === 'object' && id ? checkSpec(id).spec : null;
-    if (spec) { this.id = CUSTOM; this.d = { ...spec, name: id.name || 'Custom' }; }
+    const custom = typeof id === 'object' && id ? id : null;
+    const spec = custom ? checkSpec(custom).spec : null;
+    if (spec) { this.id = CUSTOM; this.d = { ...spec, name: custom.name || 'Custom' }; }
     else { this.id = DRIVETRAINS[id] ? id : DEFAULT_DRIVETRAIN; this.d = DRIVETRAINS[this.id]; }
     this.seq = !!this.d.seq;
     // rear position 0 = easiest (biggest cog); front 0 = small ring

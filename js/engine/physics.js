@@ -1,3 +1,4 @@
+// @ts-check
 // Bike physics and the virtual gearbox.
 // All SI units internally: m, s, kg, W, m/s. Grade as a fraction (0.05 = 5%).
 

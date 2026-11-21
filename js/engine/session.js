@@ -1,3 +1,4 @@
+// @ts-check
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
@@ -49,6 +50,14 @@ const TRIM_TAU = 20;
 const clampTrim = (t) => Math.max(-TRIM_CARRY, Math.min(TRIM_CARRY, Number(t) || 0));
 
 export class Session extends Emitter {
+  /**
+   * @param {object} o
+   * @param {any} o.trainer Trainer (js/ble/trainer.js) or the demo sim.
+   * @param {any} [o.hr] Heart rate strap, if any.
+   * @param {import('../types.js').Settings} o.settings
+   * @param {import('../types.js').Workout | null} [o.workout] Null = free ride.
+   * @param {string} [o.name]
+   */
   constructor({ trainer, hr, settings, workout = null, name }) {
     super();
     this.trainer = trainer;
@@ -90,6 +99,10 @@ export class Session extends Emitter {
     this._sampleAcc = 0;
     this._lowCad = 0;
     this._guard = false;
+    /** @type {number | undefined} epoch ms of the first start, set by start() */
+    this.startMs = undefined;
+    /** @type {Set<string> | undefined} timed messages already shown ("segI:k"), made by _messages() */
+    this._msgDone = undefined;
   }
 
   // ---------- controls ----------
