@@ -194,9 +194,9 @@ export function gearViz(gb, { INK, RULE }) {
 }
 
 // ---- what the desktop ride screen says, as pure functions of the session (unit tests: test/ride.mjs).
-// `v` = rideView(s), built once per draw: { ftp, riderKg, hrBpm, track, zoneHex, gradeHex, INK, RULE }.
+// `v` = rideView(s), built once per draw (the phone's renderPhone() uses the same one): { ftp, riderKg, hrBpm, track, zoneHex, gradeHex, INK, RULE }.
 // `track` is the road of a slope-only workout (cached per session), null otherwise.
-const rideView = (s) => ({
+export const rideView = (s) => ({
   ftp: app.settings.ftp, riderKg: app.settings.riderKg, hrBpm: app.hr?.bpm,
   track: s.segs && isTrack(s.segs) ? rideTrack(s) : null, zoneHex, gradeHex, ...look(),
 });

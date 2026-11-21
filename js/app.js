@@ -23,7 +23,7 @@ import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, pr
 import { initToday, renderHero, renderWeek, renderCalendar, refreshPlanViews, trainingRows, whoopDay, recZone, BIKE_ICO } from './today.js?v=202611102147';
 import { $, $$, esc, toast, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 import { initControls, action, onButton, onRelease, holdStart, holdEnd, focusables, applyFocus } from './controls.js?v=202611102147';
-import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, segRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js?v=202611102147';
+import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, segRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, rideView, workoutX, gradeBarH, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js?v=202611102147';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
@@ -1224,111 +1224,145 @@ new ResizeObserver(() => { if (app.screen === 'ride' && isPhone()) { sizePhoneCh
 PHONE_MQ.addEventListener('change', () => { if (app.screen === 'ride') { sizeChart(); sizePhoneChart(); renderRide(); } });
 PHONE_MQ.addEventListener('change', () => { if (app.screen === 'ridepage' && rd.doc) renderRidePage(); });
 
-const segColor = (g, s, t = 0.5) => (g.kind === 'erg' ? zoneHex(segTarget(g, t)) : gradeHex(g.grade + (s?.gradeOffset || 0)));
-const segTargetText = (g, s) => (g.kind === 'erg'
-  ? (g.from === g.to ? `${Math.round(g.from * app.settings.ftp * s.intensity)} W` : `${Math.round(g.from * app.settings.ftp * s.intensity)}-${Math.round(g.to * app.settings.ftp * s.intensity)} W`)
-  : `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`);
+// ---- what the phone ride screen says, as pure functions of the session. `v` = rideView(s) from js/ride.js, built once
+// per draw: { ftp, hrBpm, zoneHex, gradeHex, ... }.
+/** Top line: elapsed, the workout's name, time left (a workout) or distance (free ride). */
+function phoneTop(s) {
+  return {
+    elapsed: fmtTime(s.elapsed), name: esc(s.name),
+    leftK: s.segs ? 'Left' : 'Distance', left: s.segs ? (s.seg ? workoutLeft(s) : '0:00') : fmtDist(s.bike.dist),
+  };
+}
 
-function renderPhone(s) {
-  const td = s.trainer.data || {};
-  const ftp = app.settings.ftp;
-  const hr = Math.round(app.hr?.bpm || td.hr || 0);
-  const p = Math.round(s.powerShown);
+/** Hero card: color (`zc`), interval label, countdown (time or metres), target (watts or grade) and its sub line. */
+function phoneHero(s, v) {
   const seg = s.seg;
-  const set = (id, v) => { const el = document.getElementById(id); if (el.innerHTML !== String(v)) el.innerHTML = v; };
-
-  set('rp-elapsed', fmtTime(s.elapsed));
-  set('rp-name', esc(s.name));
-  if (s.segs) {
-    set('rp-left-k', 'Left');
-    set('rp-left', seg ? workoutLeft(s) : '0:00');
-  } else {
-    set('rp-left-k', 'Distance');
-    set('rp-left', fmtDist(s.bike.dist));
-  }
-
-  // hero: interval countdown + target
-  const hero = $('#rp');
-  let zc;
   if (seg) {
     const rem = s.segRemaining;
     const tgt = seg.kind === 'erg' ? segTarget(seg, s.segProgress) : null;
-    zc = seg.kind === 'erg' ? zoneHex(tgt) : gradeHex(seg.grade + s.gradeOffset);
-    set('rp-int-label', `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`);
-    set('rp-count', rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m));
     const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
-    if (seg.kind === 'erg') {
-      set('rp-target', `${s.target || Math.round(tgt * ftp * s.intensity)} W`);
-      set('rp-target-sub', `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}`);
-    } else {
-      set('rp-target', `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`);
-      set('rp-target-sub', `${seg.aim ? `grade, aim ${Math.round(seg.aim.mid * ftp)} W` : 'grade, use your gears'}${cad}`);
-    }
-  } else if (s.segs) {
-    zc = 'var(--ok-bg)';
-    set('rp-int-label', 'Workout complete');
-    set('rp-count', 'Done');
-    set('rp-target', '');
-    set('rp-target-sub', 'Keep riding. End ride is in the menu.');
-  } else {
-    zc = gradeHex(s.grade);
-    set('rp-int-label', 'Free ride');
-    set('rp-count', `${(s.grade * 100).toFixed(1)}%`);
-    set('rp-target', '');
-    set('rp-target-sub', 'D-pad &#9650;&#9660; changes the grade');
+    return {
+      zc: seg.kind === 'erg' ? v.zoneHex(tgt) : v.gradeHex(seg.grade + s.gradeOffset),
+      label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`,
+      count: rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m),
+      target: seg.kind === 'erg' ? `${s.target || Math.round(tgt * v.ftp * s.intensity)} W` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`,
+      targetSub: seg.kind === 'erg' ? `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}` : `${seg.aim ? `grade, aim ${Math.round(seg.aim.mid * v.ftp)} W` : 'grade, use your gears'}${cad}`,
+    };
   }
-  setZc(hero, zc);
+  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', count: 'Done', target: '', targetSub: 'Keep riding. End ride is in the menu.' };
+  return { zc: v.gradeHex(s.grade), label: 'Free ride', count: `${(s.grade * 100).toFixed(1)}%`, target: '', targetSub: 'D-pad &#9650;&#9660; changes the grade' };
+}
 
-  // power + on-target gauge (centre = target, ends = ±20%); a slope step's aim works like the cadence box
-  set('rp-power', p);
+/**
+ * Power (and its on-target gauge: centre = target, ends = ±20%; a slope step's aim works like the cadence box),
+ * heart rate, cadence, and the third box: Effort in ERG, Gear in slope (ring × cog, cogs counted from the largest = 1).
+ * `gaugeAt` is the dot's left (null: the gauge is off); `powerState` / `cadState` are 'ok', 'bad' or ''.
+ */
+function phoneBoxes(s, v) {
+  const td = s.trainer.data || {};
+  const p = Math.round(s.powerShown);
+  const seg = s.seg;
   const aim = s.mode !== 'erg' && seg?.kind === 'sim' ? seg.aim : null, as = aim ? s.aimStatus : null;
-  const gt = s.target || (aim ? aim.mid * ftp : 0);
-  const gauge = $('#rp-gauge');
-  gauge.classList.toggle('off', !gt);
-  if (gt) gauge.querySelector('b').style.left = `${Math.max(0, Math.min(1, (p / gt - 0.8) / 0.4)) * 100}%`;
-  const pb = $('#rp-power-box');
-  pb.classList.toggle('ok', as === 'ok');
-  pb.classList.toggle('bad', as === 'low' || as === 'high');
-  set('rp-power-sub', !aim ? '' : as === 'low' ? '&#9650; push harder' : as === 'high' ? '&#9660; ease off' : `${Math.round(aim.lo * ftp)}-${Math.round(aim.hi * ftp)} W`);
+  const gt = s.target || (aim ? aim.mid * v.ftp : 0);
+  const cs = s.cadStatus;
+  const third = s.mode === 'erg'
+    ? { m3k: 'Effort', m3: `${Math.round(s.intensity * 100)}%`, m3sub: s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned', up: s.intensity > 1.001, down: s.intensity < 0.999 }
+    : (() => {
+      const gb = s.gb, kmh = Math.round(s.bike.v * 3.6);
+      return { m3k: 'Gear', m3: gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`, m3sub: gb.seq ? `${kmh} km/h` : `${gb.ring}×${gb.cog} · ${kmh} km/h`, up: false, down: false };
+    })();
+  return {
+    power: p,
+    gaugeAt: gt ? `${Math.max(0, Math.min(1, (p / gt - 0.8) / 0.4)) * 100}%` : null,
+    powerState: as === 'ok' ? 'ok' : as === 'low' || as === 'high' ? 'bad' : '',
+    powerSub: !aim ? '' : as === 'low' ? '&#9650; push harder' : as === 'high' ? '&#9660; ease off' : `${Math.round(aim.lo * v.ftp)}-${Math.round(aim.hi * v.ftp)} W`,
+    hr: Math.round(v.hrBpm || td.hr || 0) || '--',
+    cad: Math.round(td.cadence || 0),
+    cadState: cs === 'ok' ? 'ok' : cs === 'low' || cs === 'high' ? 'bad' : '',
+    cadSub: !seg?.cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : seg.cad.label,
+    ...third,
+  };
+}
 
-  set('rp-hr', hr || '--');
-  set('rp-cad', Math.round(td.cadence || 0));
-  const cs = s.cadStatus, cb = $('#rp-cad-box');
-  cb.classList.toggle('ok', cs === 'ok');
-  cb.classList.toggle('bad', cs === 'low' || cs === 'high');
-  set('rp-cad-sub', !seg?.cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : seg.cad.label);
-
-  const m3 = $('#rp-m3').parentElement;
-  if (s.mode === 'erg') {
-    set('rp-m3-k', 'Effort');
-    set('rp-m3', `${Math.round(s.intensity * 100)}%`);
-    set('rp-m3-sub', s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned');
-    m3.classList.toggle('up', s.intensity > 1.001);
-    m3.classList.toggle('down', s.intensity < 0.999);
-  } else {
-    set('rp-m3-k', 'Gear');
-    // Position first (ring × cog, cogs counted from the largest = 1), teeth in the sub line.
-    const gb = s.gb, kmh = Math.round(s.bike.v * 3.6);
-    set('rp-m3', gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`);
-    set('rp-m3-sub', gb.seq ? `${kmh} km/h` : `${gb.ring}×${gb.cog} · ${kmh} km/h`);
-    m3.classList.remove('up', 'down');
-  }
-
+/** Next line: the next step (its color, amount, target, cadence), "Last interval", or speed and distance in a free ride. */
+function phoneNext(s, v) {
   const next = s.segs && s.segIndex >= 0 ? s.segs[s.segIndex + 1] : null;
-  set('rp-next', next
-    ? `Next <span class="sw" style="background:${segColor(next, s, 0)}"></span><b>${segAmount(next)} @ ${segTargetText(next, s)}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`
-    : seg ? 'Last interval' : `${(s.bike.v * 3.6).toFixed(1)} km/h &middot; ${fmtDist(s.bike.dist)}`);
+  if (!next) return s.seg ? 'Last interval' : `${(s.bike.v * 3.6).toFixed(1)} km/h &middot; ${fmtDist(s.bike.dist)}`;
+  const color = next.kind === 'erg' ? v.zoneHex(segTarget(next, 0)) : v.gradeHex(next.grade + (s?.gradeOffset || 0));
+  const target = next.kind === 'erg'
+    ? (next.from === next.to ? `${Math.round(next.from * v.ftp * s.intensity)} W` : `${Math.round(next.from * v.ftp * s.intensity)}-${Math.round(next.to * v.ftp * s.intensity)} W`)
+    : `${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`;
+  return `Next <span class="sw" style="background:${color}"></span><b>${segAmount(next)} @ ${target}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`;
+}
 
-  // buttons
-  const erg = s.mode === 'erg';
-  set('rp-minus', erg ? '&minus;1%' : 'Gear &minus;');
-  set('rp-plus', erg ? '+1%' : 'Gear +');
-  set('rp-pause', !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause');
-  $('#rp-grade-row').classList.toggle('hidden', erg);
-  $('#rp-skip').classList.toggle('hidden', !seg);
-  $('#rp-lap').classList.toggle('hidden', !!seg); // workouts lap every interval on their own
-  $('#rp-erg').classList.toggle('hidden', !seg || (seg.kind !== 'erg' && !s.ergOff));
-  set('rp-erg', s.ergOff ? 'ERG back on' : 'ERG off');
+/** The buttons' labels and which sheet buttons show (`hidden`: grade row, skip, lap, erg). */
+function phoneButtons(s) {
+  const erg = s.mode === 'erg', seg = s.seg;
+  return {
+    minus: erg ? '&minus;1%' : 'Gear &minus;', plus: erg ? '+1%' : 'Gear +',
+    pause: !s.started ? 'Start' : s.paused ? 'Resume' : 'Pause',
+    hidden: {
+      'rp-grade-row': erg, 'rp-skip': !seg,
+      'rp-lap': !!seg, // workouts lap every interval on their own
+      'rp-erg': !seg || (seg.kind !== 'erg' && !s.ergOff),
+    },
+    erg: s.ergOff ? 'ERG back on' : 'ERG off',
+  };
+}
+
+/** The label over the chart / list: road progress on a slope-only workout, else "Workout · 3/8 done". */
+function phoneViewK(s) {
+  const n = s.segs.length, done = Math.min(s.segIndex < 0 ? n : s.segIndex, n);
+  return isTrack(s.segs) ? trackProgress(s) : `Workout &middot; ${done}/${n} done`;
+}
+
+function renderPhone(s) {
+  const v = rideView(s);
+  const set = (id, x) => { const el = document.getElementById(id); if (el.innerHTML !== String(x)) el.innerHTML = x; };
+
+  const t = phoneTop(s);
+  set('rp-elapsed', t.elapsed);
+  set('rp-name', t.name);
+  set('rp-left-k', t.leftK);
+  set('rp-left', t.left);
+
+  const h = phoneHero(s, v);
+  set('rp-int-label', h.label);
+  set('rp-count', h.count);
+  set('rp-target', h.target);
+  set('rp-target-sub', h.targetSub);
+  setZc($('#rp'), h.zc);
+
+  const b = phoneBoxes(s, v);
+  set('rp-power', b.power);
+  const gauge = $('#rp-gauge');
+  gauge.classList.toggle('off', b.gaugeAt === null);
+  if (b.gaugeAt !== null) gauge.querySelector('b').style.left = b.gaugeAt;
+  const pb = $('#rp-power-box');
+  pb.classList.toggle('ok', b.powerState === 'ok');
+  pb.classList.toggle('bad', b.powerState === 'bad');
+  set('rp-power-sub', b.powerSub);
+  set('rp-hr', b.hr);
+  set('rp-cad', b.cad);
+  const cb = $('#rp-cad-box');
+  cb.classList.toggle('ok', b.cadState === 'ok');
+  cb.classList.toggle('bad', b.cadState === 'bad');
+  set('rp-cad-sub', b.cadSub);
+  const m3 = $('#rp-m3').parentElement;
+  set('rp-m3-k', b.m3k);
+  set('rp-m3', b.m3);
+  set('rp-m3-sub', b.m3sub);
+  m3.classList.toggle('up', b.up);
+  m3.classList.toggle('down', b.down);
+
+  set('rp-next', phoneNext(s, v));
+
+  const k = phoneButtons(s);
+  set('rp-minus', k.minus);
+  set('rp-plus', k.plus);
+  set('rp-pause', k.pause);
+  for (const [id, hide] of Object.entries(k.hidden)) $(`#${id}`).classList.toggle('hidden', hide);
+  set('rp-erg', k.erg);
 
   renderPhoneView(s);
   drawPhoneChart();
@@ -1344,8 +1378,7 @@ function renderPhoneView(s) {
   wrap.classList.toggle('as-list', list);
   for (const b of $('#rp-view-tg').children) b.classList.toggle('on', b.dataset.view === (list ? 'list' : 'chart'));
   if (!s.segs) return;
-  const n = s.segs.length, done = Math.min(s.segIndex < 0 ? n : s.segIndex, n);
-  const k = isTrack(s.segs) ? trackProgress(s) : `Workout &middot; ${done}/${n} done`;
+  const k = phoneViewK(s);
   const kEl = $('#rp-view-k');
   if (kEl.innerHTML !== k) kEl.innerHTML = k;
   if (!list) return;
@@ -1373,6 +1406,21 @@ $('#rp-view-tg').onclick = (e) => {
   }
 };
 
+// Geometry of the phone chart, pure. Canvas pixels: y grows down, `bot` is the baseline.
+/** Free ride: the last 10 minutes; power to y with the top at FTP x 1.5 or the window's peak + 20 W if higher. */
+function phoneFreeScale(data, ftp, bot, plotH) {
+  const maxP = Math.max(ftp * 1.5, ...data.map((x) => x.power + 20));
+  return { maxP, Y: (v) => bot - (Math.min(v, maxP) / maxP) * plotH };
+}
+/** A workout: power to y with the top at the hardest ERG step (at least 130% FTP) + 8%, or the last 30 minutes' peak + 10 W. */
+function phoneScale(s, ftp, bot, plotH) {
+  const ergMax = Math.max(1.3, ...s.segs.filter((g) => g.kind === 'erg').map((g) => Math.max(g.from, g.to) * s.intensity)) * 1.08;
+  const maxP = Math.max(ergMax * ftp, ...s.samples.slice(-1800).map((x) => x.power + 10));
+  return { maxP, Yp: (w) => bot - (Math.min(w, maxP) / maxP) * plotH };
+}
+/** How many slices a block is drawn in: a ramp one per 3 px so it steps up, anything else one. */
+const phoneSlices = (g, x0, x1, dpr) => (g.kind === 'erg' && g.from !== g.to ? Math.max(1, Math.ceil((x1 - x0) / (3 * dpr))) : 1);
+
 /** Workout bars like Zwift: solid zone-coloured blocks, done part dimmed under the power trace. */
 function drawPhoneChart() {
   const s = app.session;
@@ -1387,10 +1435,9 @@ function drawPhoneChart() {
   if (!s.segs) {
     // free ride: last 10 minutes of power over the grade
     const win = 600, data = s.samples.slice(-win);
-    const maxP = Math.max(ftp * 1.5, ...data.map((x) => x.power + 20));
-    const Y = (v) => bot - (Math.min(v, maxP) / maxP) * plotH;
+    const { Y } = phoneFreeScale(data, ftp, bot, plotH);
     data.forEach((x, i) => {
-      const g = (x.grade || 0) / 100, h = Math.max(2 * dpr, ((g + 0.03) / 0.15) * plotH * 0.7);
+      const g = (x.grade || 0) / 100, h = gradeBarH(g, plotH, 0.7, 2 * dpr);
       const x0 = Math.floor((i / win) * W); ctx.fillStyle = gradeHex(g) + '88'; ctx.fillRect(x0, bot - h, Math.floor(((i + 1) / win) * W) - x0, h);
     });
     ctx.strokeStyle = INK; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
@@ -1404,23 +1451,20 @@ function drawPhoneChart() {
 
   if (isTrack(s.segs)) return drawTrack(ctx, s, { W, H, dpr, top, bot, area: 0.7, compact: true });
   const segs = s.segs, pos = s.chartPos;
-  const T = Math.max(segs.at(-1).end, pos + 1);
-  const X = (t) => (t / T) * W;
-  const ergMax = Math.max(1.3, ...segs.filter((g) => g.kind === 'erg').map((g) => Math.max(g.from, g.to) * s.intensity)) * 1.08;
-  const maxP = Math.max(ergMax * ftp, ...s.samples.slice(-1800).map((x) => x.power + 10));
-  const Yp = (w) => bot - (Math.min(w, maxP) / maxP) * plotH;
+  const X = workoutX(s, W);
+  const { Yp } = phoneScale(s, ftp, bot, plotH);
   const gap = segs.length > 60 ? 0 : 1 * dpr;
   const cur = s.segIndex;
 
   segs.forEach((g, i) => {
     const x0 = X(g.start), x1 = X(g.end);
-    const n = g.kind === 'erg' && g.from !== g.to ? Math.max(1, Math.ceil((x1 - x0) / (3 * dpr))) : 1;
+    const n = phoneSlices(g, x0, x1, dpr);
     for (let k = 0; k < n; k++) {
       const a = k / n, b = (k + 1) / n;
       const sx0 = Math.round(x0 + (x1 - x0) * a), sx1 = Math.round(x0 + (x1 - x0) * b);
       let y, col;
       if (g.kind === 'erg') { const f = segTarget(g, (a + b) / 2); y = Yp(f * ftp * s.intensity); col = zoneHex(f); }
-      else { const gr = g.grade + s.gradeOffset; y = bot - Math.max(4 * dpr, ((gr + 0.03) / 0.15) * plotH * 0.7); col = gradeHex(gr); }
+      else { const gr = g.grade + s.gradeOffset; y = bot - gradeBarH(gr, plotH, 0.7, 4 * dpr); col = gradeHex(gr); }
       const tMid = g.start + (g.end - g.start) * (a + b) / 2;
       ctx.globalAlpha = tMid < pos ? 0.38 : 1;
       ctx.fillStyle = col;
@@ -1428,7 +1472,7 @@ function drawPhoneChart() {
     }
     ctx.globalAlpha = 1;
     if (i === cur) { // outline the current block
-      const y = g.kind === 'erg' ? Math.min(Yp(g.from * ftp * s.intensity), Yp(g.to * ftp * s.intensity)) : bot - Math.max(4 * dpr, ((g.grade + s.gradeOffset + 0.03) / 0.15) * plotH * 0.7);
+      const y = g.kind === 'erg' ? Math.min(Yp(g.from * ftp * s.intensity), Yp(g.to * ftp * s.intensity)) : bot - gradeBarH(g.grade + s.gradeOffset, plotH, 0.7, 4 * dpr);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5 * dpr;
       ctx.strokeRect(x0 + dpr * 0.75, y - dpr * 0.75, Math.max(2, x1 - x0 - gap - dpr * 1.5), bot - y + dpr * 0.75);
     }
