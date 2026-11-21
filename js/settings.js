@@ -87,7 +87,7 @@ export function detectTrainer(dev) {
 export function shiftLine() {
   const t = app.trainer, want = app.settings.trainerShifting !== 'app';
   if (!want) return 'Rodillo works out the gear and sends the trainer a grade (FTMS). Takes effect on the next trainer connection.';
-  if (t?.state === 'connected' && t.zwiftShifting) return 'Now: in the trainer. Rodillo sends the road grade and your gear; the trainer sets the resistance itself, like with Zwift.';
+  if (t?.state === 'connected' && /** @type {import('./ble/trainer.js').Trainer} */ (t).zwiftShifting) return 'Now: in the trainer. Rodillo sends the road grade and your gear; the trainer sets the resistance itself, like with Zwift.';
   if (t?.state === 'connected') return "Now: in Rodillo. This trainer didn't answer the Zwift protocol (KICKR CORE needs firmware 1.3.17 or newer), so Rodillo does the gearing.";
   return 'The trainer does the gearing when it speaks the Zwift protocol (KICKR CORE with firmware 1.3.17 or newer); otherwise Rodillo does. Checked when the trainer connects.';
 }
@@ -117,7 +117,7 @@ function renderSettings() {
     else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
     else if (el.id === 'set-trainer') pickTrainer(el.value);
     else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
-    else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) app.trainer.useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
+    else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) /** @type {import('./ble/trainer.js').Trainer} */ (app.trainer).useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
     else if (el.dataset.k && el.value !== '') app.settings[el.dataset.k] = (Number(el.value) - Number(el.dataset.off)) / Number(el.dataset.mult);
     saveSettings();
   };

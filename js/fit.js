@@ -72,7 +72,7 @@ const fitTime = (unixMs) => Math.round(unixMs / 1000) - FIT_EPOCH;
  * @param {import('./types.js').Sample[]} samples
  * @param {{ startIdx: number, endIdx: number }[] | undefined} laps
  * @param {{ tss?: number }} [summary]
- * @returns {Uint8Array}
+ * @returns {Uint8Array<ArrayBuffer>}
  */
 export function encodeActivity(samples, laps, summary = {}) {
   if (!samples.length) throw new Error('No samples');

@@ -1,3 +1,4 @@
+// @ts-check
 import { Trainer } from './ble/trainer.js?v=202611102147';
 import { HeartRate } from './ble/hr.js?v=202611102147';
 import { ZwiftRide } from './ble/zwiftride.js?v=202611102147';
@@ -27,6 +28,9 @@ import { initRidePhone, renderPhone, sizePhoneChart } from './ridephone.js?v=202
 import { initControls, onButton, onRelease, focusables, applyFocus } from './controls.js?v=202611102147';
 import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js?v=202611102147';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js?v=202611102147';
+/** @typedef {import('./types.js').Settings} Settings */
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
+/** @typedef {import('./types.js').FieldEvent} FieldEvent */
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
@@ -37,14 +41,14 @@ let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE, GRAD
 // blank SVG fills draw black, blank strokes draw nothing, canvas keeps black (Nov 18: all-black charts in Bluefy).
 // So nothing starts until the stylesheet is in. Chrome already waits, so there this resolves at once.
 const cssReady = () => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() !== '';
-await new Promise((done) => {
+await /** @type {Promise<void>} */ (new Promise((done) => {
   const css = document.querySelector('link[rel="stylesheet"][href*="app.css"]');
   if (!css || cssReady()) return done();
-  css.addEventListener('load', done, { once: true });
-  css.addEventListener('error', done, { once: true });
-  window.addEventListener('load', done, { once: true });
+  css.addEventListener('load', /** @type {() => void} */ (done), { once: true });
+  css.addEventListener('error', /** @type {() => void} */ (done), { once: true });
+  window.addEventListener('load', /** @type {() => void} */ (done), { once: true });
   setTimeout(done, 10000);
-});
+}));
 /** Re-read the tokens if they came back blank (belt and braces for the wait above); call before drawing. */
 const ensureTokens = () => { if (!INK && cssReady()) readTokens(); };
 function readTokens() {
@@ -74,6 +78,7 @@ const setZc = (el, c) => { el.style.setProperty('--zc', c); el.style.setProperty
 const gradeHex = (g) => GRADE[gradeBand(g)];
 
 // ------------------------------------------------------------------ state
+/** @type {import('./types.js').AppState} */
 const app = {
   settings: { ...DEFAULT_SETTINGS, ...ls.get('settings', {}) },
   trainer: null, hr: null, controllers: [],
@@ -115,7 +120,7 @@ async function connect(kind) {
       const side = kind === 'controllerR' ? 'right' : kind === 'controller2' ? 'all' : 'left';
       if (side === 'left') { for (const old of app.controllers) old.disconnect(); app.controllers = []; }
       const c = new ZwiftRide();
-      c.side = side;
+      /** @type {ZwiftRide & { side?: string }} */ (c).side = side; // which hood(s) this connection is for
       bindDevice(c);
       c.on('press', (b) => onButton(b, c));
       c.on('release', onRelease);
@@ -193,7 +198,7 @@ function renderDevices() {
     const btn = el.querySelector('[data-connect]');
     btn.textContent = st === 'connected' ? 'Reconnect' : 'Connect';
   };
-  const tz = app.trainer?.state === 'connected' && !app.demo ? `<br>Shifting: ${app.trainer.zwiftShifting && app.settings.trainerShifting !== 'app' ? 'in the trainer (Zwift protocol)' : 'in Rodillo (FTMS)'}` : '';
+  const tz = app.trainer?.state === 'connected' && !app.demo ? `<br>Shifting: ${/** @type {Trainer} */ (app.trainer).zwiftShifting && app.settings.trainerShifting !== 'app' ? 'in the trainer (Zwift protocol)' : 'in Rodillo (FTMS)'}` : '';
   card('trainer', app.trainer, app.demo ? 'Simulated' : tz);
   card('hr', app.hr);
   const ctl = app.controllers.find((c) => c.state === 'connected') || app.controllers[0];
@@ -301,7 +306,7 @@ async function starterPlan(gh) {
  */
 function reconcileSettings(source = 'settings') {
   const r = reconcile({ plan: app.coachPlan, settings: app.settings, base: ls.get('settingsBase', null), pending: ls.get('settingsPending', {}), defaults: DEFAULT_SETTINGS, source });
-  app.settings = r.settings;
+  app.settings = /** @type {Settings} */ (r.settings);
   // bikes saved before gearing left the bike (Nov 12): their gearings move to the rider's own; the next save sends it
   const moved = migrateGarage(app.settings);
   if (moved) Object.assign(app.settings, moved);
@@ -400,12 +405,12 @@ function plannedOn(id) {
 }
 
 function applyLibrary() {
-  const custom = new Map((signedIn() ? app.coachWorkouts || [] : []).map((w) => [w.id, { ...w, _source: 'coach' }]));
+  const custom = new Map((signedIn() ? app.coachWorkouts || [] : []).map((w) => [w.id, { ...w, _source: /** @type {'coach'} */ ('coach') }]));
   const lib = (app.baseLibrary || []).map((w) => custom.get(w.id) || w);
   for (const [id, w] of custom) if (!lib.some((x) => x.id === id)) lib.push(w);
   for (const w of ls.get('imported', [])) lib.push(w);
   // Agustín's own workouts (builder) are private: only with access to rodillo-data (GitHub sign-in or token).
-  const mine = !signedIn() ? [] : mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: 'mine' }))
+  const mine = !signedIn() ? [] : mineView(app.mineDoc, ls.get('minePending', {})).map((w) => ({ ...w, _source: /** @type {'mine'} */ ('mine') }))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   app.plan = (signedIn() && app.coachPlan) || app.basePlan || null; // the coach's plan is private: signed out shows the public one
   reconcileSettings();
@@ -421,14 +426,14 @@ function applyLibrary() {
 // ---- Training tab (stats card, charts, rides list): js/training.js. trainingRows() is in js/today.js with refreshPlanViews().
 // Touch screens have no hover: tap (i) to toggle the tip, tap anywhere else to close it (infoTip() tips: the Training tab and
 // Today's overview tiles).
-document.addEventListener('click', (e) => {
+document.addEventListener('click', (/** @type {ElementEvent} */ e) => {
   const btn = e.target.closest('.info-btn');
   $$('.info.open').forEach((x) => { if (!btn || x !== btn.parentElement) x.classList.remove('open'); });
   if (btn) btn.parentElement.classList.toggle('open');
 });
 
 // ------------------------------------------------------------------ imports
-$('#import-workout').addEventListener('change', async (e) => {
+$('#import-workout').addEventListener('change', async (/** @type {FieldEvent} */ e) => {
   const failed = [];
   for (const f of e.target.files) {
     const text = await f.text();
@@ -923,7 +928,7 @@ async function doneFtp(take) {
   const st = rd.done.ride.summary;
   const say = (msg) => { f.msg = msg; const b = $('#dn-ftp .dn-ftp-btns'); if (b) b.remove(); $('#dn-ftpmsg').textContent = msg; };
   if (!take) { if (f.test) declineTestFtp(st.id); say(`Kept ${f.cur} W.`); return; }
-  $$('#dn-ftp button').forEach((b) => (b.disabled = true));
+  $$('#dn-ftp button').forEach((/** @type {HTMLButtonElement} */ b) => (b.disabled = true));
   app.settings.ftp = f.ftp;
   reconcileSettings(`${f.test ? 'ramp test' : 'ride'} ${st.id.slice(0, 10)}`);
   const synced = await flushSettings();
@@ -956,7 +961,7 @@ function drawRideChart() {
   const c = chartSvg(rd.doc, { width: wrap.clientWidth, phone: isPhone(), ftp: rideFtp(), segs: rd.segs, sel: rd.sel, tok: TOK, zoneHex, gradeHex });
   const svg = $('#rd-chart');
   svg.setAttribute('viewBox', `0 0 ${c.width} ${c.height}`);
-  svg.setAttribute('height', c.height);
+  svg.setAttribute('height', String(c.height));
   svg.innerHTML = c.svg;
   rd.geo = c.geo;
   const s = rd.segs.find((x) => x.i === rd.sel);
@@ -1010,8 +1015,8 @@ function bindRideChart() {
   wrap.addEventListener('touchstart', touch, { passive: true });
   wrap.addEventListener('touchmove', touch, { passive: true });
   // click works in Bluefy too (its web view doesn't always send pointer events for taps on non-buttons)
-  wrap.addEventListener('click', (e) => {
-    const strip = e.target.closest('.rd-strip [data-i]');
+  wrap.addEventListener('click', (/** @type {ElementEvent} */ e) => {
+    const strip = /** @type {SVGElement} */ (e.target.closest('.rd-strip [data-i]'));
     if (strip) return selectRideSeg(+strip.dataset.i);
     const t = tAt(e.clientX);
     if (!canHover.matches) return rideCrosshair(t);
@@ -1039,8 +1044,8 @@ function rideAction(what) {
   }
 }
 
-$('#rd').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-rd]');
+$('#rd').addEventListener('click', async (/** @type {ElementEvent} */ e) => {
+  const b = /** @type {HTMLElement} */ (e.target.closest('[data-rd]'));
   if (b) {
     const a = b.dataset.rd;
     if (a === 'back' || a === 'done') closeRide();
@@ -1060,11 +1065,11 @@ $('#rd').addEventListener('click', async (e) => {
     }
     return;
   }
-  const tr = e.target.closest('#rd-ints tr[data-i]');
+  const tr = /** @type {HTMLElement} */ (e.target.closest('#rd-ints tr[data-i]'));
   if (tr) selectRideSeg(+tr.dataset.i, true);
 });
 // phone: a tap outside the chart puts the reading away
-document.addEventListener('touchstart', (e) => { if (app.screen === 'ridepage' && rd.t != null && !e.target.closest('#rd-wrap')) rideCrosshair(null); }, { passive: true });
+document.addEventListener('touchstart', (/** @type {import('./types.js').ElementEvent<TouchEvent>} */ e) => { if (app.screen === 'ridepage' && rd.t != null && !e.target.closest('#rd-wrap')) rideCrosshair(null); }, { passive: true });
 let rdResize = 0;
 window.addEventListener('resize', () => { if (app.screen !== 'ridepage') return; cancelAnimationFrame(rdResize); rdResize = requestAnimationFrame(drawRideChart); });
 
@@ -1137,13 +1142,13 @@ function modalAction(what, a) {
   switch (what) {
     case 'first': modalFocus = 0; setModalFocus(); break;
     case 'last': modalFocus = btns.length - 1; setModalFocus(); break;
-    case 'press': (btns.includes(document.activeElement) ? document.activeElement : btns[modalFocus])?.click(); break;
+    case 'press': (/** @type {HTMLElement} */ (btns.includes(/** @type {HTMLElement} */ (document.activeElement)) ? document.activeElement : btns[modalFocus]))?.click(); break;
     case 'cancel': modalDone?.(btns.length < 2); break;
   }
 }
 $('#modal-ok').onclick = () => modalDone?.(true);
 $('#modal-cancel').onclick = () => modalDone?.(false);
-$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') modalDone?.(modalBtns().length < 2); });
+$('#modal').addEventListener('click', (/** @type {ElementEvent} */ e) => { if (e.target.id === 'modal') modalDone?.(modalBtns().length < 2); });
 
 // ---- garage and gearing (the #garage popup, Bikes | Gearing): js/garage.js
 initGarage({ app, numField, saveSettings, ask, syncClient, setDevPop });
@@ -1185,7 +1190,7 @@ $('#btn-demo').onclick = enterDemo;
 $('#btn-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!devPopOpen()); };
 $('#devpop-close').onclick = () => setDevPop(false);
 // click anywhere outside closes it (the Bluetooth chooser is browser chrome, so it doesn't count as outside)
-document.addEventListener('click', (e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #pz-devices, #modal')) setDevPop(false); });
+document.addEventListener('click', (/** @type {ElementEvent} */ e) => { if (devPopOpen() && !e.target.closest('#devpop, #btn-devices, #pz-devices, #modal')) setDevPop(false); });
 // pause screen of a ride: the same panels as the home top bar
 $('#pz-devices').onclick = (e) => { e.stopPropagation(); setDevPop(!(devPopOpen() && $('#devpop').classList.contains('on-ride')), 'ride'); };
 $('#pz-controls').onclick = () => $('#btn-controls').click();
@@ -1206,12 +1211,12 @@ $('#btn-new-wo').onclick = () => { setDevPop(false); if (signedIn()) openBuilder
 if (inkObserver) { inkObserver.observe($('#wo-kind')); inkObserver.observe($('#tabs')); }
 placeInk($('#tabs'), $('#tabs button.active'));
 // "Settings" links in notices open the panel (the top-bar button is just a gear)
-document.addEventListener('click', (e) => {
+document.addEventListener('click', (/** @type {ElementEvent} */ e) => {
   if (!e.target.closest('[data-open-gearing]')) return;
   e.preventDefault();
   openGearing();
 });
-document.addEventListener('click', (e) => {
+document.addEventListener('click', (/** @type {ElementEvent} */ e) => {
   if (!e.target.closest('[data-open-garage]')) return;
   e.preventDefault();
   $$('.panel').forEach((p) => p.classList.add('hidden'));
@@ -1287,7 +1292,7 @@ function setTheme(t) {
   app.theme = t === 'dark' ? 'dark' : 'light';
   ls.set('theme', app.theme);
   document.documentElement.dataset.theme = app.theme;
-  document.querySelector('meta[name="theme-color"]').content = app.theme === 'dark' ? '#0c0e0d' : '#e6e9e5';
+  /** @type {HTMLMetaElement} */ (document.querySelector('meta[name="theme-color"]')).content = app.theme === 'dark' ? '#0c0e0d' : '#e6e9e5';
   const label = app.theme === 'dark' ? 'Light mode' : 'Dark mode';
   $('#btn-theme').title = `Switch to ${label.toLowerCase()}`;
   $('#btn-theme').setAttribute('aria-label', label);
@@ -1309,7 +1314,7 @@ const scrimObs = new MutationObserver(syncScrim);
 $$('.panel').forEach((p) => scrimObs.observe(p, { attributes: true, attributeFilter: ['class'] }));
 $('#scrim').onclick = () => { if (!builderOpen()) $$('.panel').forEach((p) => p.classList.add('hidden')); };
 $('#btn-diag').onclick = async () => {
-  for (const d of [app.trainer, app.hr, ...app.controllers]) {
+  for (const d of /** @type {import('./ble/base.js').BleDevice[]} */ ([app.trainer, app.hr, ...app.controllers])) {
     if (!d?.listServices || d.state !== 'connected') continue;
     logMsg(d.kind, `${d.name} ${JSON.stringify(d.info)} services: ${(await d.listServices()).join(', ')}`);
   }
@@ -1350,7 +1355,7 @@ setInterval(() => {
   const now = performance.now();
   const dt = Math.min(1, (now - last) / 1000);
   last = now;
-  if (app.demo) { app.trainer.step(); app.hr.step(dt); }
+  if (app.demo) { /** @type {SimTrainer} */ (app.trainer).step(); /** @type {SimHr} */ (app.hr).step(dt); }
   const s = app.session;
   if (s && !s.finished) {
     s.tick(dt);
@@ -1381,4 +1386,4 @@ renderDevices();
 loadLibrary();
 autoReconnect();
 syncPending();
-window.rodillo = app; // for debugging from the console
+/** @type {Window & { rodillo?: object }} */ (window).rodillo = app; // for debugging from the console

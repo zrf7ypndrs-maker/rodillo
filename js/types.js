@@ -314,14 +314,14 @@
 /**
  * @typedef {object} AppState The one state object js/app.js passes to every module as `app`.
  * @property {Settings} settings
- * @property {any} trainer Trainer, the demo sim or null.
- * @property {any} hr Heart rate strap or null.
- * @property {any[]} controllers Zwift Ride hoods.
+ * @property {import('./ble/trainer.js').Trainer | import('./ble/sim.js').SimTrainer | null} trainer The trainer, the demo sim or null.
+ * @property {import('./ble/hr.js').HeartRate | import('./ble/sim.js').SimHr | null} hr Heart rate strap, the demo one or null.
+ * @property {(import('./ble/zwiftride.js').ZwiftRide & { side?: string })[]} controllers Zwift Ride hoods.
  * @property {boolean} demo
  * @property {Workout[]} library
  * @property {Plan | null} plan
- * @property {any} session The ride in progress (engine/session.js Session) or null.
- * @property {string | null} rideId
+ * @property {RideSession | null} session The ride in progress or null.
+ * @property {number | null} rideId The ride in progress's start, epoch ms (its LocalRide id).
  * @property {string} screen 'home' | 'ride' | 'ridepage'.
  * @property {string} tab 'today' | 'workouts' | 'calendar' | 'training'.
  * @property {number} focus

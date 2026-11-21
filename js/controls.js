@@ -11,6 +11,7 @@ import { shiftStyleFor } from './engine/garage.js?v=202611102147';
 import { builderOpen, closeBuilder } from './builder.js?v=202611102147';
 import { logMsg } from './ble/base.js?v=202611102147';
 import { $, $$, toast } from './ui.js?v=202611102147';
+/** @typedef {import('./ble/sim.js').SimTrainer} SimTrainer */
 /**
  * @typedef {object} ControlState
  * @property {boolean} [launching]
@@ -163,8 +164,9 @@ export function initControls(deps) {
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(/** @type {HTMLElement} */ (e.target).tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
     if (builderOpen() && e.key !== 'Escape') return; // Space/Enter press the builder's own buttons
     if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
-      app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
-      toast(`Demo rider: ${app.trainer.riderPower} W`);
+      // demo mode: the trainer is the sim
+      /** @type {SimTrainer} */ (app.trainer).riderPower = Math.max(0, /** @type {SimTrainer} */ (app.trainer).riderPower + (e.key === '-' ? -20 : 20));
+      toast(`Demo rider: ${/** @type {SimTrainer} */ (app.trainer).riderPower} W`);
       return;
     }
     const st = controlState();
