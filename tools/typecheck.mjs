@@ -27,7 +27,7 @@ const copy = (dir) => {
 copy('js');
 fs.writeFileSync(path.join(out, 'tsconfig.json'), JSON.stringify({
   extends: path.join(root, 'tsconfig.json'),
-  include: ['js/**/*.js'],
+  include: ['js/**/*.js', path.join(root, 'types', '*.d.ts')], // types/: browser APIs the DOM types lack (Web Bluetooth)
 }, null, 2));
 
 const tsc = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');

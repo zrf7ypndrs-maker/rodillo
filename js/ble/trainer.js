@@ -1,3 +1,4 @@
+// @ts-check
 // Smart trainer over FTMS (Fitness Machine Service), with Cycling Power as a
 // fallback/supplement for power, cadence and wheel data.
 
@@ -128,7 +129,8 @@ export class Trainer extends BleDevice {
     this.zwift = null;
     if (this.useZwift) {
       const link = new ZwiftHubLink(this);
-      if (await link.start(this.zwiftTimeoutMs || 3000)) this.zwift = link;
+      // zwiftTimeoutMs: only test/ble-mock.mjs sets it (a shorter wait)
+      if (await link.start(/** @type {Trainer & { zwiftTimeoutMs?: number }} */ (this).zwiftTimeoutMs || 3000)) this.zwift = link;
     }
   }
 

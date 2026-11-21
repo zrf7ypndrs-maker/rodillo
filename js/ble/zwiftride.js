@@ -1,3 +1,4 @@
+// @ts-check
 // Zwift Ride handlebar controllers (also works for Click v1 / Play on the Ride protocol).
 // Protocol notes (from the open-source BikeControl project):
 //  - custom service 0xFC82 (older devices: 00000001-19ca-4651-86e5-fa29dcdd09d1)

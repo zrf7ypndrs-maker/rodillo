@@ -1,3 +1,4 @@
+// @ts-check
 // Shared Web Bluetooth plumbing: connect, auto-reconnect, serialized writes.
 
 export const uuid16 = (n) => `0000${n.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
@@ -47,9 +48,10 @@ export class BleDevice extends Emitter {
   /** Take `device` and watch it for drops, once per device (re-picking the same strap mid-ride used to stack listeners). */
   listen(device) {
     this.device = device;
-    this._heard ||= new WeakSet();
-    if (this._heard.has(device)) return;
-    this._heard.add(device);
+    // _heard: the devices already watched (set here, on first use)
+    /** @type {BleDevice & { _heard?: WeakSet<BluetoothDevice> }} */ (this)._heard ||= new WeakSet();
+    if (/** @type {BleDevice & { _heard?: WeakSet<BluetoothDevice> }} */ (this)._heard.has(device)) return;
+    /** @type {BleDevice & { _heard?: WeakSet<BluetoothDevice> }} */ (this)._heard.add(device);
     device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
   }
 

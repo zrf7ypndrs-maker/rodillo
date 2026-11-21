@@ -1,3 +1,4 @@
+// @ts-check
 // Zwift trainer protocol ("Zwift Protocol", trainer side): lets the trainer do virtual shifting itself, like it does
 // for Zwift. Rodillo sends the course grade and the virtual gear ratio; the trainer's firmware measures the real gear
 // (cadence x flywheel speed) and sets its brake on its own, many times a second, with no Bluetooth round trip.
@@ -33,6 +34,8 @@ function varint(n) {
   out.push(n);
   return out;
 }
+/** @typedef {{ grade?: number, wind?: number, cwa?: number, crr?: number }} SimParams Grade as a fraction; wind m/s, CWa m², Crr. */
+/** @typedef {{ gearRatio?: number, bikeKg?: number, riderKg?: number }} PhysParams */
 const zz = (n) => { n = Math.round(n); return n >= 0 ? 2 * n : -2 * n - 1; }; // sint32 zigzag
 const fieldVarint = (num, v) => [...varint(num * 8), ...varint(v)];
 const fieldMsg = (num, body) => [...varint(num * 8 + 2), ...varint(body.length), ...body];
@@ -41,6 +44,7 @@ const fieldMsg = (num, body) => [...varint(num * 8 + 2), ...varint(body.length),
  * SimulationParam body: grade as a fraction (0.20 = 20%). Incline only by default, like qdomyos-zwift (known to work
  * on Wahoo/Zwift Hub): with wind, CWa and Crr in the same message the KICKR CORE took the gear but ignored the grade
  * (Nov 20, Agustín: 167 W at 25.5 km/h on "7%", a flat road). wind / cwa / crr go out only when given.
+ * @param {SimParams} [p]
  */
 export function simulationParam({ grade = 0, wind, cwa, crr } = {}) {
   return [
@@ -50,7 +54,8 @@ export function simulationParam({ grade = 0, wind, cwa, crr } = {}) {
     ...(crr != null ? fieldVarint(4, crr * 100000) : []),
   ];
 }
-/** PhysicalParam body. gearRatio = chainring / cog (e.g. 32/52 = 0.615); 0 leaves it out. */
+/** PhysicalParam body. gearRatio = chainring / cog (e.g. 32/52 = 0.615); 0 leaves it out.
+ * @param {PhysParams} [p] */
 export function physicalParam({ gearRatio = 0, bikeKg, riderKg } = {}) {
   return [
     ...fieldVarint(2, gearRatio * 10000),
@@ -58,7 +63,8 @@ export function physicalParam({ gearRatio = 0, bikeKg, riderKg } = {}) {
     ...(riderKg ? fieldVarint(5, riderKg * 100) : []),
   ];
 }
-/** 0x04 HubCommand with any of: powerTarget (W), sim (SimulationParam fields), physical (PhysicalParam fields). */
+/** 0x04 HubCommand with any of: powerTarget (W), sim (SimulationParam fields), physical (PhysicalParam fields).
+ * @param {{ powerTarget?: number, sim?: SimParams, physical?: PhysParams }} [p] */
 export function hubCommand({ powerTarget, sim, physical } = {}) {
   return new Uint8Array([
     0x04,

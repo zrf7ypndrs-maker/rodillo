@@ -1,3 +1,4 @@
+// @ts-check
 // Simulated trainer + HR strap for testing without hardware.
 // The simulated rider holds a chosen power; cadence emerges from the
 // resistance the app commands, exactly like on the real trainer.

@@ -1,3 +1,4 @@
+// @ts-check
 import { BleDevice, uuid16 } from './base.js?v=202611102147';
 
 const HRS = uuid16(0x180d);
