@@ -1,3 +1,4 @@
+// @ts-check
 // Bike garage and gearing: the #garage popup (Bikes | Gearing tabs) and its editors. Moved out of js/app.js
 // Nov 17 (code-health plan step 4) with no change in behavior. The editors work on `draft`, never on settings;
 // picking a bike or gearing writes settings and saves through app.js. Pure logic: js/engine/garage.js,
@@ -11,7 +12,15 @@ import { ls } from './store.js?v=202611102147';
 import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 
 // from app.js, set by initGarage()
-let app, numField, saveSettings, ask, syncClient, setDevPop;
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
+/** @typedef {import('./types.js').FieldEvent} FieldEvent */
+/** @typedef {import('./types.js').GarageDeps} Deps */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['numField']} */ let numField;
+/** @type {Deps['saveSettings']} */ let saveSettings;
+/** @type {Deps['ask']} */ let ask;
+/** @type {Deps['syncClient']} */ let syncClient;
+/** @type {Deps['setDevPop']} */ let setDevPop;
 
 // ---- gearing: a known drivetrain, or your own chainrings and cogs
 // The menu is "a x b" gears, chainring teeth, smallest and largest cog (the cogs between come from cassette()).
@@ -40,7 +49,7 @@ function gearingHtml() {
 }
 /** 1x: which hood the shifter is on. 2x: SRAM or Shimano. Keeps draft.shiftStyle valid for the gearing. */
 function fillStyle(d) {
-  const one = !d.seq && d.rings.length === 1, el = $('#set-style');
+  const one = !d.seq && d.rings.length === 1, el = /** @type {HTMLSelectElement} */ ($('#set-style'));
   draft.shiftStyle = shiftStyleFor(draft.shiftStyle, one);
   $('label[for="set-style"]').textContent = one ? 'Shifter side' : 'Shifting style';
   el.innerHTML = one ? '<option value="right">Right</option><option value="left">Left</option>' : '<option value="sram">SRAM</option><option value="shimano">Shimano</option>';
@@ -57,41 +66,41 @@ function styleHelp(d) {
 }
 function fillDrivetrain() {
   const d = dtSpec(draft), two = !d.seq && d.rings.length > 1;
-  $('#set-gears').value = d.seq ? 'zwift' : `${d.rings.length}x${d.cogs.length}`;
+  /** @type {HTMLSelectElement} */ ($('#set-gears')).value = d.seq ? 'zwift' : `${d.rings.length}x${d.cogs.length}`;
   $('.dt-fields').classList.toggle('hidden', !!d.seq);
   $$('.dt-2x').forEach((el) => el.classList.toggle('hidden', !two));
   if (!d.seq) {
     $('label[for="set-ring1"]').textContent = two ? 'Big ring (teeth)' : 'Chainring (teeth)';
     $('#set-ring1').closest('.fld').classList.toggle('full', !two);
-    $('#set-ring1').value = d.rings.at(-1);
-    $('#set-ring2').value = two ? d.rings[0] : '';
+    /** @type {HTMLInputElement} */ ($('#set-ring1')).value = d.rings.at(-1);
+    /** @type {HTMLInputElement} */ ($('#set-ring2')).value = two ? d.rings[0] : '';
     $('#set-cmin').innerHTML = cogOpts(COG_MINS, d.cogs[0]);
     $('#set-cmax').innerHTML = cogOpts(COG_MAXES, d.cogs.at(-1));
-    $('#set-cmin').value = d.cogs[0];
-    $('#set-cmax').value = d.cogs.at(-1);
+    /** @type {HTMLSelectElement} */ ($('#set-cmin')).value = d.cogs[0];
+    /** @type {HTMLSelectElement} */ ($('#set-cmax')).value = d.cogs.at(-1);
   }
   $('#dt-sum').textContent = dtSummary(d);
   fillStyle(d);
 }
 /** Reads the gearing fields. Saves only a valid set; returns false (and says why) otherwise. */
 function editDrivetrain(el) {
-  const count = $('#set-gears').value;
+  const count = /** @type {HTMLSelectElement} */ ($('#set-gears')).value;
   if (count === 'zwift') { draft.drivetrain = 'zwift-24'; draft.customDrivetrain = null; fillDrivetrain(); return true; }
   const two = count.startsWith('2');
-  let r1 = Number($('#set-ring1').value) || 0, r2 = Number($('#set-ring2').value) || 0;
+  let r1 = Number(/** @type {HTMLInputElement} */ ($('#set-ring1')).value) || 0, r2 = Number(/** @type {HTMLInputElement} */ ($('#set-ring2')).value) || 0;
   if (el?.id === 'set-gears') {
     // coming from Zwift's gears or switching 1x / 2x: start from rings that make sense
     if (!r1) r1 = two ? 50 : 32;
     if (two && !r2) { r2 = Math.max(24, r1 - 16); if (r1 < 44) { r1 = 50; r2 = 34; } }
-    $('#set-ring1').value = r1;
-    $('#set-ring2').value = two ? r2 : '';
-    if ($('#set-cmin').options.length === 0) { $('#set-cmin').innerHTML = cogOpts(COG_MINS, 11); $('#set-cmax').innerHTML = cogOpts(COG_MAXES, 34); $('#set-cmin').value = 11; $('#set-cmax').value = 34; }
+    /** @type {HTMLInputElement} */ ($('#set-ring1')).value = String(r1);
+    /** @type {HTMLInputElement} */ ($('#set-ring2')).value = two ? String(r2) : '';
+    if (/** @type {HTMLSelectElement} */ ($('#set-cmin')).options.length === 0) { $('#set-cmin').innerHTML = cogOpts(COG_MINS, 11); $('#set-cmax').innerHTML = cogOpts(COG_MAXES, 34); /** @type {HTMLSelectElement} */ ($('#set-cmin')).value = '11'; /** @type {HTMLSelectElement} */ ($('#set-cmax')).value = '34'; }
     $$('.dt-2x').forEach((x) => x.classList.toggle('hidden', !two));
     $('label[for="set-ring1"]').textContent = two ? 'Big ring (teeth)' : 'Chainring (teeth)';
     $('#set-ring1').closest('.fld').classList.toggle('full', !two);
     $('.dt-fields').classList.remove('hidden');
   }
-  const r = simpleSpec({ count, rings: two ? [r1, r2] : [r1], min: $('#set-cmin').value, max: $('#set-cmax').value });
+  const r = simpleSpec({ count, rings: two ? [r1, r2] : [r1], min: /** @type {HTMLSelectElement} */ ($('#set-cmin')).value, max: /** @type {HTMLSelectElement} */ ($('#set-cmax')).value });
   if (r.error) { $('#dt-sum').textContent = `Not saved yet. ${r.error}`; return false; }
   const id = presetFor(r.spec);
   if (id) draft.drivetrain = id;
@@ -125,15 +134,15 @@ function bikeHtml() {
 function fillBike(keepWeight = false) {
   const spec = draft.bikeSpec ? cleanSpec(draft.bikeSpec) : null;
   $('#set-bike').innerHTML = bikeOptions();
-  $('#set-bike').value = spec ? bikePresetFor(spec) || BIKE_CUSTOM : BIKE_EXACT;
+  /** @type {HTMLSelectElement} */ ($('#set-bike')).value = spec ? bikePresetFor(spec) || BIKE_CUSTOM : BIKE_EXACT;
   $('.bike-fields').classList.toggle('hidden', !spec);
-  if (!keepWeight) $('#set-bikeKg').value = +draft.bikeKg.toFixed(1);
+  if (!keepWeight) /** @type {HTMLInputElement} */ ($('#set-bikeKg')).value = String(+draft.bikeKg.toFixed(1));
   if (spec) {
-    $('#set-btype').value = spec.type;
-    $('#set-bmat').value = spec.material;
-    $('#set-bfront').value = spec.front;
-    $('#set-brear').value = spec.rear;
-    $('#set-bbuild').value = spec.build;
+    /** @type {HTMLSelectElement} */ ($('#set-btype')).value = spec.type;
+    /** @type {HTMLSelectElement} */ ($('#set-bmat')).value = spec.material;
+    /** @type {HTMLInputElement} */ ($('#set-bfront')).value = String(spec.front);
+    /** @type {HTMLInputElement} */ ($('#set-brear')).value = String(spec.rear);
+    /** @type {HTMLSelectElement} */ ($('#set-bbuild')).value = spec.build;
     $$('.bike-mtb').forEach((el) => el.classList.toggle('hidden', BIKE_TYPES[spec.type].fam !== 'mtb'));
   }
   $('#bike-sum').textContent = spec
@@ -154,8 +163,8 @@ function pickBike(id) {
 /** Reads the spec fields. A new type starts from that type's usual travel. */
 function editBike(el) {
   const s = {
-    type: $('#set-btype').value, material: $('#set-bmat').value, build: $('#set-bbuild').value,
-    front: $('#set-bfront').value, rear: $('#set-brear').value,
+    type: /** @type {HTMLSelectElement} */ ($('#set-btype')).value, material: /** @type {HTMLSelectElement} */ ($('#set-bmat')).value, build: /** @type {HTMLSelectElement} */ ($('#set-bbuild')).value,
+    front: /** @type {HTMLInputElement} */ ($('#set-bfront')).value, rear: /** @type {HTMLInputElement} */ ($('#set-brear')).value,
   };
   if (el.id === 'set-btype') { s.front = BIKE_TYPES[s.type].front; s.rear = BIKE_TYPES[s.type].rear; }
   if ((el.id === 'set-bfront' || el.id === 'set-brear') && el.value === '') return false;
@@ -263,7 +272,7 @@ function renderGarage(view = garView) {
   const f = $('#garage-form');
   const b = view.id && garageOf(app.settings).find((x) => x.id === view.id);
   if (view.mode === 'details' && b) f.innerHTML = garDetailsHtml(b);
-  else if (view.mode === 'custom' && draft) { f.innerHTML = garCustomHtml(); $('#set-wheel').value = closestWheel(draft.wheel); fillBike(); }
+  else if (view.mode === 'custom' && draft) { f.innerHTML = garCustomHtml(); /** @type {HTMLSelectElement} */ ($('#set-wheel')).value = String(closestWheel(draft.wheel)); fillBike(); }
   else { garView = { mode: 'list' }; f.innerHTML = garListHtml(); }
   $('#garage').scrollTop = 0;
 }
@@ -276,10 +285,10 @@ function startCustom(from) {
   draft = { name: g.some((x) => x.name === base) ? `${base} ${g.length + 1}` : base,
     bikeKg: src.bikeKg ?? DEFAULT_SETTINGS.bikeKg, bikeSpec: src.bikeSpec || null, wheel: closestWheel(src.wheel || DEFAULT_SETTINGS.wheelCirc) };
   renderGarage({ mode: 'custom' });
-  $('#set-gname').focus(); $('#set-gname').select();
+  $('#set-gname').focus(); /** @type {HTMLInputElement} */ ($('#set-gname')).select();
 }
 function saveCustom() {
-  const name = $('#set-gname').value.trim();
+  const name = /** @type {HTMLInputElement} */ ($('#set-gname')).value.trim();
   if (!name) { $('#gar-err').textContent = 'Give it a name.'; $('#set-gname').focus(); return; }
   const g = garageOf(app.settings);
   const b = cleanBike({ id: newBikeId(g), name, bikeKg: draft.bikeKg, bikeSpec: draft.bikeSpec, wheel: draft.wheel });
@@ -362,8 +371,8 @@ function renderGearing(view = gearView) {
   if (gearView === 'new') { f.innerHTML = gearNewHtml(); fillDrivetrain(); }
   else {
     f.innerHTML = gearListHtml();
-    $('#gear-all').value = gearOptions().find((o) => o.on)?.v || '';
-    if ($('#gear-style')) $('#gear-style').value = shiftStyleFor(app.settings.shiftStyle, $('#gear-style').options[0].value === 'right');
+    /** @type {HTMLSelectElement} */ ($('#gear-all')).value = gearOptions().find((o) => o.on)?.v || '';
+    if ($('#gear-style')) /** @type {HTMLSelectElement} */ ($('#gear-style')).value = shiftStyleFor(app.settings.shiftStyle, /** @type {HTMLSelectElement} */ ($('#gear-style')).options[0].value === 'right');
   }
   $('#garage').scrollTop = 0;
 }
@@ -375,7 +384,7 @@ function setGarTab(id, animate = false) {
   const prev = garTab;
   garTab = id;
   draft = null; // leaving a half-made bike or gearing discards it, like Cancel
-  $$('#gar-tabs button').forEach((b) => { const on = b.dataset.gtab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+  $$('#gar-tabs button').forEach((b) => { const on = b.dataset.gtab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
   $('#garage-form').classList.toggle('hidden', id !== 'bikes');
   $('#gearing-form').classList.toggle('hidden', id !== 'gearing');
   if (id === 'bikes') renderGarage({ mode: 'list' }); else renderGearing('list');
@@ -402,12 +411,12 @@ function startGearing() {
   draft = { name: `My gearing${n ? ` ${n + 1}` : ''}`, drivetrain: app.settings.drivetrain, customDrivetrain: app.settings.customDrivetrain || null, shiftStyle: app.settings.shiftStyle || 'sram' };
   if (draft.drivetrain === 'zwift-24') draft.drivetrain = DEFAULT_SETTINGS.drivetrain; // a new gearing has real teeth
   renderGearing('new');
-  $('#set-gname').focus(); $('#set-gname').select();
+  $('#set-gname').focus(); /** @type {HTMLInputElement} */ ($('#set-gname')).select();
 }
 function saveGearing() {
-  const name = $('#set-gname').value.trim();
+  const name = /** @type {HTMLInputElement} */ ($('#set-gname')).value.trim();
   if (!name) { $('#gar-err').textContent = 'Give it a name.'; $('#set-gname').focus(); return; }
-  if ($('#set-gears').value !== 'zwift' && !editDrivetrain()) { $('#gar-err').textContent = 'Fix the gearing first.'; return; }
+  if (/** @type {HTMLSelectElement} */ ($('#set-gears')).value !== 'zwift' && !editDrivetrain()) { $('#gar-err').textContent = 'Fix the gearing first.'; return; }
   const mine = myGearings(app.settings);
   const g = cleanGearing({ ...draft, id: newBikeId([...gearingsOf(app.settings)], 'gearing'), name });
   if (!g) return;
@@ -425,11 +434,12 @@ async function removeGearing(id) {
 }
 
 /** Wires the Garage popup. Call once from app.js, after its helpers exist. */
+/** @param {Deps} deps */
 export function initGarage(deps) {
   ({ app, numField, saveSettings, ask, syncClient, setDevPop } = deps);
   {
     const f = $('#garage-form');
-    f.oninput = (e) => {
+    f.oninput = (/** @type {import('./types.js').FieldEvent<InputEvent>} */ e) => {
       const el = e.target;
       if (!draft) return;
       if (el.id === 'set-gname') draft.name = el.value;
@@ -444,7 +454,7 @@ export function initGarage(deps) {
       }
       $('#gar-err') && ($('#gar-err').textContent = '');
     };
-    f.onclick = (e) => {
+    f.onclick = (/** @type {ElementEvent} */ e) => {
       const t = e.target.closest('button');
       if (!t) return;
       if (t.classList.contains('gar-pick') && t.dataset.bike) useBike(t.dataset.bike);
@@ -465,7 +475,7 @@ export function initGarage(deps) {
   if (inkObserver) inkObserver.observe($('#gar-tabs'));
   {
     const f = $('#gearing-form');
-    f.oninput = (e) => {
+    f.oninput = (/** @type {import('./types.js').FieldEvent<InputEvent>} */ e) => {
       const el = e.target;
       if (el.id === 'gear-all') return useGearing(el.value);
       if (el.id === 'gear-style') {
@@ -482,8 +492,8 @@ export function initGarage(deps) {
       $('#gar-err') && ($('#gar-err').textContent = '');
     };
     // tidy the typed teeth once the field is left (only when they were valid)
-    f.onchange = (e) => { if (draft && ['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
-    f.onclick = (e) => {
+    f.onchange = (/** @type {FieldEvent} */ e) => { if (draft && ['set-ring1', 'set-ring2'].includes(e.target.id) && editDrivetrain()) fillDrivetrain(); };
+    f.onclick = (/** @type {ElementEvent} */ e) => {
       const t = e.target.closest('button');
       if (!t) return;
       if (t.dataset.gear) useGearing(`g:${t.dataset.gear}`);

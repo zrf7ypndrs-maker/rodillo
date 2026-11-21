@@ -1,3 +1,4 @@
+// @ts-check
 // Settings panel: the Rider / Ride / Road feel / Trainer / Sync tabs (#settings, #set-tabs), the trainer grade range,
 // GitHub token and sign-in row, and the ride history import (Settings > Sync). Moved out of js/app.js Nov 17
 // (code-health plan step 4) with no change in behavior. Shared DOM helpers come from js/ui.js; app.js passes app
@@ -12,7 +13,21 @@ import { authEnabled, authSession, startSignIn, signOut } from './auth.js?v=2026
 import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
 
 // from app.js, set by initSettings()
-let app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData;
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
+/** @typedef {import('./types.js').FieldEvent} FieldEvent */
+/** @typedef {import('./types.js').SettingsDeps} Deps */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['saveSettings']} */ let saveSettings;
+/** @type {Deps['ask']} */ let ask;
+/** @type {Deps['tell']} */ let tell;
+/** @type {Deps['setDevPop']} */ let setDevPop;
+/** @type {Deps['dataRepo']} */ let dataRepo;
+/** @type {Deps['syncClient']} */ let syncClient;
+/** @type {Deps['syncHint']} */ let syncHint;
+/** @type {Deps['loadCoachData']} */ let loadCoachData;
+/** @type {Deps['syncPending']} */ let syncPending;
+/** @type {Deps['refreshAfterSettings']} */ let refreshAfterSettings;
+/** @type {Deps['leaveData']} */ let leaveData;
 
 // One tab per section. Number fields: [key, label, step, mult, help, offset].
 const SET_TABS = {
@@ -37,9 +52,9 @@ const pct = (x) => +((x * 100).toFixed(1));
 function fillTrainer() {
   const st = app.settings;
   const id = TRAINERS[st.trainerModel] && trainerFits(st.trainerModel, st.minSendGrade, st.maxSendGrade) ? st.trainerModel : CUSTOM_TRAINER;
-  $('#set-trainer').value = id;
-  $('#set-gmax').value = pct(st.maxSendGrade);
-  $('#set-gmin').value = pct(st.minSendGrade);
+  /** @type {HTMLSelectElement} */ ($('#set-trainer')).value = id;
+  /** @type {HTMLInputElement} */ ($('#set-gmax')).value = String(pct(st.maxSendGrade));
+  /** @type {HTMLInputElement} */ ($('#set-gmin')).value = String(pct(st.minSendGrade));
 }
 function pickTrainer(id) {
   app.settings.trainerModel = id;
@@ -48,14 +63,14 @@ function pickTrainer(id) {
   fillTrainer();
 }
 function editGradeRange() {
-  const mx = $('#set-gmax').value, mn = $('#set-gmin').value;
+  const mx = /** @type {HTMLInputElement} */ ($('#set-gmax')).value, mn = /** @type {HTMLInputElement} */ ($('#set-gmin')).value;
   if (mx === '' || mn === '') return false;
   const r = cleanRange(Number(mn) / 100, Number(mx) / 100);
   app.settings.maxSendGrade = r.max;
   app.settings.minSendGrade = r.min;
   const cur = app.settings.trainerModel;
   app.settings.trainerModel = TRAINERS[cur] && trainerFits(cur, r.min, r.max) ? cur : trainerFor(r.min, r.max) || CUSTOM_TRAINER;
-  $('#set-trainer').value = app.settings.trainerModel;
+  /** @type {HTMLSelectElement} */ ($('#set-trainer')).value = app.settings.trainerModel;
   return true;
 }
 /** First trainer connection with no trainer chosen yet: use the range of the model it reports. */
@@ -92,11 +107,11 @@ function renderSettings() {
   };
   f.innerHTML = Object.entries(SET_TABS).map(([id, fields]) =>
     `<div class="settings-form stab-pane hidden" data-pane="${id}">${id === 'rider' ? nameField() : ''}${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
-  $('#set-guard').value = app.settings.ergCadenceGuard ? '1' : '0';
+  /** @type {HTMLSelectElement} */ ($('#set-guard')).value = app.settings.ergCadenceGuard ? '1' : '0';
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   fillTrainer();
-  $('#set-shift').value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
-  f.oninput = (e) => {
+  /** @type {HTMLSelectElement} */ ($('#set-shift')).value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
+  f.oninput = (/** @type {import('./types.js').FieldEvent<InputEvent>} */ e) => {
     const el = e.target;
     if (el.id === 'set-name') app.settings.riderName = el.value.trim();
     else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
@@ -107,7 +122,7 @@ function renderSettings() {
     saveSettings();
   };
   // tidy the typed grades once the field is left (only when they were valid)
-  f.onchange = (e) => {
+  f.onchange = (/** @type {FieldEvent} */ e) => {
     if (['set-gmax', 'set-gmin'].includes(e.target.id)) fillTrainer();
   };
   setSetTab(ls.get('setTab', 'rider'));
@@ -116,7 +131,7 @@ function renderSettings() {
 function setSetTab(id, animate = false) {
   if (!SET_TAB_IDS.includes(id)) id = 'rider';
   const prev = $('#set-tabs button.active')?.dataset.stab;
-  $$('#set-tabs button').forEach((b) => { const on = b.dataset.stab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+  $$('#set-tabs button').forEach((b) => { const on = b.dataset.stab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
   $$('#settings .stab-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== id));
   const btn = $(`#set-tabs [data-stab="${id}"]`);
   placeInk($('#set-tabs'), btn);
@@ -143,10 +158,11 @@ export function renderSignIn(msg = '') {
 }
 
 /** Wires the Settings panel. Call once from app.js, after its helpers exist. */
+/** @param {Deps} deps */
 export function initSettings(deps) {
   ({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData } = deps);
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('[data-open-settings]');
+  document.addEventListener('click', (/** @type {ElementEvent} */ e) => {
+    const a = /** @type {HTMLElement} */ (e.target.closest('[data-open-settings]'));
     if (!a) return;
     e.preventDefault();
     if (a.dataset.openSettings) ls.set('setTab', a.dataset.openSettings);
@@ -158,8 +174,8 @@ export function initSettings(deps) {
   $('#btn-settings').onclick = () => {
     renderSettings();
     const cfg = ls.get('sync', {});
-    $('#set-token').value = cfg.token || '';
-    $('#set-repo').value = dataRepo();
+    /** @type {HTMLInputElement} */ ($('#set-token')).value = cfg.token || '';
+    /** @type {HTMLInputElement} */ ($('#set-repo')).value = dataRepo();
     $('#token-status').textContent = cfg.token ? 'Token saved' : '';
     renderSignIn();
     setDevPop(false);
@@ -169,12 +185,12 @@ export function initSettings(deps) {
     setSetTab(ls.get('setTab', 'rider'));
   };
   $('#btn-token').onclick = async () => {
-    const token = $('#set-token').value.trim();
-    const repo = $('#set-repo').value.trim() || dataRepo();
+    const token = /** @type {HTMLInputElement} */ ($('#set-token')).value.trim();
+    const repo = /** @type {HTMLInputElement} */ ($('#set-repo')).value.trim() || dataRepo();
     const st = $('#token-status');
     if (!token) {
       const signedInGh = authEnabled() && !!authSession();
-      if (ls.get('sync', {}).token && !(await leaveData(() => ls.set('sync', { repo }), signedInGh))) { $('#set-token').value = ls.get('sync', {}).token; return; }
+      if (ls.get('sync', {}).token && !(await leaveData(() => ls.set('sync', { repo }), signedInGh))) { /** @type {HTMLInputElement} */ ($('#set-token')).value = ls.get('sync', {}).token; return; }
       ls.set('sync', { repo });
       if (authEnabled() && authSession()) { st.textContent = 'Saved. Loading...'; await loadCoachData(); st.textContent = app.coachError || `Syncing with ${repo}`; refreshAfterSettings(); return; }
       st.textContent = 'Sync turned off'; refreshAfterSettings(); return;
@@ -191,7 +207,7 @@ export function initSettings(deps) {
   };
   // ------------------------------------------------------------------ history import (Settings > Sync)
   // Strava / Garmin export or loose activity files -> rides in rodillo-data, in one commit.
-  $('#imp-file').onchange = async (e) => {
+  $('#imp-file').onchange = async (/** @type {FieldEvent} */ e) => {
     const files = [...e.target.files];
     e.target.value = '';
     if (!files.length) return;

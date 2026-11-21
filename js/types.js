@@ -528,7 +528,7 @@
  * @property {() => any} loadCoachData
  * @property {() => any} syncPending
  * @property {() => any} refreshAfterSettings
- * @property {(revoke: boolean, keepsAccess?: boolean) => any} leaveData
+ * @property {(revoke: () => any, keepsAccess?: boolean) => Promise<boolean>} leaveData Signs out / drops the token (`revoke`); false when the rider cancels.
  */
 
 /**
