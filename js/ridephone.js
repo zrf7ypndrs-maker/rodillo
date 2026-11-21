@@ -92,29 +92,34 @@ export function phoneHero(s, v) {
  * `gaugeAt` is the dot's left (null: the gauge is off); `powerState` / `cadState` are 'ok', 'bad' or ''.
  */
 export function phoneBoxes(s, v) {
-  const td = s.trainer.data || {};
+  return { ...phonePower(s, v), ...phoneHrCad(s, v), ...phoneThird(s) };
+}
+function phonePower(s, v) {
   const p = Math.round(s.powerShown);
-  const seg = s.seg;
-  const aim = s.mode !== 'erg' && seg?.kind === 'sim' ? seg.aim : null, as = aim ? s.aimStatus : null;
+  const aim = s.mode !== 'erg' && s.seg?.kind === 'sim' ? s.seg.aim : null, as = aim ? s.aimStatus : null;
   const gt = s.target || (aim ? aim.mid * v.ftp : 0);
-  const cs = s.cadStatus;
-  const third = s.mode === 'erg'
-    ? { m3k: 'Effort', m3: `${Math.round(s.intensity * 100)}%`, m3sub: s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned', up: s.intensity > 1.001, down: s.intensity < 0.999 }
-    : (() => {
-      const gb = s.gb, kmh = Math.round(s.bike.v * 3.6);
-      return { m3k: 'Gear', m3: gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`, m3sub: gb.seq ? `${kmh} km/h` : `${gb.ring}×${gb.cog} · ${kmh} km/h`, up: false, down: false };
-    })();
   return {
     power: p,
     gaugeAt: gt ? `${Math.max(0, Math.min(1, (p / gt - 0.8) / 0.4)) * 100}%` : null,
     powerState: as === 'ok' ? 'ok' : as === 'low' || as === 'high' ? 'bad' : '',
     powerSub: !aim ? '' : as === 'low' ? '&#9650; push harder' : as === 'high' ? '&#9660; ease off' : `${Math.round(aim.lo * v.ftp)}-${Math.round(aim.hi * v.ftp)} W`,
+  };
+}
+function phoneHrCad(s, v) {
+  const td = s.trainer.data || {}, cs = s.cadStatus, cad = s.seg?.cad;
+  return {
     hr: Math.round(v.hrBpm || td.hr || 0) || '--',
     cad: Math.round(td.cadence || 0),
     cadState: cs === 'ok' ? 'ok' : cs === 'low' || cs === 'high' ? 'bad' : '',
-    cadSub: !seg?.cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : seg.cad.label,
-    ...third,
+    cadSub: !cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : cad.label,
   };
+}
+function phoneThird(s) {
+  if (s.mode === 'erg') {
+    return { m3k: 'Effort', m3: `${Math.round(s.intensity * 100)}%`, m3sub: s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned', up: s.intensity > 1.001, down: s.intensity < 0.999 };
+  }
+  const gb = s.gb, kmh = Math.round(s.bike.v * 3.6);
+  return { m3k: 'Gear', m3: gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`, m3sub: gb.seq ? `${kmh} km/h` : `${gb.ring}×${gb.cog} · ${kmh} km/h`, up: false, down: false };
 }
 
 /** Next line: the next step (its color, amount, target, cadence), "Last interval", or speed and distance in a free ride. */
