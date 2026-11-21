@@ -1,3 +1,4 @@
+// @ts-check
 // The phone ride screen (#rp, Zwift Companion style): top line, hero card, power gauge, heart rate / cadence / effort or
 // gear boxes, the Next line, the workout as a chart or a list, the buttons and the ··· sheet (grade, Skip and End holds,
 // Lap, ERG, theme). renderPhone() is called by renderRide() in js/ride.js on every engine tick (4 Hz) while the phone
@@ -13,18 +14,31 @@ import { renderRide, rideView, segRows, workoutLeft, fmtDist, segAmount, drawTra
 import { ls } from './store.js?v=202611102147';
 import { $, esc } from './ui.js?v=202611102147';
 
-let app, isPhone, look, zoneHex, gradeHex, setZc, setTheme, NUM_FONT;
+/** @typedef {import('./types.js').RidePhoneDeps} Deps */
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
+/** @typedef {import('./types.js').RideSession} Session */
+/** @typedef {import('./types.js').RideView} RideView */
+/** @typedef {import('./types.js').Segment} Segment */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['isPhone']} */ let isPhone;
+/** @type {Deps['look']} */ let look;
+/** @type {Deps['zoneHex']} */ let zoneHex;
+/** @type {Deps['gradeHex']} */ let gradeHex;
+/** @type {Deps['setZc']} */ let setZc;
+/** @type {Deps['setTheme']} */ let setTheme;
+/** @type {Deps['NUM_FONT']} */ let NUM_FONT;
 /**
  * deps: app state and app.js hooks. `look()` = { INK, MUTED, FTP_LINE, ... } read at draw time (the light / dark theme,
  * the same as the desktop's); zoneHex, gradeHex and setZc are app.js's color helpers; setTheme is the ··· sheet's theme
  * switch; NUM_FONT is shared with the desktop chart.
+ * @param {Deps} deps
  */
 export function initRidePhone(deps) {
   ({ app, isPhone, look, zoneHex, gradeHex, setZc, setTheme, NUM_FONT } = deps);
   rpCanvas = $('#rp-chart');
   new ResizeObserver(() => { if (app.screen === 'ride' && isPhone()) { sizePhoneChart(); drawPhoneChart(); } }).observe(rpCanvas.parentElement);
   app.phoneView = ls.get('phoneView', 'chart') === 'list' ? 'list' : 'chart';
-  $('#rp-view-tg').onclick = (e) => {
+  $('#rp-view-tg').onclick = (/** @type {ElementEvent} */ e) => {
     const v = e.target.closest('button')?.dataset.view;
     if (!v || v === app.phoneView) return;
     e.preventDefault();
@@ -60,6 +74,7 @@ export function sizePhoneChart() {
 // ---- what the phone ride screen says, as pure functions of the session. `v` = rideView(s) from js/ride.js, built once
 // per draw: { ftp, hrBpm, zoneHex, gradeHex, ... }.
 /** Top line: elapsed, the workout's name, time left (a workout) or distance (free ride). */
+/** @param {Session} s */
 export function phoneTop(s) {
   return {
     elapsed: fmtTime(s.elapsed), name: esc(s.name),
@@ -68,6 +83,7 @@ export function phoneTop(s) {
 }
 
 /** Hero card: color (`zc`), interval label, countdown (time or metres), target (watts or grade) and its sub line. */
+/** @param {Session} s @param {RideView} v */
 export function phoneHero(s, v) {
   const seg = s.seg;
   if (seg) {
@@ -91,9 +107,11 @@ export function phoneHero(s, v) {
  * heart rate, cadence, and the third box: Effort in ERG, Gear in slope (ring × cog, cogs counted from the largest = 1).
  * `gaugeAt` is the dot's left (null: the gauge is off); `powerState` / `cadState` are 'ok', 'bad' or ''.
  */
+/** @param {Session} s @param {RideView} v */
 export function phoneBoxes(s, v) {
   return { ...phonePower(s, v), ...phoneHrCad(s, v), ...phoneThird(s) };
 }
+/** @param {Session} s */
 function phonePower(s, v) {
   const p = Math.round(s.powerShown);
   const aim = s.mode !== 'erg' && s.seg?.kind === 'sim' ? s.seg.aim : null, as = aim ? s.aimStatus : null;
@@ -105,6 +123,7 @@ function phonePower(s, v) {
     powerSub: !aim ? '' : as === 'low' ? '&#9650; push harder' : as === 'high' ? '&#9660; ease off' : `${Math.round(aim.lo * v.ftp)}-${Math.round(aim.hi * v.ftp)} W`,
   };
 }
+/** @param {Session} s */
 function phoneHrCad(s, v) {
   const td = s.trainer.data || {}, cs = s.cadStatus, cad = s.seg?.cad;
   return {
@@ -114,6 +133,7 @@ function phoneHrCad(s, v) {
     cadSub: !cad ? '' : cs === 'low' ? '&#9650; faster' : cs === 'high' ? '&#9660; slower' : cad.label,
   };
 }
+/** @param {Session} s */
 function phoneThird(s) {
   if (s.mode === 'erg') {
     return { m3k: 'Effort', m3: `${Math.round(s.intensity * 100)}%`, m3sub: s.intensity > 1.001 ? 'harder than plan' : s.intensity < 0.999 ? 'easier than plan' : 'as planned', up: s.intensity > 1.001, down: s.intensity < 0.999 };
@@ -123,6 +143,7 @@ function phoneThird(s) {
 }
 
 /** Next line: the next step (its color, amount, target, cadence), "Last interval", or speed and distance in a free ride. */
+/** @param {Session} s @param {RideView} v */
 export function phoneNext(s, v) {
   const next = s.segs && s.segIndex >= 0 ? s.segs[s.segIndex + 1] : null;
   if (!next) return s.seg ? 'Last interval' : `${(s.bike.v * 3.6).toFixed(1)} km/h &middot; ${fmtDist(s.bike.dist)}`;
@@ -134,6 +155,7 @@ export function phoneNext(s, v) {
 }
 
 /** The buttons' labels and which sheet buttons show (`hidden`: grade row, skip, lap, erg). */
+/** @param {Session} s */
 export function phoneButtons(s) {
   const erg = s.mode === 'erg', seg = s.seg;
   return {
@@ -149,11 +171,13 @@ export function phoneButtons(s) {
 }
 
 /** The label over the chart / list: road progress on a slope-only workout, else "Workout · 3/8 done". */
+/** @param {Session} s */
 export function phoneViewK(s) {
   const n = s.segs.length, done = Math.min(s.segIndex < 0 ? n : s.segIndex, n);
   return isTrack(s.segs) ? trackProgress(s) : `Workout &middot; ${done}/${n} done`;
 }
 
+/** @param {Session} s */
 export function renderPhone(s) {
   const v = rideView(s);
   const set = (id, x) => { const el = document.getElementById(id); if (el.innerHTML !== String(x)) el.innerHTML = x; };
@@ -209,23 +233,24 @@ export function renderPhone(s) {
 // Chart vs list for the workout area (app.phoneView, read in initRidePhone()). Remembered across rides; switchable mid-ride.
 const phoneList = (s) => !!s?.segs && app.phoneView === 'list';
 
+/** @param {Session} s */
 function renderPhoneView(s) {
   const wrap = $('#rp-wrap'), list = phoneList(s);
   wrap.classList.toggle('no-segs', !s.segs);
   wrap.classList.toggle('as-list', list);
-  for (const b of $('#rp-view-tg').children) b.classList.toggle('on', b.dataset.view === (list ? 'list' : 'chart'));
+  for (const b of /** @type {HTMLCollectionOf<HTMLElement>} */ ($('#rp-view-tg').children)) b.classList.toggle('on', b.dataset.view === (list ? 'list' : 'chart'));
   if (!s.segs) return;
   const k = phoneViewK(s);
   const kEl = $('#rp-view-k');
   if (kEl.innerHTML !== k) kEl.innerHTML = k;
   if (!list) return;
   const { rows, cur } = segRows(s);
-  const el = $('#rp-segs'), html = rows.join('');
+  const el = /** @type {HTMLElement & { _html?: string }} */ ($('#rp-segs')), html = rows.join('');
   if (el._html !== html) { el.innerHTML = html; el._html = html; }
   if (app._rpSegI !== cur) { // keep the current interval centred when it changes (or the list was just opened)
     const jump = app._rpSegI === undefined;
     app._rpSegI = cur;
-    const row = el.querySelector('.seg.current') || el.lastElementChild;
+    const row = /** @type {HTMLElement} */ (el.querySelector('.seg.current') || el.lastElementChild);
     if (row) el.scrollTo({ top: Math.max(0, row.offsetTop - (el.clientHeight - row.offsetHeight) / 2), behavior: jump ? 'auto' : 'smooth' });
   }
 }
@@ -237,6 +262,7 @@ export function phoneFreeScale(data, ftp, bot, plotH) {
   return { maxP, Y: (v) => bot - (Math.min(v, maxP) / maxP) * plotH };
 }
 /** A workout: power to y with the top at the hardest ERG step (at least 130% FTP) + 8%, or the last 30 minutes' peak + 10 W. */
+/** @param {Session} s */
 export function phoneScale(s, ftp, bot, plotH) {
   const ergMax = Math.max(1.3, ...s.segs.filter((g) => g.kind === 'erg').map((g) => Math.max(g.from, g.to) * s.intensity)) * 1.08;
   const maxP = Math.max(ergMax * ftp, ...s.samples.slice(-1800).map((x) => x.power + 10));

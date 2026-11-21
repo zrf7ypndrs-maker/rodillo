@@ -1,3 +1,4 @@
+// @ts-check
 // The desktop ride screen (#ride): interval card, Next card, tiles, interval list, the chart (workouts, free ride and
 // slope-only roads), workout messages over the chart and the ramp test takeover. renderRide() runs on every engine
 // tick (4 Hz), so nothing here may do more per tick than it did in app.js.
@@ -14,11 +15,25 @@ import { ELEV_MIN, rampStops } from './profile.js?v=202611102147';
 import { action } from './controls.js?v=202611102147';
 import { $, esc, reducedMotion } from './ui.js?v=202611102147';
 
-let app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, setZc, NUM_FONT;
+/** @typedef {import('./types.js').RideDeps} Deps */
+/** @typedef {import('./types.js').RideSession} Session */
+/** @typedef {import('./types.js').RideView} RideView */
+/** @typedef {import('./types.js').Segment} Segment */
+/** @typedef {HTMLElement & { _ses?: object, _seg?: number }} RideCard The interval card / phone hero, with the session and step it last showed. */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['isPhone']} */ let isPhone;
+/** @type {Deps['renderPhone']} */ let renderPhone;
+/** @type {Deps['setDevPop']} */ let setDevPop;
+/** @type {Deps['look']} */ let look;
+/** @type {Deps['zoneHex']} */ let zoneHex;
+/** @type {Deps['gradeHex']} */ let gradeHex;
+/** @type {Deps['setZc']} */ let setZc;
+/** @type {Deps['NUM_FONT']} */ let NUM_FONT;
 /**
  * deps: app state and app.js hooks. `look()` = { INK, MUTED, RULE, FTP_LINE, HR_LINE, TOK } read at draw time (the
  * light / dark theme); zoneHex, gradeHex and setZc are app.js's color helpers; NUM_FONT is shared with the phone chart.
  * rampStops and ELEV_MIN come from js/profile.js (the workout profiles use them too).
+ * @param {Deps} deps
  */
 export function initRide(deps) {
   ({ app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, setZc, NUM_FONT } = deps);
@@ -26,10 +41,10 @@ export function initRide(deps) {
   new ResizeObserver(() => { if (app.screen === 'ride') { sizeChart(); drawChart(); } }).observe(canvas);
   for (const id of ['r-interval', 'rp-hero']) {
     document.getElementById(id).addEventListener('animationend', (e) => {
-      if (e.animationName === 'int-fresh') e.currentTarget.classList.remove('int-fresh');
+      if (e.animationName === 'int-fresh') /** @type {HTMLElement} */ (e.currentTarget).classList.remove('int-fresh');
     });
   }
-  $('#r-erg').onclick = (e) => { e.currentTarget.blur(); action('ergToggle'); };
+  $('#r-erg').onclick = (e) => { /** @type {HTMLElement} */ (e.currentTarget).blur(); action('ergToggle'); };
 }
 
 // ------------------------------------------------------------------ ride rendering
@@ -60,6 +75,7 @@ export { fmtDist }; // lives in js/ridepage.js next to fmtTime (js/profile.js us
 export const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
 
 /** Remaining workout time ("~" while distance steps make it an estimate), shared by the desktop list and the phone. */
+/** @param {Session} s */
 export function workoutLeft(s) {
   const last = s.segs.at(-1), est = s.segs.some((g) => g.estDur && s.segs.indexOf(g) >= Math.max(0, s.segIndex));
   return s.seg ? `${est ? '~' : ''}${fmtTime(last.end - s.chartPos)}` : 'Done';
@@ -70,6 +86,7 @@ export function workoutLeft(s) {
  * between them. Scroll rule (Agustín, Nov 10): if every row fits nothing scrolls; otherwise the current row never
  * goes below the middle of the box, and near the end the list stops and the current row moves down.
  */
+/** @param {Session} s */
 function renderSegList(s) {
   const body = $('#r-body');
   body.classList.toggle('with-segs', !!s.segs);
@@ -83,13 +100,14 @@ function renderSegList(s) {
   if (app._segI !== cur) {
     const first = app._segI === undefined;
     app._segI = cur;
-    const row = box.querySelector('.seg.current');
+    const row = /** @type {HTMLElement} */ (box.querySelector('.seg.current'));
     const rowTop = row ? row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop : 0; // offsetTop depends on the layout's offsetParent
     const top = row ? Math.max(0, rowTop - box.clientHeight / 2 + row.offsetHeight / 2) : box.scrollHeight;
     box.scrollTo({ top, behavior: first || reducedMotion() ? 'auto' : 'smooth' }); // the box only, never the page
   }
 }
 
+/** @param {Session} s */
 function renderNextCard(s, next, setHTML, v) {
   const el = $('#r-next'), c = nextCard(s, next, v);
   el.classList.toggle('none', c.none);
@@ -111,8 +129,9 @@ export function slideEnd() {
   $('#r-next').style.visibility = '';
   slide.busy = false;
 }
+/** @param {Session} s */
 function slideNextIn(s) {
-  const card = $('#r-interval'), next = $('#r-next');
+  const card = /** @type {RideCard} */ ($('#r-interval')), next = $('#r-next');
   const i = s.started ? s.segIndex : -1;
   if (card._ses !== s || card._seg < 0 || i < 0 || i === card._seg) return;
   if (reducedMotion() || next.classList.contains('none') || !next.offsetWidth) return; // pulseCard handles it
@@ -155,6 +174,7 @@ function slideNextIn(s) {
 }
 
 /** Segment rows shared by the desktop sidebar and the phone list view. */
+/** @param {Session} s */
 export function segRows(s) {
   const ftp = app.settings.ftp, cur = s.segIndex < 0 ? s.segs.length : s.segIndex;
   const doneN = Math.min(cur, s.segs.length);
@@ -176,6 +196,7 @@ export function segRows(s) {
     if (state === 'todo') right = `<span class="big">${segAmount(g)}</span>`;
     else if (!avgP) right = state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
     else {
+      // @ts-expect-error never true here (ERG rows returned above); kept as it was, no change in behavior
       const pct = g.kind === 'erg' && !s.ergOff ? ` <span class="pct ${avgP / ((g.from + g.to) / 2 * ftp * s.intensity) < 0.95 ? 'low' : 'ok'}">${Math.round((avgP / ((g.from + g.to) / 2 * ftp * s.intensity)) * 100)}%</span>` : '';
       right = `<span class="big">${avgP} W</span>${pct}<br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : ''}</span>`;
     }
@@ -197,12 +218,14 @@ export function gearViz(gb, { INK, RULE }) {
 // ---- what the desktop ride screen says, as pure functions of the session (unit tests: test/ride.mjs).
 // `v` = rideView(s), built once per draw (the phone's renderPhone() uses the same one): { ftp, riderKg, hrBpm, track, zoneHex, gradeHex, INK, RULE }.
 // `track` is the road of a slope-only workout (cached per session), null otherwise.
+/** @param {Session} s @returns {RideView} */
 export const rideView = (s) => ({
   ftp: app.settings.ftp, riderKg: app.settings.riderKg, hrBpm: app.hr?.bpm,
   track: s.segs && isTrack(s.segs) ? rideTrack(s) : null, zoneHex, gradeHex, ...look(),
 });
 
 /** The tiles (power, HR, cadence, gear, Climbed / To the top, speed) and the clock: text or markup for each. */
+/** @param {Session} s @param {RideView} v */
 export function rideTiles(s, v) {
   const td = s.trainer.data || {};
   const hr = Math.round(v.hrBpm || td.hr || 0);
@@ -254,6 +277,7 @@ export function rideTiles(s, v) {
  * Interval card: color (`zc`), label, small line, the big sentence ("Hold 216 W for 4:00", "Ramp to 140 W in 9:30",
  * "6% grade for 150 m", "Done. Nice work.", "2.0% grade") and the progress bar's width (null: no bar).
  */
+/** @param {Session} s @param {RideView} v */
 export function intervalCard(s, v) {
   const seg = s.seg;
   const num = (x, u = '') => `<span class="num">${x}</span>${u ? `<span class="u">${u}</span>` : ''}`;
@@ -295,6 +319,7 @@ export function intervalCard(s, v) {
 }
 
 /** Next card: "4:00 @ 216 W" (+ cadence target; a slope step's aim, "60-65 rpm · ~216 W"); "Finish" on the last interval; `none` when there is no next step. */
+/** @param {Session} s @param {Segment | undefined} next @param {RideView} v */
 export function nextCard(s, next, v) {
   if (!s.segs || !s.seg) return { none: true };
   if (!next) return { none: false, finish: true, nc: 'var(--rule)', html: '<div class="rt-k">Next</div><div class="amt">Finish</div>' };
@@ -309,6 +334,7 @@ export function nextCard(s, next, v) {
   };
 }
 
+/** @param {Session} s */
 function renderPaused(s) {
   $('#r-paused').classList.toggle('hidden', !s.paused);
   if (!s.paused && $('#devpop').classList.contains('on-ride') && !$('#devpop').classList.contains('hidden')) setDevPop(false); // riding again: it went with the pause screen
@@ -321,12 +347,15 @@ function renderPaused(s) {
 // Interval card pulse (desktop card and phone hero): one beat when a new interval starts,
 // a steady beat once per second through its last 10 seconds. Distance steps estimate the
 // seconds left from current speed. Nothing pulses before the start or while paused.
+/** @param {Session} s */
 export function intervalEnding(s) {
   const rem = s.segRemaining;
   if (!rem || !s.started || s.paused) return false;
   if (rem.sec !== undefined) return rem.sec > 0 && rem.sec < 10.5; // the countdown reads 0:10
   return s.bike.v > 1 && rem.m > 0 && rem.m / s.bike.v < 10.5;
 }
+/** @param {RideCard} card */
+/** @param {Session} s */
 function pulseCard(s, card) {
   if (card._ses !== s) { card._ses = s; card._seg = -1; card.classList.remove('int-fresh', 'int-ending'); }
   const i = s.started ? s.segIndex : -1;
@@ -347,6 +376,7 @@ export function renderRide() {
   if (isPhone()) { renderPhone(s); renderPaused(s); return; }
   const v = rideView(s), t = rideTiles(s, v);
   $('#r-elapsed').textContent = t.elapsed;
+  // @ts-expect-error textContent takes the number as it is (the DOM writes its text)
   $('#r-power').textContent = t.power;
   const pt = $('.tile.power');
   pt.classList.remove('low', 'high', 'ok', 'aim-ok', 'aim-bad');
@@ -355,8 +385,10 @@ export function renderRide() {
   const pctEl = $('#r-pct'); // effort: only when it isn't 100%
   pctEl.classList.toggle('hidden', !t.effortShown);
   if (pctEl.innerHTML !== t.effort) pctEl.innerHTML = t.effort;
+  // @ts-expect-error textContent takes the number as it is (the DOM writes its text)
   $('#r-hr').textContent = t.hr;
   $('#r-hrzone').textContent = t.hrAvg;
+  // @ts-expect-error textContent takes the number as it is (the DOM writes its text)
   $('#r-cad').textContent = t.cad;
   const ct = $('.tile.cad');
   ct.classList.toggle('ok', t.cadState === 'ok');
@@ -383,7 +415,7 @@ export function renderRide() {
   setHTML($('#r-int-text'), c.text);
   setHTML($('#r-int-big'), c.big);
   bar.classList.toggle('hidden', c.bar === null);
-  if (c.bar !== null) bar.firstElementChild.style.width = c.bar;
+  if (c.bar !== null) /** @type {HTMLElement} */ (bar.firstElementChild).style.width = c.bar;
   renderNextCard(s, s.seg ? s.segs[s.segIndex + 1] : undefined, setHTML, v);
   renderSegList(s);
 
@@ -409,6 +441,7 @@ export function powerScale(samples, base, bot, plotH) {
   return { maxP, Yp: (p) => bot - (Math.min(p, maxP) / maxP) * plotH };
 }
 /** Workout time to x: the whole workout fills the width (or the ride so far, once it runs past the end). */
+/** @param {Session} s */
 export function workoutX(s, W) {
   const T = Math.max(s.segs[s.segs.length - 1].end, s.chartPos + 1);
   return (t) => (t / T) * W;
@@ -521,6 +554,7 @@ export const trackKmStep = (D) => (D > 40000 ? 10 : D > 12000 ? 5 : D > 5000 ? 2
  * so the climb fills the width (Nov 12, Agustín): v0 = metres where the view starts, km marks and progress count
  * from there, lo/hi are the elevation range of what's shown.
  */
+/** @param {Session} s */
 export function trackView(s, tr) {
   const n = s.workout?.profile?.lead?.length || 0;
   const past = n && n < s.segs.length && (s.segIndex >= n || s.chartPos >= s.segs[n - 1].end);
@@ -616,6 +650,7 @@ export function drawTrack(ctx, s, { W, H, dpr, top, bot, area, compact }) {
 }
 
 /** "12.5 of 24.9 km · +215 of 495 m" for a slope-only ride. */
+/** @param {Session} s */
 export function trackProgress(s) {
   const tr = rideTrack(s), { v0, up0 } = trackView(s, tr), d = trackDist(tr, s.segs, s.chartPos);
   return `${((d - v0) / 1000).toFixed(1)} of ${((tr.D - v0) / 1000).toFixed(1)} km · +${Math.round(trackClimbed(tr, d) - up0)} of ${Math.round((tr.ascent - up0) / 5) * 5} m`;
@@ -708,6 +743,7 @@ export function lastTestBest() {
     .sort((a, b) => String(a.summary.start).localeCompare(String(b.summary.start))).at(-1);
   return t ? t.summary.bests[60] : null;
 }
+/** @param {Session} s */
 export function testStep(s) {
   const g = s.seg;
   if (!s.test || !g?.untilFail) return;
@@ -718,6 +754,7 @@ export function testStep(s) {
   if (cue.takeover) takeover(cue.takeover, { color: zoneHex(g.from) });
   if (cue.msg) rideMsg(cue.msg);
 }
+/** @param {Session} s */
 export function testEnded(s, e) {
   app.controllers.forEach((c) => c.vibrate?.());
   const best60 = bestAvg(s.samples.map((x) => x.power), 60);
@@ -749,7 +786,7 @@ function takeover({ line, big, sub }, { color = null, dark = false, hold = 2200 
     ], { duration: total });
   takeoverAnims.push(grow);
   if (!reduce) {
-    const kids = [['#to-line', 0.06], ['#to-big', 0], ['#to-sub', 0.1]];
+    const kids = /** @type {[string, number][]} */ ([['#to-line', 0.06], ['#to-big', 0], ['#to-sub', 0.1]]);
     kids.forEach(([sel, d]) => takeoverAnims.push($(sel).animate([
       { opacity: 0, transform: 'translateY(18px) scale(.94)' }, { opacity: 0, transform: 'translateY(18px) scale(.94)', offset: a * 0.6 + d * a },
       { opacity: 1, transform: 'none', offset: Math.min(b - 0.02, a * 1.5 + d * a), easing: 'ease-out' },

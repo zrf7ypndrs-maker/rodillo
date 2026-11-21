@@ -362,6 +362,14 @@
  * @typedef {E & { target: HTMLInputElement }} FieldEvent
  */
 
+// ------------------------------------------------------------------ the ride in progress
+
+/**
+ * The ride in progress as the ride screens see it: an engine Session plus what beginSession() in js/app.js adds
+ * (`test`, the ramp test's coach state: cues given so far, the last test's best minute, the result once it ends).
+ * @typedef {import('./engine/session.js').Session & { test?: { st: { ftpCrossed?: boolean, prevPassed?: boolean, warned?: boolean }, prevBest: number | null, result?: ReturnType<typeof import('./testcoach.js').resultCue> } | null }} RideSession
+ */
+
 // ------------------------------------------------------------------ views and looks (built at draw time in js/app.js / js/ride.js)
 
 /** @typedef {(f: number) => string} ZoneHex Fraction of FTP -> zone color. */
