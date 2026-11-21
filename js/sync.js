@@ -1,3 +1,4 @@
+// @ts-check
 // Push rides to the private rodillo-data repo through the GitHub contents API.
 
 export const DEFAULT_REPO = 'zrf7ypndrs-maker/rodillo-data';
@@ -37,11 +38,18 @@ export function syncedToPrune(list, remoteIds, now = Date.now(), days = KEEP_SYN
 
 export class GitHubSync {
   // token: a string (pasted fine-grained token) or async (force) => string (GitHub sign-in, refreshes itself)
+  /**
+   * @param {object} [o]
+   * @param {string | ((force: boolean) => Promise<string>)} [o.token]
+   * @param {string} [o.repo]
+   * @param {string} [o.branch]
+   * @param {typeof fetch} [o.fetchImpl] Tests pass their own.
+   */
   constructor({ token, repo = DEFAULT_REPO, branch = 'main', fetchImpl } = {}) {
     this.token = token;
     this.repo = repo;
     this.branch = branch;
-    this.fetch = fetchImpl || ((...a) => fetch(...a));
+    this.fetch = fetchImpl || ((input, init) => fetch(input, init));
   }
 
   get configured() { return !!this.token; }
@@ -63,7 +71,7 @@ export class GitHubSync {
     if (res.status === 404) return null;
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      const err = new Error(`GitHub ${res.status}: ${body.slice(0, 200)}`);
+      const err = /** @type {Error & { status?: number }} */ (new Error(`GitHub ${res.status}: ${body.slice(0, 200)}`));
       err.status = res.status;
       throw err;
     }
@@ -145,7 +153,10 @@ export class GitHubSync {
     throw new Error(`Could not update ${path} after 3 attempts`);
   }
 
-  /** Write the full ride file, then upsert its summary into index.json. */
+  /**
+   * Write the full ride file, then upsert its summary into index.json.
+   * @param {import("./types.js").RideDoc} ride
+   */
   async pushRide(ride) {
     const s = ride.summary;
     const path = `rides/${s.id.slice(0, 4)}/${s.id}.json`;
@@ -176,6 +187,9 @@ export class GitHubSync {
    * Adds many rides in ONE commit (history import) through the git data API, with index.json
    * merged. Files go inline in tree requests, a few MB at a time, so a big import costs a handful
    * of API calls instead of two commits per ride. Retries if someone else pushed in between.
+   * @param {import("./types.js").RideDoc[]} docs
+   * @param {string} message
+   * @param {(done: number, total: number) => void} [onProgress]
    */
   async pushRides(docs, message, onProgress = () => {}) {
     const CHUNK = 3e6;
@@ -216,6 +230,7 @@ export class GitHubSync {
   /**
    * Removes one ride (rides/YYYY/<id>.json and its index.json entry) in ONE commit through the git
    * data API. Missing file or entry is fine (already gone). Retries if someone else pushed in between.
+   * @param {string} id
    */
   async deleteRide(id) {
     const path = `rides/${id.slice(0, 4)}/${id}.json`;
@@ -229,6 +244,7 @@ export class GitHubSync {
       const before = index.rides.length;
       index.rides = index.rides.filter((r) => r.id !== id);
       if (!file && index.rides.length === before) return index; // nothing to delete
+      /** @type {{ path: string, mode: string, type: string, content?: string, sha?: null }[]} a null sha deletes the file */
       const entries = [{ path: 'index.json', mode: '100644', type: 'blob', content: JSON.stringify(index, null, 2) }];
       if (file) entries.push({ path, mode: '100644', type: 'blob', sha: null });
       const t = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: commit.tree.sha, tree: entries }) });
