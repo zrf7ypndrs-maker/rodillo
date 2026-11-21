@@ -1,3 +1,4 @@
+// @ts-check
 // Workout builder: drag blocks from a palette onto a timeline, drag them to reorder (or into a repeat),
 // pull a selected bar's top edge for power/grade and its right edge for length. The selected block's
 // details (cadence, name, cue, exact numbers) are edited below the timeline.
@@ -7,6 +8,7 @@ import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mi
 import { $, $$, esc, placeInk, reducedMotion as reduced } from './ui.js?v=202611102147';
 import { woMeta } from './profile.js?v=202611102147';
 
+/** @type {import('./types.js').BuilderDeps} */
 let D = null;   // deps from app.js
 let st = null;  // { w, isNew, mine, snap, kind, sel, untouched, undo: [], scale }
 let drag = null;
@@ -83,15 +85,16 @@ function pathOf(obj) {
 const durOf = (s) => { const g = flatten({ steps: [s] }, D.ftp()); return g.length ? g.at(-1).end : 0; };
 
 // ---------------------------------------------------------------- public
+/** @param {import('./types.js').BuilderDeps} deps */
 export function initBuilder(deps) {
   D = deps;
   const panel = $('#builder');
   panel.addEventListener('input', onInput);
   panel.addEventListener('change', onChange);
   panel.addEventListener('click', onClick);
-  panel.addEventListener('focusin', (e) => {
+  panel.addEventListener('focusin', (/** @type {import('./types.js').ElementEvent<FocusEvent>} */ e) => {
     if (e.target.matches('.b-in')) pushUndo(); // one undo step per field edit
-    const r = e.target.closest('#b-steps [data-p]');
+    const r = /** @type {HTMLElement} */ (e.target.closest('#b-steps [data-p]'));
     if (r) select(r.dataset.p, false);
   });
   // drags: pointer events, plus a touch fallback for web views that don't send them (Bluefy)
@@ -130,7 +133,7 @@ export function initBuilder(deps) {
   window.addEventListener('resize', () => { if (builderOpen() && !drag) renderTimeline(); });
   document.addEventListener('keydown', (e) => {
     if (!builderOpen() || !(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return; // native undo inside fields
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(/** @type {HTMLElement} */ (e.target).tagName)) return; // native undo inside fields
     e.preventDefault();
     undo();
   });
@@ -651,7 +654,7 @@ async function save(ride) {
   st.w.id = w.id;
   st.snap = JSON.stringify(st.w);
   st.isNew = false; st.mine = true;
-  const btns = $$('#builder .b-foot button');
+  const btns = /** @type {HTMLButtonElement[]} */ ($$('#builder .b-foot button'));
   btns.forEach((x) => (x.disabled = true));
   $('#b-save').textContent = 'Saving...';
   try { await D.onSave(w); } finally { btns.forEach((x) => (x.disabled = false)); $('#b-save').textContent = 'Save'; }

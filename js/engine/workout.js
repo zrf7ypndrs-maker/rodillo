@@ -42,7 +42,7 @@ const EST = { riderKg: 77, bikeKg: 9, cda: 0.32, crr: 0.004 };
 const EST_W = 180; // steady power behind every estimate (durations of distance steps, distances of time steps)
 
 /**
- * @param {Workout} workout
+ * @param {Pick<Workout, 'steps'> & Partial<Workout>} workout A workout, or just its steps (the builder's previews).
  * @param {number} [ftp] Turns absolute watts steps into fractions of FTP.
  * @returns {Segment[]}
  */

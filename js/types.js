@@ -183,6 +183,8 @@
  * @property {string} [ftpSetAt]
  * @property {Partial<Settings>} [settings]
  * @property {string} [settingsSetAt]
+ * @property {number} [maxMinutes] Longest workout the builder allows, minutes.
+ * @property {string} [ftpDeclinedAt] When the rider kept the old FTP after a ramp test.
  */
 
 // ------------------------------------------------------------------ rides
@@ -482,10 +484,10 @@
  * @property {() => number} ftp
  * @property {ZoneHex} zoneHex
  * @property {GradeHex} gradeHex
- * @property {number} maxMinutes
+ * @property {() => number} maxMinutes The plan's cap on a workout's length, minutes (0 = none).
  * @property {(w: Workout) => any} onSave
- * @property {(w: Workout) => any} onDelete
- * @property {(w: Workout) => any} onRide
+ * @property {(id: string) => any} onDelete
+ * @property {(id: string) => void} onRide
  * @property {(id: string) => string[]} plannedOn
  * @property {() => boolean} signedIn
  */
