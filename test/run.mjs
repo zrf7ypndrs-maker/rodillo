@@ -100,12 +100,13 @@ test('Zwift trainer protocol: commands and riding data match the captured bytes'
   const hx = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(' ');
   // Makinolo's KICKR CORE capture: Physical { gear 0, bike 6.41 kg, rider 76.2 kg }
   assert.equal(hx(hubCommand({ physical: { gearRatio: 0, bikeKg: 6.41, riderKg: 76.2 } })), '04 2a 08 10 00 20 81 05 28 c4 3b');
-  // Simulation: 5% up, Zwift's CWa 0.51 and Crr 0.004, no wind
+  // Simulation: 5% up, incline only (like qdomyos-zwift; with wind/CWa/Crr the KICKR CORE ignored the grade, Nov 20)
   const sim = decodeProto(hubCommand({ sim: { grade: 0.05 } }).slice(1));
   assert.equal(sim[0][0], 4);
-  assert.deepEqual(decodeProto(sim[0][1]), [[1, 0], [2, 1000], [3, 5100], [4, 400]]); // incline 500 zigzagged
+  assert.deepEqual(decodeProto(sim[0][1]), [[2, 1000]]); // incline 500 zigzagged
+  assert.deepEqual(decodeProto(decodeProto(hubCommand({ sim: { grade: 0.05, wind: 0, cwa: 0.51, crr: 0.004 } }).slice(1))[0][1]), [[1, 0], [2, 1000], [3, 5100], [4, 400]]);
   const down = decodeProto(decodeProto(hubCommand({ sim: { grade: -0.05 } }).slice(1))[0][1]);
-  assert.deepEqual(down[1], [2, 999]); // -500 zigzagged
+  assert.deepEqual(down[0], [2, 999]); // -500 zigzagged
   // both in one message, gear 32x52
   const both = decodeProto(hubCommand({ sim: { grade: 0.2 }, physical: { gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 } }).slice(1));
   assert.deepEqual(both.map((f) => f[0]), [4, 5]);

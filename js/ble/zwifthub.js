@@ -37,13 +37,17 @@ const zz = (n) => { n = Math.round(n); return n >= 0 ? 2 * n : -2 * n - 1; }; //
 const fieldVarint = (num, v) => [...varint(num * 8), ...varint(v)];
 const fieldMsg = (num, body) => [...varint(num * 8 + 2), ...varint(body.length), ...body];
 
-/** SimulationParam body: grade as a fraction (0.20 = 20%). */
-export function simulationParam({ grade = 0, wind = 0, cwa = 0.51, crr = 0.004 } = {}) {
+/**
+ * SimulationParam body: grade as a fraction (0.20 = 20%). Incline only by default, like qdomyos-zwift (known to work
+ * on Wahoo/Zwift Hub): with wind, CWa and Crr in the same message the KICKR CORE took the gear but ignored the grade
+ * (Nov 20, Agustín: 167 W at 25.5 km/h on "7%", a flat road). wind / cwa / crr go out only when given.
+ */
+export function simulationParam({ grade = 0, wind, cwa, crr } = {}) {
   return [
-    ...fieldVarint(1, zz(wind * 100)),
+    ...(wind != null ? fieldVarint(1, zz(wind * 100)) : []),
     ...fieldVarint(2, zz(grade * 10000)),
-    ...fieldVarint(3, cwa * 10000),
-    ...fieldVarint(4, crr * 100000),
+    ...(cwa != null ? fieldVarint(3, cwa * 10000) : []),
+    ...(crr != null ? fieldVarint(4, crr * 100000) : []),
   ];
 }
 /** PhysicalParam body. gearRatio = chainring / cog (e.g. 32/52 = 0.615); 0 leaves it out. */
@@ -77,6 +81,30 @@ export function ridingData(body) {
 const isRideOn = (b) => b.length >= 6 && RIDE_ON.every((c, i) => b[i] === c);
 
 /**
+ * What Zwift's own app sends after RideOn, byte for byte as qdomyos-zwift replays it (ftmsbike.cpp zwiftPlayInit(),
+ * proven on Zwift-protocol trainers). Rodillo skipped it until Nov 20, when the KICKR CORE took the virtual gear but
+ * never the grade. 0x41 08 05 is not decoded; 00 08 88 04 asks for the gear ratio (DataId 520); the rest are a gear
+ * (ratio 2.4, 8.31 kg bike, 85 kg rider) and grades 1.73%, -0.85%, 0%. The ride's own values follow at once.
+ */
+export const ZWIFT_INIT = [
+  [0x41, 0x08, 0x05],
+  [0x04, 0x2a, 0x04, 0x10, 0xc0, 0xbb, 0x01],
+  [0x00, 0x08, 0x00],
+  [0x41, 0x08, 0x05],
+  [0x00, 0x08, 0x88, 0x04],
+  [0x04, 0x2a, 0x0a, 0x10, 0xc0, 0xbb, 0x01, 0x20, 0xbf, 0x06, 0x28, 0xb4, 0x42],
+  [0x04, 0x22, 0x0b, 0x08, 0x00, 0x10, 0xda, 0x02, 0x18, 0xec, 0x27, 0x20, 0x90, 0x03],
+  [0x04, 0x2a, 0x04, 0x10, 0xc0, 0xbb, 0x01],
+  [0x00, 0x08, 0x88, 0x04],
+  [0x04, 0x22, 0x03, 0x10, 0xa9, 0x01],
+  [0x04, 0x2a, 0x04, 0x10, 0xc0, 0xbb, 0x01],
+  [0x00, 0x08, 0x88, 0x04],
+  [0x04, 0x22, 0x02, 0x10, 0x00],
+].map((b) => new Uint8Array(b));
+/** After every gear: ask for the gear ratio back, as Zwift and qdomyos-zwift do ("gearApply"). */
+const GEAR_APPLY = new Uint8Array([0x00, 0x08, 0x88, 0x04]);
+
+/**
  * The Zwift link on an already connected trainer. start() resolves true when the trainer answered the handshake
  * (a "RideOn" reply or riding data), false when it has no such service or stays silent: then Rodillo keeps doing
  * virtual shifting itself over FTMS.
@@ -105,6 +133,7 @@ export class ZwiftHubLink {
       await this.dev.write(this.rx, RIDE_ON, this._wr);
       this.ok = await answered;
       logMsg('zwift', this.ok ? 'trainer answered: shifting in the trainer' : 'no answer to RideOn: shifting stays in Rodillo');
+      if (this.ok) for (const m of ZWIFT_INIT) await this.dev.write(this.rx, m, this._wr);
       return this.ok;
     } catch (e) {
       logMsg('zwift', `setup failed (${e.message}): shifting stays in Rodillo`);
@@ -122,23 +151,40 @@ export class ZwiftHubLink {
 
   /**
    * Course grade + virtual gear, sent when something changed (grade by 0.1% or more, or the gear) and at least every
-   * 2 s, never more than 4 times a second. The trainer does the rest.
+   * 2 s, never more than 4 times a second. The trainer does the rest. Gear and grade go out as separate messages,
+   * the way Zwift sends them (gear + gear-ratio request first, grade last), each only when it changed or on the 2 s
+   * refresh: one combined message moved the gear but left the grade at flat on the KICKR CORE (Nov 20).
    */
   setSim({ grade, gearRatio, riderKg, bikeKg }) {
     if (!this.ok || !this.rx) return;
     const g = Math.round(grade * 1000) / 1000, r = Math.round(gearRatio * 10000) / 10000;
     const now = performance.now(), last = this._last;
-    const changed = !last || Math.abs(last.g - g) >= 0.001 || last.r !== r || last.riderKg !== riderKg || last.bikeKg !== bikeKg;
-    if (!changed && now - this._lastAt < 2000) return;
+    const gChanged = !last || Math.abs(last.g - g) >= 0.001;
+    const pChanged = !last || last.r !== r || last.riderKg !== riderKg || last.bikeKg !== bikeKg;
+    const refresh = now - this._lastAt >= 2000;
+    if (!gChanged && !pChanged && !refresh) return;
     if (now - this._lastAt < 250) { // too soon: send the newest values a moment later
       this._next = { grade, gearRatio, riderKg, bikeKg };
       if (!this._timer) this._timer = setTimeout(() => { this._timer = null; const n = this._next; this._next = null; if (n) this.setSim(n); }, 260);
       return;
     }
     this._last = { g, r, riderKg, bikeKg }; this._lastAt = now;
-    this.dev.write(this.rx, hubCommand({ sim: { grade: g }, physical: { gearRatio: r, riderKg, bikeKg } }), this._wr);
+    if (pChanged || refresh) {
+      this.dev.write(this.rx, hubCommand({ physical: { gearRatio: r, riderKg, bikeKg } }), this._wr);
+      this.dev.write(this.rx, GEAR_APPLY, this._wr);
+    }
+    if (gChanged || refresh) {
+      this.dev.write(this.rx, hubCommand({ sim: { grade: g } }), this._wr);
+      // the log shows each whole-percent grade sent, so a trainer that ignores it can be told apart from one that never got it
+      const pct = Math.round(g * 100);
+      if (pct !== this._loggedPct) { this._loggedPct = pct; logMsg('zwift', `grade ${pct}% sent`); }
+    }
   }
 
-  /** Forget what was sent (mode switch, reconnect): the next setSim goes out at once. */
-  reset() { this._last = null; this._lastAt = -Infinity; }
+  /** Forget what was sent (mode switch, e.g. after ERG over FTMS): Zwift's start-up sequence again, then the next
+   *  setSim goes out at once. */
+  reset() {
+    this._last = null; this._lastAt = -Infinity;
+    if (this.ok && this.rx) for (const m of ZWIFT_INIT) this.dev.write(this.rx, m, this._wr);
+  }
 }

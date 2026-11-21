@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { Trainer } from '../js/ble/trainer.js';
 import { ZwiftRide } from '../js/ble/zwiftride.js';
+import { ZWIFT_INIT } from '../js/ble/zwifthub.js';
 import { HeartRate } from '../js/ble/hr.js';
 import { uuid16 } from '../js/ble/base.js';
 
@@ -72,15 +73,26 @@ console.log('ok - trainer connect, control, coalescing');
   ]));
   assert.equal(zt.zwiftShifting, true);
   assert.deepEqual(zRx.writes[0], [0x52, 0x69, 0x64, 0x65, 0x4f, 0x6e]);
+  // then Zwift's own start-up sequence, byte for byte as qdomyos-zwift sends it
+  const n0 = 1 + ZWIFT_INIT.length;
+  assert.equal(zRx.writes.length, n0);
+  assert.deepEqual(zRx.writes[1], [0x41, 0x08, 0x05]);
+  assert.deepEqual(zRx.writes[n0 - 1], [0x04, 0x22, 0x02, 0x10, 0x00]);
   zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 });
   zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 52, riderKg: 77, bikeKg: 12.5 }); // same: not sent again
   await new Promise((r) => setTimeout(r, 5));
-  assert.equal(zRx.writes.length, 2);
-  assert.equal(zRx.writes[1][0], 0x04);
+  // entering slope mode sends the start-up sequence again (it also follows every ERG stretch)
+  assert.deepEqual(zRx.writes.slice(1, n0), zRx.writes.slice(n0, 2 * n0 - 1));
+  zRx.writes.splice(n0, ZWIFT_INIT.length);
+  assert.equal(zRx.writes.length, n0 + 3); // gear, gear-ratio request, then the grade as its own message (last word)
+  assert.deepEqual([zRx.writes[n0][0], zRx.writes[n0][1]], [0x04, 0x2a]); // Physical
+  assert.deepEqual(zRx.writes[n0 + 1], [0x00, 0x08, 0x88, 0x04]);
+  assert.deepEqual(zRx.writes[n0 + 2], [0x04, 0x22, 0x03, 0x10, 0xa0, 0x1f]); // Simulation { incline 2000 }
   zt.setZwiftSim({ grade: 0.2, gearRatio: 32 / 50, riderKg: 77, bikeKg: 12.5 }); // shift inside 250 ms: sent a moment later
-  assert.equal(zRx.writes.length, 2);
+  assert.equal(zRx.writes.length, n0 + 3);
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(zRx.writes.length, 3);
+  assert.equal(zRx.writes.length, n0 + 5); // only the gear changed: gear + request, no grade message
+  assert.equal(zRx.writes[n0 + 3][1], 0x2a);
   zAsync.fire([0x03, 0x08, 0xbe, 0x01, 0x10, 0x50]);
   assert.equal(zt.zwift.data.power, 190);
   // switching to ERG goes back to FTMS
