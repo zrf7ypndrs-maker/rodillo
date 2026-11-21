@@ -4,7 +4,8 @@ import { Trainer } from '../js/ble/trainer.js';
 import { ZwiftRide } from '../js/ble/zwiftride.js';
 import { ZWIFT_INIT } from '../js/ble/zwifthub.js';
 import { HeartRate } from '../js/ble/hr.js';
-import { uuid16 } from '../js/ble/base.js';
+import { uuid16, RETRY_MS } from '../js/ble/base.js';
+import { HR_STALE_MS } from '../js/ble/hr.js';
 
 globalThis.performance ??= { now: () => Date.now() };
 globalThis.TextDecoder ??= (await import('node:util')).TextDecoder;
@@ -153,4 +154,52 @@ await hr.attach(fakeDevice('HRM-Pro', [new FakeService(uuid16(0x180d), [hrm])]))
 hrm.fire([0x00, 141]);
 assert.equal(hr.bpm, 141);
 console.log('ok - heart rate');
+
+// a strap that goes silent (lost skin contact, link still up) reads 0, never a frozen number
+{
+  const real = performance.now;
+  const t0 = real.call(performance);
+  performance.now = () => t0 + HR_STALE_MS + 1;
+  assert.equal(hr.bpm, 0);
+  performance.now = real;
+  hrm.fire([0x00, 150]);
+  assert.equal(hr.bpm, 150);
+  console.log('ok - silent strap reads 0');
+}
+
+// a drop: bpm clears at once, and reconnect keeps trying past the old 8-try limit until the strap is back
+{
+  RETRY_MS.splice(0, RETRY_MS.length, 1);
+  const c = new FakeChar(uuid16(0x2a37));
+  let fail = 12, disc = null, tries = 0;
+  const svc = new FakeService(uuid16(0x180d), [c]);
+  const dev = {
+    name: 'HRM-Pro', id: 'hrm2', addEventListener(ev, f) { if (ev === 'gattserverdisconnected') { assert.equal(disc, null, 'one drop listener per device'); disc = f; } },
+    gatt: {
+      connected: true,
+      disconnect() {},
+      async connect() { tries++; if (fail-- > 0) throw new Error('out of range'); return { async getPrimaryService(u) { if (u !== svc.uuid) throw new Error('no svc'); return svc; } }; },
+    },
+  };
+  const h = new HeartRate();
+  fail = 0;
+  await h.attach(dev);
+  await h.attach(dev); // re-picked the same strap: still one listener
+  c.fire([0x00, 160]);
+  assert.equal(h.bpm, 160);
+  fail = 12; tries = 0;
+  const p1 = disc(); disc(); // two events, one loop
+  assert.equal(h.bpm, 0);
+  assert.equal(h.state, 'disconnected');
+  await p1;
+  for (let i = 0; i < 100 && h.state !== 'connected'; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(h.state, 'connected');
+  assert.equal(tries, 13, `tries ${tries}`);
+  // rider disconnects on purpose: no retry loop
+  await h.disconnect(); tries = 0;
+  await disc();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(tries, 0);
+  console.log('ok - drop clears HR, reconnect never gives up, one loop');
+}
 process.exit(0);

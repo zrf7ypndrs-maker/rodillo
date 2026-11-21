@@ -167,8 +167,7 @@ async function autoReconnect() {
       else if (ids.ctl.includes(d.id)) { obj = new ZwiftRide(); obj.on('press', (b) => onButton(b, obj)); obj.on('release', onRelease); app.controllers.push(obj); }
       if (!obj) continue;
       bindDevice(obj);
-      obj.device = d;
-      d.addEventListener('gattserverdisconnected', () => obj._onDisconnect());
+      obj.listen(d);
       // wait for the device to advertise, then connect
       const go = () => obj.connect().catch(() => {}).finally(renderDevices);
       if (d.watchAdvertisements) {

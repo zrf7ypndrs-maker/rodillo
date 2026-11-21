@@ -14,6 +14,9 @@ export function logMsg(src, msg) { log.emit('log', { t: Date.now(), src, msg });
 
 export const hex = (dv) => Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)).map((b) => b.toString(16).padStart(2, '0')).join(' ');
 
+// waits between reconnect tries; the last one repeats for as long as it takes
+export const RETRY_MS = [1000, 2000, 3000, 5000];
+
 /** Base class for a Web Bluetooth peripheral we keep connected. */
 export class BleDevice extends Emitter {
   constructor(kind) {
@@ -32,18 +35,25 @@ export class BleDevice extends Emitter {
   setState(s) { this.state = s; this.emit('state', s); }
 
   async pick(options) {
-    this.device = await navigator.bluetooth.requestDevice(options);
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
+    this.listen(await navigator.bluetooth.requestDevice(options));
     return this.connect();
   }
 
   async attach(device) {
-    this.device = device;
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
+    this.listen(device);
     return this.connect();
   }
 
-  async connect() {
+  /** Take `device` and watch it for drops, once per device (re-picking the same strap mid-ride used to stack listeners). */
+  listen(device) {
+    this.device = device;
+    this._heard ||= new WeakSet();
+    if (this._heard.has(device)) return;
+    this._heard.add(device);
+    device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
+  }
+
+  async connect(quiet = false) {
     this._wantConnected = true;
     this.setState('connecting');
     try {
@@ -53,7 +63,7 @@ export class BleDevice extends Emitter {
       this.setState('connected');
       logMsg(this.kind, `connected to ${this.name}`);
     } catch (e) {
-      logMsg(this.kind, `connect failed: ${e.message}`);
+      if (!quiet) logMsg(this.kind, `connect failed: ${e.message}`);
       this.setState('disconnected');
       throw e;
     }
@@ -65,14 +75,22 @@ export class BleDevice extends Emitter {
     this.setState('disconnected');
   }
 
+  /**
+   * A drop: keep trying until it's back or the rider disconnects it on purpose (Nov 20: the HR strap dropped mid-ride
+   * and the old loop gave up after 8 tries, ~40 s, so it never came back). One loop at a time; quiet log after the first tries.
+   */
   async _onDisconnect() {
     this.setState('disconnected');
     logMsg(this.kind, 'disconnected');
-    if (!this._wantConnected) return;
-    for (let i = 0; i < 8 && this._wantConnected; i++) {
-      await new Promise((r) => setTimeout(r, 1000 * Math.min(8, 1 + i)));
-      try { await this.connect(); return; } catch { /* retry */ }
-    }
+    if (!this._wantConnected || this._retrying) return;
+    this._retrying = true;
+    try {
+      for (let i = 0; this._wantConnected; i++) {
+        await new Promise((r) => setTimeout(r, RETRY_MS[Math.min(i, RETRY_MS.length - 1)]));
+        if (!this._wantConnected || (this.state === 'connected' && this.device?.gatt.connected)) return; // re-picked meanwhile
+        try { await this.connect(i >= 3); logMsg(this.kind, `back after ${i + 1} tries`); return; } catch { /* retry */ }
+      }
+    } finally { this._retrying = false; }
   }
 
   /** Device Information Service, if exposed. */
