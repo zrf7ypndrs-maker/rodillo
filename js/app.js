@@ -507,13 +507,37 @@ function riseHtml(p) {
   return m ? ` <span>${m > 0 ? '+' : '&minus;'}${Math.abs(m)} m</span>` : '';
 }
 
+/** Which stretch a finger at `f` across the chart (0 left, 1 right) is on: anywhere in its column counts, -1 for none. */
+function profileHit(f, segs, tr) {
+  const T = segs[segs.length - 1].end;
+  f = Math.min(Math.max(f, 0), 0.9999);
+  return tr ? tr.parts.findIndex((p) => f * tr.D >= p.d0 && f * tr.D < p.d1) : segs.findIndex((g) => f * T >= g.start && f * T < g.end);
+}
+
+/** The readout over stretch i: its label and rep, what it asks for (+ % FTP, + height on a road), its length and when. */
+function profileTip(segs, i, ftp, tr) {
+  const g = segs[i];
+  const pct = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * 100)}%` : `${Math.round(g.from * 100)}-${Math.round(g.to * 100)}%`) + ' FTP' : '';
+  const rep = g.rep ? ` &middot; ${g.rep.i} of ${g.rep.of}` : '';
+  const len = g.dist ? `${fmtDist(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur);
+  const cad = g.cadence !== '' ? ` &middot; ${esc(g.cadence)} rpm` : '';
+  return `<div class="pt-lbl">${esc(g.label)}${rep}</div>
+        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}${tr ? riseHtml(tr.parts[i]) : ''}</div>
+        <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
+}
+
+/** The middle of stretch i across the chart (0 left, 1 right): where the readout centres. */
+const profileMid = (segs, i, tr) => (tr ? (tr.parts[i].d0 + tr.parts[i].d1) / 2 / tr.D : (segs[i].start + segs[i].end) / 2 / segs[segs.length - 1].end);
+/** The readout's centre (px) over `mid`, kept inside a chart `width` px wide; `half` = half the readout's width. */
+const tipLeft = (mid, half, width) => Math.min(Math.max(mid, half), width - half);
+
 /** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
 function bindProfileHover(box, w) {
   if (!box) return;
   w = previewOf(w); // same steps as the chart it reads
   const segs = flatten(w, app.settings.ftp);
   if (!segs.length) return;
-  const T = segs[segs.length - 1].end, ftp = app.settings.ftp;
+  const ftp = app.settings.ftp;
   const tr = isTrack(segs) ? track(segs) : null; // elevation profile: the x axis is distance
   const tip = document.createElement('div');
   tip.className = 'prof-tip';
@@ -526,8 +550,7 @@ function bindProfileHover(box, w) {
     let i;
     if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
       // A finger is imprecise: anywhere in the interval's column counts.
-      const f = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 0.9999);
-      i = tr ? tr.parts.findIndex((p) => f * tr.D >= p.d0 && f * tr.D < p.d1) : segs.findIndex((g) => f * T >= g.start && f * T < g.end);
+      i = profileHit((e.clientX - r.left) / r.width, segs, tr);
     } else {
       // Mouse: only inside the filled area under the curve, not the empty space above it.
       const hit = e.target.closest?.('[data-i]');
@@ -536,23 +559,14 @@ function bindProfileHover(box, w) {
     if (i < 0) return hide();
     if (i !== cur) {
       cur = i;
-      const g = segs[i];
       svg.querySelectorAll('[data-i]').forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
-      const pct = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * 100)}%` : `${Math.round(g.from * 100)}-${Math.round(g.to * 100)}%`) + ' FTP' : '';
-      const rep = g.rep ? ` &middot; ${g.rep.i} of ${g.rep.of}` : '';
-      const len = g.dist ? `${fmtDist(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur);
-      const cad = g.cadence !== '' ? ` &middot; ${esc(g.cadence)} rpm` : '';
-      tip.innerHTML = `<div class="pt-lbl">${esc(g.label)}${rep}</div>
-        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}${tr ? riseHtml(tr.parts[i]) : ''}</div>
-        <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
+      tip.innerHTML = profileTip(segs, i, ftp, tr);
       box.classList.add('hov');
     }
     // Centered over the interval, kept inside the chart.
-    const b = box.getBoundingClientRect(), g = segs[cur];
-    const f = tr ? (tr.parts[cur].d0 + tr.parts[cur].d1) / 2 / tr.D : (g.start + g.end) / 2 / T;
-    const mid = r.left - b.left + f * r.width;
-    const half = tip.offsetWidth / 2;
-    tip.style.left = `${Math.min(Math.max(mid, half), b.width - half)}px`;
+    const b = box.getBoundingClientRect();
+    const mid = r.left - b.left + profileMid(segs, cur, tr) * r.width;
+    tip.style.left = `${tipLeft(mid, tip.offsetWidth / 2, b.width)}px`;
   };
   const hide = () => {
     cur = -1;
