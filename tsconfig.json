@@ -1,0 +1,18 @@
+{
+  // npm run typecheck (tools/typecheck.mjs). TypeScript only reads the files: no build step, nothing the browser loads changes.
+  // checkJs is off on purpose: a file is checked once it starts with // @ts-check (code-health plan step 8, one file at a
+  // time). Turn checkJs on once every file in js/ has it. Shared shapes live in js/types.js (JSDoc @typedef only).
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["js/**/*.js"]
+}
