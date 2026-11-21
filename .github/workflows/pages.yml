@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,8 +69,19 @@ jobs:
       - name: Site files only
         run: rm -rf node_modules test tools auth-worker .github
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # v5 leaves dotfiles out of the artifact (.nojekyll, .gitignore); an Actions deploy doesn't run Jekyll, so none is needed.
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: .
+      # GitHub sometimes fails to find the artifact it was just given ("Fetching artifact metadata failed" /
+      # "No artifacts named github-pages", three times on Nov 20, every check green). Try once more after a minute
+      # instead of a manual re-run, which also cancels whatever else is queued.
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - name: Wait before retrying the deploy
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v5
