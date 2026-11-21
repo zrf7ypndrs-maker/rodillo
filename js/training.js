@@ -1,3 +1,4 @@
+// @ts-check
 // Training tab: stats card, fitness / fatigue / form chart, weekly load bars, power curve, time in zones and the
 // rides list (#training-cards, #chart-*, #ride-table). Moved out of js/app.js Nov 17 (code-health plan step 4) with
 // no change in behavior. The chart builders are pure (data and a `look` in, markup out; tested in test/training.mjs):
@@ -10,17 +11,35 @@ import { fmtTime } from './ridepage.js?v=202611102147';
 import { ls, rides } from './store.js?v=202611102147';
 import { $, $$, esc } from './ui.js?v=202611102147';
 import { dkey, dayDate } from './dates.js?v=202611102147';
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
 
 // from app.js, set by initTraining()
-let app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask;
+/** @typedef {import('./types.js').TrainingDeps} Deps */
+/** @typedef {import('./types.js').ChartLook} ChartLook */
+/** @typedef {import('./types.js').LoadRow} LoadRow */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['look']} */ let look;
+/** @type {Deps['trainingRows']} */ let trainingRows;
+/** @type {Deps['syncClient']} */ let syncClient;
+/** @type {Deps['dataRepo']} */ let dataRepo;
+/** @type {Deps['syncHint']} */ let syncHint;
+/** @type {Deps['syncPending']} */ let syncPending;
+/** @type {Deps['whoopDay']} */ let whoopDay;
+/** @type {Deps['recZone']} */ let recZone;
+/** @type {Deps['openRide']} */ let openRide;
+/** @type {Deps['downloadFit']} */ let downloadFit;
+/** @type {Deps['ask']} */ let ask;
 
+/** @param {import('./types.js').TrainingDeps} deps */
 export function initTraining(deps) {
   ({ app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask } = deps);
 }
 
 
 // Form states, same cutoffs as formLabel() in stats.js (the Form tile)
+/** @type {[number, number, string][]} */
 const FORM_BANDS = [[15, 25, 'Very fresh'], [5, 15, 'Fresh'], [-10, 5, 'Balanced'], [-30, -10, 'Productive fatigue'], [-45, -30, 'Overreaching']];
+/** @param {LoadRow[]} series @param {ChartLook} look */
 export function svgLoad(series, { phone, INK, MUTED, RULE, FITNESS, FATIGUE }) {
   // phone: the svg shrinks to about half, so text is drawn about twice as big there
   const ph = phone, k = ph ? 1.8 : 1;
@@ -63,6 +82,7 @@ export function svgLoad(series, { phone, INK, MUTED, RULE, FITNESS, FATIGUE }) {
     ${legend}</svg>`;
 }
 
+/** @param {ReturnType<typeof weekly>} weeks @param {ChartLook} look */
 export function svgWeekly(weeks, { phone, ZC, INK, MUTED, RULE, FAINT, UNDERLAY }) {
   // Real pixel sizes on the phone (viewBox = about the card width there), so text isn't shrunk.
   const W = phone ? 340 : 560, n = weeks.length;
@@ -101,6 +121,7 @@ export function svgWeekly(weeks, { phone, ZC, INK, MUTED, RULE, FAINT, UNDERLAY 
 
 /** Power curve (premium look): orange line and a soft orange fill, no glow (Nov 16). Agustín's call (Nov 12, "I actually liked
  *  the orange"; Nov 13, "keep the curve orange" on desktop too): the one exception to the zone-colors-only-on-zone-data rule. */
+/** @param {Record<string, number>} c90 @param {Record<string, number>} cAll @param {ChartLook} look */
 export function svgCurve(c90, cAll, look) {
   const { phone, zoneHex, TOK, INK, MUTED } = look;
   if (phone) return svgCurvePhone(c90, cAll, look);
@@ -123,6 +144,7 @@ export function svgCurve(c90, cAll, look) {
 
 /** Phone power curve (premium look, Nov 12): real pixel size so text isn't shrunk. Same orange as the desktop curve above,
  *  no glow (Agustín, Nov 13). */
+/** @param {Record<string, number>} c90 @param {Record<string, number>} cAll @param {ChartLook} look */
 export function svgCurvePhone(c90, cAll, { zoneHex, TOK, INK, MUTED }) {
   const W = 340, H = 160, labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'], C = zoneHex(1.1);
   const max = Math.max(100, ...Object.values(cAll)) * 1.08;
@@ -143,6 +165,7 @@ export function svgCurvePhone(c90, cAll, { zoneHex, TOK, INK, MUTED }) {
 
 /** Time-in-zone rows (Z1..Z7). With ftp, ranges are in watts (one ride); without, % of FTP. */
 const fmtLong = (sec) => (sec < 3600 ? fmtTime(sec) : `${Math.floor(sec / 3600)}h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}m`);
+/** @param {number[]} secs Seconds per zone. @param {number} [ftp] */
 export function zoneBars(secs, ftp) {
   const total = (secs || []).reduce((a, b) => a + (b || 0), 0);
   if (!total) return '<p class="muted">No rides in this period.</p>';
@@ -172,6 +195,7 @@ export const LOAD_INFO = {
   tsb: '<b>Training Stress Balance</b> = fitness minus fatigue. All three are as of the start of today, so today\'s ride moves them tomorrow morning. Above +5: fresh, good for a test or race. -10 to +5: balanced. -10 to -30: productive fatigue, normal in a build block. Below -30: overreaching, back off.',
 };
 /** (i) button with a hover / tap tip; app.js closes open tips on a click elsewhere. */
+/** @param {string} html @param {string} label */
 export const infoTip = (html, label) => `<span class="info"><button type="button" class="info-btn" aria-label="What is ${esc(label)}?"><svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="3.6" r="1.25"/><rect x="5.95" y="5.9" width="2.1" height="5.5" rx=".6"/></svg></button><span class="tip" role="tooltip">${html}</span></span>`;
 
 export async function renderTraining() {
@@ -228,9 +252,9 @@ export async function renderTraining() {
         <div class="rl-stats">${st('Time', fmtTime(x.durSec))}${st('NP', x.np != null ? x.np : '-', x.np != null ? ' W' : '')}${st('IF', x.if ?? '-')}${st(x.tssFrom === 'hr' ? 'TSS (HR)' : 'TSS', x.tss)}${st('HR', x.avgHr ?? '-')}</div>
         ${r.local ? `<div class="rl-btns"><button class="ghost small" data-fit="${r.local.id}">.FIT</button><button class="ghost small" data-del="${r.local.id}">Delete</button></div>` : ''}</div>`;
     }).join('')}</div>` : '<p class="muted">No rides yet.</p>';
-  $$('#ride-table .rl').forEach((el) => (el.onclick = (e) => { if (!e.target.closest('button')) openRide(el.dataset.ride); }));
+  $$('#ride-table .rl').forEach((el) => (el.onclick = (/** @type {ElementEvent} */ e) => { if (!e.target.closest('button')) openRide(el.dataset.ride); }));
   // a row opens its ride page (the .FIT / Delete buttons keep their own job)
-  $$('#ride-table tr[data-ride]').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('button')) openRide(tr.dataset.ride); }));
+  $$('#ride-table tr[data-ride]').forEach((tr) => (tr.onclick = (/** @type {ElementEvent} */ e) => { if (!e.target.closest('button')) openRide(tr.dataset.ride); }));
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
   $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this Mac?', ok: 'Delete', danger: true })) { await rides.del(+b.dataset.del); renderTraining(); } }));
 }

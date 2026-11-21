@@ -113,6 +113,8 @@
  * @property {string} [basedOn] Mine workouts made with Edit a copy: the coach workout's id.
  * @property {boolean} [imported] Imported .zwo (local only).
  * @property {ClimbProfile} [profile] Real climbs (tools/climb.mjs): the road the steps are cut from.
+ * @property {number} [detail] Real climbs: the detail level the steps are cut at (withDetail() in js/engine/climb.js).
+ * @property {'coach' | 'mine'} [_source] In app.library only: coach/workouts.json or workouts/mine.json (applyLibrary()).
  */
 
 /**
@@ -275,9 +277,24 @@
  * @typedef {object} RideRow A row of the ride history (trainingRows() in js/today.js).
  * @property {RideSummary} summary
  * @property {boolean} synced
- * @property {object} [local] This device's recording (IndexedDB `rides`).
+ * @property {LocalRide} [local] This device's recording (IndexedDB `rides`).
  * @property {boolean} [demo]
  * @property {boolean} [interrupted]
+ */
+
+/**
+ * @typedef {object} LocalRide A recording on this device (IndexedDB `rides`, saveRide() in js/app.js). rides.list() leaves out `samples`.
+ * @property {number} id Start time, epoch ms.
+ * @property {string} name
+ * @property {string} status 'done' | 'interrupted' | ...
+ * @property {boolean} demo
+ * @property {boolean} synced
+ * @property {Sample[]} [samples]
+ * @property {any[]} [laps]
+ * @property {import('./stats.js').RideMeta} [meta]
+ * @property {RideSummary} summary
+ * @property {IntervalResult[]} intervals
+ * @property {boolean} [discarded]
  */
 
 /** @typedef {{ date: string, tss: number, ctl: number, atl: number, tsb: number }} LoadRow A day of loadSeries(). */
@@ -312,6 +329,37 @@
  * @property {boolean} [usedNav]
  * @property {boolean} [launching]
  * @property {string} [phoneView] 'chart' | 'list'.
+ * @property {string | null} [calMonth] Calendar month shown, 'YYYY-MM' (null = this month).
+ * @property {string | null} [calSel] Calendar day selected, day key (null = today).
+ * @property {Workout[]} [baseLibrary] The public workouts/*.json (loadCoachData()).
+ * @property {Plan | null} [basePlan] The public plans/current.json.
+ * @property {Plan | null} [coachPlan] rodillo-data coach/plan.json (or its cached copy).
+ * @property {Workout[]} [coachWorkouts] rodillo-data coach/workouts.json.
+ * @property {MineDoc | null} [mineDoc] rodillo-data workouts/mine.json.
+ * @property {string | null} [coachError] Why the coach data didn't load.
+ * @property {string | null} [coachNoRepo] The data repo that couldn't be reached.
+ * @property {number} [_segI] The desktop ride screen's current segment (js/ride.js).
+ * @property {number} [_rpSegI] The phone ride screen's current segment (js/ridephone.js).
+ */
+
+/**
+ * @typedef {object} MineDoc workouts/mine.json in rodillo-data (js/mine.js).
+ * @property {number} version
+ * @property {Workout[]} workouts
+ * @property {Record<string, string>} deleted Workout id -> when it was deleted.
+ */
+
+// ------------------------------------------------------------------ DOM events (type checking only)
+
+/**
+ * A listener's event whose target is an HTML element (clicks, delegated handlers); `ElementEvent<KeyboardEvent>` for keys.
+ * @template {Event} [E=PointerEvent]
+ * @typedef {E & { target: HTMLElement }} ElementEvent
+ */
+/**
+ * A listener's event on a form field (input / change on an input or a select).
+ * @template {Event} [E=Event]
+ * @typedef {E & { target: HTMLInputElement }} FieldEvent
  */
 
 // ------------------------------------------------------------------ views and looks (built at draw time in js/app.js / js/ride.js)
@@ -377,7 +425,7 @@
  * @property {(open: boolean, where?: string) => void} setDevPop
  * @property {(tab: string) => void} setTab
  * @property {string[]} TABS
- * @property {(w: Workout, effort?: number) => void} startWorkout
+ * @property {(w: Workout, effort?: number, btn?: Element) => void} startWorkout
  * @property {(name: string) => void} rideAction
  * @property {(name: string) => void} modalAction
  * @property {() => void} renderRide
@@ -401,7 +449,7 @@
  * @property {() => LibView} view
  * @property {() => void} saveSettings
  * @property {() => void} refreshPlanViews
- * @property {(w: Workout, effort?: number) => void} startWorkout
+ * @property {(w: Workout, effort?: number, btn?: Element) => void} startWorkout
  * @property {() => Element[]} focusables
  * @property {() => void} applyFocus
  * @property {() => boolean} signedIn
@@ -414,8 +462,8 @@
  * @property {() => boolean} isPhone
  * @property {() => any} syncClient
  * @property {() => string} syncHint
- * @property {() => void} startFree
- * @property {(w: Workout, effort?: number) => void} startWorkout
+ * @property {(btn?: Element) => void} startFree
+ * @property {(w: Workout, effort?: number, btn?: Element) => void} startWorkout
  * @property {(id: string) => void} openRide
  * @property {(tab: string) => void} setTab
  */

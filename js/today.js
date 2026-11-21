@@ -1,3 +1,4 @@
+// @ts-check
 // Today and Calendar (#today, #overview, #week, #tab-calendar): the rider overview tiles, the hero (planned workout,
 // rest day or done), the Next days strip, the month calendar with the selected day's detail, and the WHOOP recovery call
 // on them. Moved out of js/app.js Nov 18 (code-health plan step 4) with no change in behavior.
@@ -18,9 +19,23 @@ import { profileSvg, woMeta, isSim, workSummary, bindProfileHover } from './prof
 import { $, esc } from './ui.js?v=202611102147';
 
 // from app.js, set by initToday()
-let app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, setTab;
+/** @typedef {import('./types.js').TodayDeps} Deps */
+/** @typedef {import('./types.js').TodayView} TodayView */
+/** @typedef {import('./types.js').Workout} Workout */
+/** @typedef {import('./types.js').RideSummary} RideSummary */
+/** @typedef {ReturnType<typeof dayInfo>} DayInfo What's planned and ridden on a day. */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['view']} */ let view;
+/** @type {Deps['isPhone']} */ let isPhone;
+/** @type {Deps['syncClient']} */ let syncClient;
+/** @type {Deps['syncHint']} */ let syncHint;
+/** @type {Deps['startFree']} */ let startFree;
+/** @type {Deps['startWorkout']} */ let startWorkout;
+/** @type {Deps['openRide']} */ let openRide;
+/** @type {Deps['setTab']} */ let setTab;
 
 /** Wires the Calendar's month buttons. Called once from app.js, where that wiring sat, before anything renders. */
+/** @param {import('./types.js').TodayDeps} deps */
 export function initToday(deps) {
   ({ app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, setTab } = deps);
   const shiftMonth = (n) => { const [y, m] = (app.calMonth || dkey(new Date()).slice(0, 7)).split('-').map(Number); const d = new Date(y, m - 1 + n, 1, 12); app.calMonth = dkey(d).slice(0, 7); renderCalendar(); };
@@ -40,6 +55,7 @@ function renderOverview() {
 }
 
 /** The overview tiles at `now`; `ph` = the phone layout (three tiles and the recovery card). */
+/** @param {Date} now @param {boolean} ph Phone layout. @param {TodayView} v */
 export function overviewHtml(now, ph, v) {
   const real = (v.rows || []).filter((r) => !r.demo).map((r) => r.summary);
   const series = loadSeries(real, now, 90);
@@ -108,6 +124,7 @@ export function overviewHtml(now, ph, v) {
 // ------------------------------------------------------------------ plan: week carousel + calendar
 // day keys: dkey, dayDate, addDays, mondayOf from js/dates.js
 
+/** @param {Workout} w @param {TodayView} v */
 export function workoutColor(w, v) {
   const segs = flatten(w);
   if (segs.every((x) => x.kind === 'sim')) return v.gradeHex(Math.max(...segs.map((x) => x.grade ?? 0))); // slope day = its steepest grade
@@ -116,6 +133,7 @@ export function workoutColor(w, v) {
 }
 
 /** What's planned and what was ridden on a given date. */
+/** @param {string} key Day key. @param {TodayView} v */
 export function dayInfo(key, v) {
   const entry = v.plan?.days?.[key];
   const w = entry && v.library.find((x) => x.id === entry);
@@ -128,6 +146,7 @@ export function dayInfo(key, v) {
   };
 }
 
+/** @param {DayInfo} info @param {TodayView} v */
 export function dayCardHtml(info, v) {
   const d = dayDate(info.key);
   const dow = d.toLocaleDateString([], { weekday: 'short' });
@@ -158,6 +177,7 @@ export const BIKE_ICO = '<svg class="bike-ico" viewBox="0 0 156 96" aria-hidden=
 const PLAY_ICO = '<svg class="play-ico" viewBox="0 0 16 18" aria-hidden="true"><path d="M2 1.5v15l13-7.5z"/></svg>';
 
 /** Recovery + the coach's call (or the built-in advice), one line under the profile. */
+/** @param {DayInfo} today @param {TodayView} v */
 export function heroRecovery(today, v) {
   const d = whoopDay(today.key, v);
   const decided = coachDecision(today.key, v);
@@ -179,6 +199,7 @@ const SEE_ICO = '<svg class="see-ico" viewBox="0 0 24 24" aria-hidden="true"><pa
 
 /** Today's hero once the planned ride is done: result headline, the ride's real numbers, See ride + Free ride. */
 /** Stat row of a finished ride (done hero, Calendar day): only the numbers the ride has. */
+/** @param {Workout | null} w @param {RideSummary} r @param {TodayView} v */
 export function rideStatsHtml(w, r, v) {
   const same = !!w && r.workoutId === w.id;
   const c = r.compliance;
@@ -196,6 +217,7 @@ export function rideStatsHtml(w, r, v) {
 /** "All 3 reps on target." / "Weakest rep at 88% of target." */
 export const complianceLine = (c) => !c ? '' : c.min >= 95 ? `All ${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} on target.` : `Weakest rep at ${c.min}% of target.`;
 
+/** @param {Workout | null} w @param {RideSummary} r @param {string} date Day key. @param {TodayView} v */
 export function heroDoneBody(w, r, date, v) {
   const same = r.workoutId === w.id;
   const at = r.start ? new Date(r.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
@@ -220,6 +242,7 @@ export function heroDoneBody(w, r, date, v) {
 
 /** Phone hero numbers (premium look, Nov 12): the main set's watts big with the set under it, then time and TSS.
  *  Desktop hides .hero-nums and keeps the one-line .hero-meta. Real climbs keep .hero-meta (ascent) on the phone too. */
+/** @param {Workout} w @param {string} work The main set phrase. @param {TodayView} v */
 export function heroNums(w, work, v) {
   const segs = flatten(w);
   if (isTrack(segs)) return '';
@@ -254,7 +277,7 @@ export function renderHero() {
   if (doneRide) {
     // Done: a quiet sheet card with the ride's real numbers (Next days below shows what's next).
     el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w, v)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date, v)}</section>`;
-    $('#btn-free').onclick = (e) => startFree(e.currentTarget);
+    $('#btn-free').onclick = (e) => startFree(/** @type {HTMLElement} */ (e.currentTarget));
     $('#hero-see').onclick = () => openRide(doneRide.id);
     if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w, v.prof);
     return;
@@ -291,8 +314,8 @@ export function renderHero() {
       </div>${heroRecovery(today, v)}`;
   }
   el.innerHTML = `${src}<section class="hero ${w ? '' : 'nowo'}${body.includes('hero-nums') ? ' has-nums' : ''}" style="--c:${w ? workoutColor(w, v) : 'transparent'}" aria-label="Today">${body}</section>`;
-  $('#btn-free').onclick = (e) => startFree(e.currentTarget);
-  el.querySelectorAll('.hero-done-see').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
+  $('#btn-free').onclick = (e) => startFree(/** @type {HTMLElement} */ (e.currentTarget));
+  el.querySelectorAll('.hero-done-see').forEach((/** @type {HTMLElement} */ b) => (b.onclick = () => openRide(b.dataset.ride)));
   const s = $('#hero-start');
   if (s) s.onclick = () => startWorkout(w, 1, s);
   if (w) bindProfileHover(el.querySelector('.hero-prof'), w, v.prof);
@@ -317,8 +340,8 @@ export function renderWeek() {
     <div class="row-btns"><button class="ghost small" data-scroll="-1" aria-label="Earlier">&lsaquo;</button><button class="ghost small" data-scroll="1" aria-label="Later">&rsaquo;</button></div></div>
     <div class="week-strip" id="week-strip" data-start="${dkey(start)}">${days.map((d) => dayCardHtml(d, v)).join('')}</div>`;
   const strip = $('#week-strip');
-  el.querySelectorAll('[data-scroll]').forEach((b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
-  const back = el.querySelector('[data-scroll="-1"]');
+  el.querySelectorAll('[data-scroll]').forEach((/** @type {HTMLElement} */ b) => (b.onclick = () => strip.scrollBy({ left: +b.dataset.scroll * strip.clientWidth * 0.8, behavior: 'smooth' })));
+  const back = /** @type {HTMLButtonElement} */ (el.querySelector('[data-scroll="-1"]'));
   const syncBack = () => (back.disabled = strip.scrollLeft <= 4);
   strip.addEventListener('scroll', syncBack, { passive: true });
   strip.scrollLeft = keepScroll;
@@ -328,8 +351,8 @@ export function renderWeek() {
 }
 
 function bindDayCards(root) {
-  root.querySelectorAll('[data-startday]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const i = dayInfo(b.dataset.startday, view()); if (i.workout) startWorkout(i.workout); }));
-  root.querySelectorAll('.day[data-day], .cal-cell[data-day]').forEach((c) => (c.onclick = () => { app.calMonth = c.dataset.day.slice(0, 7); app.calSel = c.dataset.day; setTab('calendar'); }));
+  root.querySelectorAll('[data-startday]').forEach((/** @type {HTMLElement} */ b) => (b.onclick = (e) => { e.stopPropagation(); const i = dayInfo(b.dataset.startday, view()); if (i.workout) startWorkout(i.workout); }));
+  root.querySelectorAll('.day[data-day], .cal-cell[data-day]').forEach((/** @type {HTMLElement} */ c) => (c.onclick = () => { app.calMonth = c.dataset.day.slice(0, 7); app.calSel = c.dataset.day; setTab('calendar'); }));
 }
 
 export function renderCalendar() {
@@ -341,17 +364,18 @@ export function renderCalendar() {
   const sel = app.calSel || dkey(now);
   $('#cal-title').textContent = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
   $('#cal-grid').innerHTML = calGridHtml(ym, sel, v);
-  $('#cal-grid').querySelectorAll('.cal-cell').forEach((c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
+  $('#cal-grid').querySelectorAll('.cal-cell').forEach((/** @type {HTMLElement} */ c) => (c.onclick = () => { app.calSel = c.dataset.day; if (c.dataset.day.slice(0, 7) !== ym) app.calMonth = c.dataset.day.slice(0, 7); renderCalendar(); }));
   // detail for the selected day
   const info = dayInfo(sel, v);
   $('#cal-detail').innerHTML = calDayHtml(sel, v);
   $('#cal-detail').style.setProperty('--c', info.workout ? workoutColor(info.workout, v) : 'transparent'); // phone: soft glow in the day's color
-  $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
-  $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
+  $('#cal-detail').querySelectorAll('[data-ride]').forEach((/** @type {HTMLElement} */ b) => (b.onclick = () => openRide(b.dataset.ride)));
+  $('#cal-detail').querySelectorAll('[data-startday]').forEach((/** @type {HTMLElement} */ b) => (b.onclick = () => startWorkout(info.workout)));
   if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout, v.prof);
 }
 
 /** The month grid (Monday first, up to six weeks) for `ym` = "YYYY-MM", with the day `sel` selected. */
+/** @param {string} ym 'YYYY-MM'. @param {string} sel Day key. @param {TodayView} v */
 export function calGridHtml(ym, sel, v) {
   const [y, m] = ym.split('-').map(Number);
   const first = new Date(y, m - 1, 1, 12);
@@ -375,6 +399,7 @@ export function calGridHtml(ym, sel, v) {
 
 /** The selected day's detail: the result once the planned workout is ridden, else the plan; then the coach's call,
  *  WHOOP and any other rides that day. */
+/** @param {string} sel Day key. @param {TodayView} v */
 export function calDayHtml(sel, v) {
   const info = dayInfo(sel, v);
   const date = dayDate(sel).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -407,9 +432,12 @@ export function calDayHtml(sel, v) {
 }
 
 // ------------------------------------------------------------------ WHOOP recovery
+/** @param {number} r Recovery, %. */
 export const recZone = (r) => (r >= 67 ? 'green' : r >= 34 ? 'yellow' : 'red');
+/** @param {string} key Day key. @param {TodayView} [v] */
 export const whoopDay = (key, v = view()) => v.whoop?.[key];
 
+/** @param {Workout} w */
 export function isHard(w) {
   if (!w) return false;
   if ((w.tags || []).some((t) => ['vo2', 'threshold', 'test', 'max'].includes(t))) return true;
@@ -417,6 +445,7 @@ export function isHard(w) {
 }
 
 /** Coach's read of today's recovery vs today's session. */
+/** @param {DayInfo} today @param {TodayView} v */
 export function recoveryAdvice(today, v) {
   if (!today) return '';
   const d = whoopDay(today.key, v);
@@ -444,6 +473,7 @@ export function recoveryAdvice(today, v) {
 export const DECISION_LABEL = { kept: 'Ride as planned', scaled: 'Adjusted', swapped: 'Swapped', moved: 'Moved', rest: 'Rest instead' };
 
 /** The daily coach run's decision for a day (plan.daily[key]), as HTML. */
+/** @param {string} key Day key. @param {TodayView} v */
 export function coachDecision(key, v) {
   const d = v.plan?.daily?.[key];
   if (!d?.reason) return '';

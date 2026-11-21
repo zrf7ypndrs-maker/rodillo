@@ -1,3 +1,4 @@
+// @ts-check
 // Workouts library (#tab-workouts): the ERG / Slope / Mine switch, rows grouped by purpose, the open row (facts,
 // big chart, Start / Edit), and a real climb's detail slider and grade range. Moved out of js/app.js Nov 18
 // (code-health plan step 4) with no change in behavior.
@@ -18,11 +19,24 @@ import { dayDate } from './dates.js?v=202611102147';
 import { openBuilder } from './builder.js?v=202611102147';
 import { previewOf, profileSvg, woMeta, workSummary, bindProfileHover } from './profile.js?v=202611102147';
 import { $, $$, esc, placeInk, slideIn } from './ui.js?v=202611102147';
+/** @typedef {import('./types.js').ElementEvent} ElementEvent */
 
 // from app.js, set by initLibrary()
-let app, view, saveSettings, refreshPlanViews, startWorkout, focusables, applyFocus, signedIn;
+/** @typedef {import('./types.js').LibraryDeps} Deps */
+/** @typedef {import('./types.js').LibView} LibView */
+/** @typedef {import('./types.js').Workout} Workout */
+/** @typedef {import('./types.js').Settings} Settings */
+/** @type {Deps['app']} */ let app;
+/** @type {Deps['view']} */ let view;
+/** @type {Deps['saveSettings']} */ let saveSettings;
+/** @type {Deps['refreshPlanViews']} */ let refreshPlanViews;
+/** @type {Deps['startWorkout']} */ let startWorkout;
+/** @type {Deps['focusables']} */ let focusables;
+/** @type {Deps['applyFocus']} */ let applyFocus;
+/** @type {Deps['signedIn']} */ let signedIn;
 
 /** Wires the ERG / Slope / Mine switch. Called once from app.js, before the library first loads. */
+/** @param {import('./types.js').LibraryDeps} deps */
 export function initLibrary(deps) {
   ({ app, view, saveSettings, refreshPlanViews, startWorkout, focusables, applyFocus, signedIn } = deps);
   setWoKind(app.woKind);
@@ -30,16 +44,21 @@ export function initLibrary(deps) {
 }
 
 /** Grade band of a stretch: the slope colors (GRADE in app.js) and the open row's Time by grade. */
+/** @param {number} g Grade, fraction. */
 export const gradeBand = (g) => (g < 0 ? 0 : g < 0.03 ? 1 : g < 0.06 ? 2 : g < 0.09 ? 3 : g < 0.12 ? 4 : 5); // index into GRADE: down, 0-3, 3-6, 6-9, 9-12, 12%+
 
 // ------------------------------------------------------------------ real climbs: detail slider
 // A climb workout carries its full elevation profile (js/engine/climb.js); the open row in the Slope list has a
 // Detail slider (right = finer stretches) and a Default button. The choice is saved per climb in
 // settings.climbDetail and syncs like every other setting (Nov 11, asked for by Agustín).
+/** @param {Workout} w @param {Settings} settings */
 export const climbLevel = (w, settings) => clampDetail(settings.climbDetail?.[w.id] ?? defaultDetail(w));
+/** @param {Workout} w @param {Settings} settings */
 export const cutClimb = (w, settings) => (w.profile ? withDetail(w, climbLevel(w, settings)) : w);
+/** @param {number} lv */
 export const sliderOf = (lv) => DETAIL_MAX + DETAIL_MIN - lv; // slider value grows with detail, levels grow with stretch length
 const climbSteps = (w) => w.steps.length - (w.profile?.lead?.length || 0);
+/** @param {Workout} w */
 export const detailText = (w) => `${detailLabel(w.profile, w.detail)} &middot; ${climbSteps(w)} steps`;
 
 
@@ -52,6 +71,7 @@ const pct1 = (f) => `${+(f * 100).toFixed(1)}%`;
  * scaled by gear (`steepestGrade()`): an easy gear rides far steeper than the trainer's own max (Nov 11, Agustín).
  * Uphill is taken after grade realism, like the session sends it. Updates with the detail slider and settings.
  */
+/** @param {Workout} w @param {number} i Index in app.library. @param {Settings} settings */
 export function gradeRangeHtml(w, i, settings) {
   const segs = flatten(previewOf(w));
   if (!isTrack(segs)) return '';
@@ -79,6 +99,7 @@ export function refreshGradeRanges() {
   $$('.wo-grades[data-gi]').forEach((el) => { const w = app.library[+el.dataset.gi]; if (w) el.outerHTML = gradeRangeHtml(w, +el.dataset.gi, app.settings); });
 }
 
+/** @param {Workout} w @param {number} i */
 export function detailRow(w, i) {
   if (!w.profile) return '';
   return `<div class="wo-detail">
@@ -93,7 +114,7 @@ export function detailRow(w, i) {
 function setClimbDetail(i, lv, commit) {
   const w = withDetail(app.library[i], lv);
   app.library[i] = w;
-  const card = document.querySelector(`.wo[data-i="${i}"]`);
+  const card = /** @type {HTMLElement} */ (document.querySelector(`.wo[data-i="${i}"]`));
   if (card) {
     const pl = view().prof;
     const mini = card.querySelector(':scope > .profile');
@@ -110,8 +131,8 @@ function setClimbDetail(i, lv, commit) {
     card.querySelector('.wo-det-v').innerHTML = detailText(w);
     const gr = card.querySelector('.wo-grades');
     if (gr) gr.outerHTML = gradeRangeHtml(w, i, app.settings);
-    card.querySelector('.wo-detail input').value = sliderOf(w.detail);
-    card.querySelector('[data-detdef]').hidden = w.detail === defaultDetail(w);
+    /** @type {HTMLInputElement} */ (card.querySelector('.wo-detail input')).value = String(sliderOf(w.detail));
+    /** @type {HTMLElement} */ (card.querySelector('[data-detdef]')).hidden = w.detail === defaultDetail(w);
   }
   if (!commit) return;
   const cd = { ...(app.settings.climbDetail || {}) };
@@ -123,7 +144,7 @@ function setClimbDetail(i, lv, commit) {
 }
 
 function bindDetailSliders() {
-  $$('.wo-detail input').forEach((inp) => {
+  $$('.wo-detail input').forEach((/** @type {HTMLInputElement} */ inp) => {
     const i = +inp.dataset.detail, lv = () => sliderOf(+inp.value);
     inp.addEventListener('input', () => setClimbDetail(i, lv(), false));
     inp.addEventListener('change', () => setClimbDetail(i, lv(), true));
@@ -131,10 +152,12 @@ function bindDetailSliders() {
   $$('[data-detdef]').forEach((b) => b.addEventListener('click', () => setClimbDetail(+b.dataset.detdef, defaultDetail(app.library[+b.dataset.detdef]), true)));
 }
 
+/** @param {Workout} w */
 export const isSlopeOnly = (w) => flatten(w).every((x) => x.kind === 'sim');
 
 // Not shown as chips: 'sim' has its own chip; weekday tags are leftovers from old plans (the calendar says when).
 export const HIDDEN_TAGS = new Set(['sim', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+/** @param {Workout} w @param {number} i Index in app.library. @param {LibView} v */
 export function workoutCard(w, i, v) {
   const facts = woFacts(w, v);
   return `
@@ -159,6 +182,7 @@ export function workoutCard(w, i, v) {
 // Mine stays one flat list. The group comes from the tags; untagged workouts (imported .zwo) go by their hardest step.
 export const GROUPS = { erg: ['VO2max', 'Threshold', 'Endurance', 'Tests'], slope: ['Climb intervals', 'Real climbs', 'Endurance', 'Tests'] };
 export const GROUP_TAGS = new Set(['vo2', 'threshold', 'z2', 'test', 'real climb', 'climb', 'endurance']); // the group label says these
+/** @param {Workout} w @param {'erg' | 'slope'} kind */
 export function groupOf(w, kind) {
   const t = w.tags || [];
   if (t.includes('test') || t.includes('max')) return 'Tests';
@@ -176,6 +200,7 @@ export function groupOf(w, kind) {
   const top = Math.max(0, ...segs.filter((x) => x.kind === 'erg' && x.dur >= 60).map((x) => Math.max(x.from, x.to)));
   return top > 1.05 ? 'VO2max' : top > 0.88 ? 'Threshold' : 'Endurance';
 }
+/** @param {{ w: Workout, i: number }[]} items @param {'erg' | 'slope'} kind @param {LibView} v */
 export function groupedHtml(items, kind, v) {
   const key = kind === 'slope' ? (x) => totalDuration(x.w) : (x) => estimateTSS(x.w);
   return GROUPS[kind].map((g) => {
@@ -185,6 +210,7 @@ export function groupedHtml(items, kind, v) {
 }
 
 /** Open row, right of the description: main set, next date in the plan, time in zones (ERG) or by grade (slope). */
+/** @param {Workout} w @param {LibView} v */
 export function woFacts(w, v) {
   const out = [];
   const main = workSummary(w, v.prof.ftp);
@@ -229,7 +255,7 @@ export function renderLibrary() {
   $('#kind-btn-mine').classList.toggle('hidden', !signedIn());
   setWoKind(ls.get('woKind', app.woKind)); // the kind last picked: "mine" signed out shows ERG but stays remembered
   bindDetailSliders();
-  $$('.wo').forEach((c) => c.addEventListener('click', (e) => {
+  $$('.wo').forEach((c) => c.addEventListener('click', (/** @type {ElementEvent} */ e) => {
     if (e.target.dataset.start) return startWorkout(app.library[+e.target.dataset.start]);
     if (e.target.dataset.remove) return removeImported(app.library[+e.target.dataset.remove]);
     if (e.target.dataset.edit) return openBuilder(app.library[+e.target.dataset.edit], { mine: true });
@@ -238,9 +264,9 @@ export function renderLibrary() {
     if (e.target.closest('.wo-detail')) return; // detail slider and Default (own handlers)
     // One open row at a time (across the ERG and slope lists).
     const open = !c.classList.contains('expanded');
-    $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((b) => (b.tabIndex = -1)); });
+    $$('.wo.expanded').forEach((x) => { x.classList.remove('expanded'); x.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((/** @type {HTMLElement} */ b) => (b.tabIndex = -1)); });
     c.classList.toggle('expanded', open);
-    if (open) c.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((b) => (b.tabIndex = 0));
+    if (open) c.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((/** @type {HTMLElement} */ b) => (b.tabIndex = 0));
     // Big chart with the same readout as the today hero; bound on first open (one document listener per chart).
     if (open && !c.dataset.prof) { c.dataset.prof = '1'; bindProfileHover(c.querySelector('.wo-prof'), app.library[+c.dataset.i], view().prof); }
   }));
