@@ -1,3 +1,4 @@
+// @ts-check
 // Minimal FIT activity encoder (file_id, event, record, lap, session, activity).
 // Produces files Garmin Connect, Strava and TrainingPeaks accept.
 
@@ -68,6 +69,10 @@ const fitTime = (unixMs) => Math.round(unixMs / 1000) - FIT_EPOCH;
 /**
  * samples: [{ t: unixMs, power, hr, cadence, speed (m/s), distance (m), altitude (m), grade (%) }]
  * laps: [{ startIdx, endIdx }] indices into samples (optional; one lap if omitted)
+ * @param {import('./types.js').Sample[]} samples
+ * @param {{ startIdx: number, endIdx: number }[] | undefined} laps
+ * @param {{ tss?: number }} [summary]
+ * @returns {Uint8Array}
  */
 export function encodeActivity(samples, laps, summary = {}) {
   if (!samples.length) throw new Error('No samples');
@@ -121,6 +126,7 @@ export function encodeActivity(samples, laps, summary = {}) {
   return new Uint8Array(all);
 }
 
+/** @param {import('./types.js').Sample[]} samples */
 export function statsFor(samples) {
   const n = samples.length;
   const wall = n > 1 ? (samples[n - 1].t - samples[0].t) / 1000 : 0;

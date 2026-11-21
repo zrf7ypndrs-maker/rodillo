@@ -181,8 +181,9 @@
  * @property {Record<string, DailyDecision>} [daily]
  * @property {number} [ftp]
  * @property {string} [ftpSetAt]
+ * @property {string} [ftpSource] What set it ('ramp test ...', 'ride ...').
  * @property {Partial<Settings>} [settings]
- * @property {string} [settingsSetAt]
+ * @property {Record<string, string>} [settingsSetAt] Setting -> when it was set (settings-sync.js).
  * @property {number} [maxMinutes] Longest workout the builder allows, minutes.
  * @property {string} [ftpDeclinedAt] When the rider kept the old FTP after a ramp test.
  */

@@ -1,3 +1,4 @@
+// @ts-check
 // Settings shared by every device through the plan in rodillo-data (coach/plan.json).
 // FTP stays top-level (plan.ftp + plan.ftpSetAt) because the morning coach reads and writes it there.
 // Every other setting: plan.settings[key] + plan.settingsSetAt[key]. Newest timestamp wins, per key.
@@ -7,11 +8,16 @@ export const SEED_AT = '2000-01-01T00:00:00.000Z';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/** @typedef {import('./types.js').Plan} Plan */
+/** @typedef {{ v: any, at: string | null }} Stamped A value and when it was set (null = never). */
+
+/** @param {Plan | null} p @param {string} k @returns {Stamped | null} */
 export function planGet(p, k) {
   if (k === 'ftp') return p?.ftp != null ? { v: p.ftp, at: p.ftpSetAt || null } : null;
   return p?.settings && k in p.settings ? { v: p.settings[k], at: p.settingsSetAt?.[k] || null } : null;
 }
 
+/** @param {Plan} p @param {string} k @param {any} v @param {string} at @param {string | null} [source] */
 export function planSet(p, k, v, at, source) {
   if (k === 'ftp') { p.ftp = v; p.ftpSetAt = at; if (source) p.ftpSource = source; return; }
   (p.settings ||= {})[k] = v;
@@ -23,6 +29,7 @@ export function planSet(p, k, v, at, source) {
  * base: { key: { v, at } } = the value each key had when this device last agreed with the plan (null on first run).
  * pending: { key: { v, at, source } } = local changes not yet written to the plan.
  * Returns new copies plus the keys adopted from the plan.
+ * @param {{ plan: Plan | null, settings: Record<string, any>, base: Record<string, Stamped> | null, pending?: Record<string, Stamped & { source?: string }>, defaults?: Record<string, any>, now?: string, source?: string }} o
  */
 export function reconcile({ plan, settings, base, pending = {}, defaults = {}, now = new Date().toISOString(), source = 'settings' }) {
   const first = !base;
@@ -55,7 +62,8 @@ export function reconcile({ plan, settings, base, pending = {}, defaults = {}, n
   return { settings, base, pending, adopted };
 }
 
-/** Writes pending changes into plan (in place) unless the plan has a newer value. Returns the keys written. */
+/** Writes pending changes into plan (in place) unless the plan has a newer value. Returns the keys written.
+ * @param {Plan} plan @param {Record<string, Stamped & { source?: string }>} pending @returns {string[]} */
 export function applyPending(plan, pending) {
   const written = [];
   for (const [k, x] of Object.entries(pending)) {
