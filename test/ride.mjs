@@ -8,7 +8,7 @@ import {
   rideTiles, intervalCard, nextCard, gearViz, powerScale, workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep,
   trackProgress, workoutLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount,
 } from '../js/ride.js';
-import { flatten, track, trackDist, trackClimbed } from '../js/engine/workout.js';
+import { flatten, track, trackDist, trackClimbed, climbsByDist } from '../js/engine/workout.js';
 import { Gearbox } from '../js/engine/drivetrain.js';
 
 let n = 0;
@@ -202,20 +202,24 @@ function ses(x = {}) {
   // Climbed in free ride and ERG / mixed workouts; To the top on a road (slope-only workout)
   let r = rideTiles(ses({ segs: null, segIndex: -1, climbed: 12.6 }), v);
   assert.deepEqual([r.climbLabel, r.climb, r.climbSub], ['Climbed', '13<span class="unit">m</span>', '']);
-  const tr = track(cr), s0 = ses({ segs: cr, segIndex: 0, chartPos: 0, mode: 'sim' });
-  r = rideTiles(s0, { ...v, track: tr });
+  // timed climbs (sim-climb-repeats): metres depend on speed, so the real Climbed, no estimate
+  assert.equal(climbsByDist(cr), false);
+  r = rideTiles(ses({ segs: cr, segIndex: 1, chartPos: cr[1].start + 60, mode: 'sim', climbed: 20.4 }), { ...v, track: track(cr) });
+  assert.deepEqual([r.climbLabel, r.climb, r.climbSub], ['Climbed', '20<span class="unit">m</span>', '']);
+  // distance climbs (hill repeats 1.5 km; its 1% warm-up and flat cool-down are timed): To the top, out of the total
+  const hr = flatten(W('sim-hill-repeats-1500')), tr = track(hr);
+  assert.equal(climbsByDist(hr), true);
+  r = rideTiles(ses({ segs: hr, segIndex: 0, chartPos: 0, mode: 'sim' }), { ...v, track: tr });
   assert.equal(r.climbLabel, 'To the top');
   assert.equal(r.climb, `${Math.round(tr.ascent)}<span class="unit">m</span>`); // nothing climbed yet
-  assert.equal(r.climbSub, `${(tr.D / 1000).toFixed(1)} km to go`);
-  // halfway up the first climb: the warm-up roll (1%) and half of 6% done
-  const mid = cr[1].start + cr[1].dur / 2, d = trackDist(tr, cr, mid);
-  r = rideTiles(ses({ segs: cr, segIndex: 1, chartPos: mid, mode: 'sim' }), { ...v, track: tr });
-  const done = tr.parts[0].d1 * 0.01 + (tr.parts[1].d1 - tr.parts[1].d0) / 2 * 0.06;
-  assert.ok(Math.abs(trackClimbed(tr, d) - done) < 1e-6);
-  assert.equal(r.climb, `${Math.round(tr.ascent - done)}<span class="unit">m</span>`);
-  r = rideTiles(ses({ segs: cr, segIndex: -1, chartPos: cr.at(-1).end + 50, mode: 'sim' }), { ...v, track: tr });
-  assert.deepEqual([r.climb, r.climbSub], ['0<span class="unit">m</span>', '0.0 km to go']);
-  ok('tiles: Climbed; To the top and km to go on a road, down to 0 at the end');
+  assert.equal(r.climbSub, `of ${Math.round(tr.ascent)} m`);
+  const ci = hr.findIndex((g) => g.dist), mid = hr[ci].start + hr[ci].dur / 2, d = trackDist(tr, hr, mid);
+  r = rideTiles(ses({ segs: hr, segIndex: ci, chartPos: mid, mode: 'sim' }), { ...v, track: tr });
+  assert.equal(r.climb, `${Math.round(tr.ascent - trackClimbed(tr, d))}<span class="unit">m</span>`);
+  r = rideTiles(ses({ segs: hr, segIndex: -1, chartPos: hr.at(-1).end + 50, mode: 'sim' }), { ...v, track: tr });
+  assert.deepEqual([r.climb, r.climbSub], ['0<span class="unit">m</span>', `of ${Math.round(tr.ascent)} m`]);
+  assert.equal(climbsByDist(flatten(W('climb-el-durazno'))), true);
+  ok('tiles: Climbed in free ride and on timed climbs; To the top out of the total climb on distance climbs, down to 0 at the end');
 }
 
 // ---- chart geometry

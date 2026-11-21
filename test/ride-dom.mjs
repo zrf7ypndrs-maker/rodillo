@@ -99,7 +99,7 @@ const ride = await import('../js/ride.js');
 const { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } = ride;
 const { Session, DEFAULT_SETTINGS } = await import('../js/engine/session.js');
 const { SimTrainer, SimHr } = await import('../js/ble/sim.js');
-const { track, trackDist, trackClimbed, climbAhead } = await import('../js/engine/workout.js');
+const { track, trackDist, climbAhead } = await import('../js/engine/workout.js');
 
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
@@ -274,13 +274,14 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   ok('free ride: grade card, no Next card or list, Climbed, gears, last 10 min chart with a grade bar a second');
 }
 
-// ---- slope road: To the top, km marks, the flag on a climb
+// ---- slope road: Climbed on timed climbs, km marks, the flag on a climb
 {
   const w = W('sim-climb-repeats'), s = begin(w);
   pedal(5); s.skip(); pedal(30);
   const tr = track(s.segs), d = trackDist(tr, s.segs, s.chartPos);
-  assert.equal($('#r-climb-label').textContent, 'To the top');
-  assert.equal($('#r-climb').innerHTML, `${Math.round(tr.ascent - trackClimbed(tr, d))}<span class="unit">m</span>`);
+  // timed climbs: the tile counts the real metres climbed (To the top only on distance climbs, test/ride.mjs)
+  assert.equal($('#r-climb-label').textContent, 'Climbed');
+  assert.equal($('#r-climb').innerHTML, `${Math.round(s.climbed)}<span class="unit">m</span>`);
   draw();
   const t = texts(), c = climbAhead(tr, s.segs, s.segIndex, d);
   const km = t.filter((x) => / km$/.test(x));
@@ -292,7 +293,7 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   // on the flat roll, no flag
   s.skip(); pedal(2); draw();
   assert.ok(!texts().some((x) => /to the top/.test(x)));
-  ok('slope road: To the top, km marks, the flag and what is left to the top on a climb, progress line, none on the flat');
+  ok('slope road: Climbed on timed climbs, km marks, the flag and what is left to the top on a climb, progress line, none on the flat');
 }
 
 // ---- workout messages: one at a time, at least 3.5 s each, a new step's first message replaces at once

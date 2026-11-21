@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { loadSeries, loadNow } from '../js/stats.js';
-import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts, segTarget } from '../js/engine/workout.js';
+import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts, segTarget, climbsByDist } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -907,10 +907,16 @@ async function rideRun() {
   const expect = (what, got, want) => { if (got !== want) fail(`${what}: "${got}", expected "${want}"`); };
   /** Climbed / To the top tile on a slope-only workout, from the road laid out in Node. */
   const toTop = (v) => {
+    if (!climbsByDist(v.s.segs)) { // timed climbs: the real metres climbed, no estimate
+      expect('tile label on timed climbs', v.climbLabel, 'Climbed');
+      expect('Climbed on timed climbs', v.climb, `${Math.round(v.s.climbed)}m`);
+      expect('Climbed sub line', v.climbSub, '');
+      return;
+    }
     const tr = track(v.s.segs), d = trackDist(tr, v.s.segs, v.s.chartPos);
     expect('tile label on a slope-only workout', v.climbLabel, 'To the top');
     expect('To the top', v.climb, `${Math.round(Math.max(0, tr.ascent - trackClimbed(tr, d)))}m`);
-    expect('To the top, km left', v.climbSub, `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`);
+    expect('To the top, out of the total climb', v.climbSub, `of ${Math.round(tr.ascent)} m`);
   };
   /** A shift: the gear tile shows the new gear (flashing) and its ratio. */
   async function shifts(name) {
@@ -955,7 +961,7 @@ async function rideRun() {
   ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), Next card, effort 101%, hold S skips, tiles');
   await ctx.close();
 
-  // slope workout (a road: To the top), a shift, the profile moved up 1%
+  // slope workout (timed climbs: Climbed, real metres), a shift, the profile moved up 1%
   const CR = byName('Climb repeats 4 x 6 min at 6%'), cr = flatten(CR);
   await ride('slope', fromLibrary(CR.name, 'slope'));
   await run(20000);
@@ -987,7 +993,7 @@ async function rideRun() {
   if (!v.s.aim) fail('no power aim status 13 s into the climb');
   expect('power tile class', v.aimCls, v.s.aim === 'ok' ? 'aim-ok' : 'aim-bad');
   expect('power tile line', v.target, v.s.aim === 'ok' ? band : v.s.aim === 'low' ? '▲ Push harder' : '▼ Ease off');
-  ok('desktop: ride, slope workout: grade card, profile +1%, Next card, gear shown after a shift, To the top, power aim');
+  ok('desktop: ride, slope workout: grade card, profile +1%, Next card, gear shown after a shift, Climbed on timed climbs, power aim');
   await ctx.close();
 
   // a real climb (distance steps; the warm-up roll leaves the chart once ridden)
@@ -1004,7 +1010,7 @@ async function rideRun() {
   if (!/m$/.test(v.big)) fail(`real climb card counts metres: "${v.big}"`);
   toTop(v);
   await shifts('real climb');
-  ok('desktop: ride, real climb: metres left on the card, To the top and km to go, a shift');
+  ok('desktop: ride, real climb: metres left on the card, To the top out of the total climb, a shift');
   await ctx.close();
 
   // free ride: grade card, no Next card or list, Climbed

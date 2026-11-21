@@ -7,7 +7,7 @@
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { POWER_SHOW_S } from './engine/session.js?v=202611102147';
-import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead } from './engine/workout.js?v=202611102147';
+import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js?v=202611102147';
 import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
 import { fmtTime } from './ridepage.js?v=202611102147';
 import { action } from './controls.js?v=202611102147';
@@ -213,12 +213,14 @@ export function rideTiles(s, v) {
   const aim = s.mode !== 'erg' && s.seg?.kind === 'sim' ? s.seg.aim : null, as = aim ? s.aimStatus : null;
   const aimW = (f) => Math.round(f * v.ftp);
   // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
-  // Real climbs say what's left (the chart header already counts what's done).
+  // Real climbs say what's left, out of the workout's total climb (Nov 20, Agustín: the tile is about climbing only,
+  // distance and speed have their own tile, so no "km to go" here). Only when the climbs are distance steps: a timed
+  // climb's metres depend on how fast he rides it, so there the tile counts the real metres climbed instead.
   let up = s.climbed || 0, upSub = '', upLabel = 'Climbed';
-  if (v.track) {
+  if (v.track && climbsByDist(s.segs)) {
     const tr = v.track, d = trackDist(tr, s.segs, s.chartPos);
     up = Math.max(0, tr.ascent - trackClimbed(tr, d)); upLabel = 'To the top';
-    upSub = `${Math.max(0, (tr.D - d) / 1000).toFixed(1)} km to go`;
+    upSub = `of ${Math.round(tr.ascent)} m`;
   }
   return {
     elapsed: fmtTime(s.elapsed),

@@ -274,6 +274,8 @@ export const hasDistance = (w) => flatten(w).some((s) => s.dist);
 
 /** True when every step is a slope step: the workout is a road with an elevation profile. */
 export const isTrack = (segs) => segs.length > 0 && segs.every((g) => g.kind === 'sim');
+/** Every climb (2%+) is a distance step, so its metres are known, not estimated from a steady 180 W (real climbs). */
+export const climbsByDist = (segs) => segs.some((g) => (g.grade || 0) >= 0.02) && segs.every((g) => (g.grade || 0) < 0.02 || g.dist);
 
 /**
  * Lay slope segments out as a road: per segment d0/d1 (m from the start) and h0/h1 (m, start = 0).
