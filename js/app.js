@@ -5,7 +5,7 @@ import { SimTrainer, SimHr } from './ble/sim.js?v=202611102147';
 import { log, logMsg } from './ble/base.js?v=202611102147';
 import { Session, DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
 import { currentBike, shiftStyleFor, gearingName, migrateGarage } from './engine/garage.js?v=202611102147';
-import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, isTrack, track } from './engine/workout.js?v=202611102147';
+import { flatten, parseZwo } from './engine/workout.js?v=202611102147';
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, powerCurve, ftpFromRide } from './stats.js?v=202611102147';
 import { ZONES, zoneOf } from './zones.js?v=202611102147';
@@ -19,20 +19,16 @@ import { initBuilder, openBuilder, builderOpen } from './builder.js?v=2026111021
 import { initGarage, openGarage, openGearing, dtSpec, forgetBikePhotos } from './garage.js?v=202611102147';
 import { initSettings, numField, detectTrainer, shiftLine, renderSignIn } from './settings.js?v=202611102147';
 import { initTraining, renderTraining } from './training.js?v=202611102147';
-import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, previewOf, gradeBand } from './library.js?v=202611102147';
+import { initLibrary, renderLibrary, setWoKind, refreshGradeRanges, cutClimb, gradeBand } from './library.js?v=202611102147';
 import { initToday, renderHero, renderWeek, renderCalendar, refreshPlanViews, trainingRows, whoopDay, recZone, BIKE_ICO } from './today.js?v=202611102147';
 import { $, $$, esc, toast, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
+import { profileSvg } from './profile.js?v=202611102147';
 import { initRidePhone, renderPhone, sizePhoneChart } from './ridephone.js?v=202611102147';
 import { initControls, onButton, onRelease, focusables, applyFocus } from './controls.js?v=202611102147';
-import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, fmtDist, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js?v=202611102147';
+import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js?v=202611102147';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js?v=202611102147';
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
-const fmtTime = (s) => {
-  s = Math.max(0, Math.round(s));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
-  return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
-};
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
 // Canvas/SVG drawing colors, read from the CSS tokens so they follow the light/dark theme.
 let INK, MUTED, RULE, FAINT, FTP_LINE, UNDERLAY, HR_LINE, FITNESS, FATIGUE, GRADE = [], TOK = {};
@@ -63,24 +59,15 @@ readTokens();
 const chartLook = () => (ensureTokens(), { phone: isPhone(), INK, MUTED, RULE, FAINT, UNDERLAY, FITNESS, FATIGUE, TOK, ZC, zoneHex });
 // colors the ride screen (js/ride.js) draws with, read at draw time like chartLook()
 const rideLook = () => (ensureTokens(), { INK, MUTED, RULE, FTP_LINE, HR_LINE, TOK });
+// what the workout profiles (js/profile.js) draw with, read at draw time: the rider's FTP, zone and grade colors (theme)
+const profileLook = () => ({ ftp: app.settings.ftp, zoneHex, gradeHex });
 // what the Workouts library rows (js/library.js) draw with, read at draw time: settings, plan and theme change
-const libView = () => ({ settings: app.settings, plan: app.plan, today: dkey(new Date()), signedIn: signedIn(), GRADE, ZC, profileSvg, woMeta, workSummary });
+const libView = () => ({ settings: app.settings, plan: app.plan, today: dkey(new Date()), signedIn: signedIn(), GRADE, ZC, prof: profileLook() });
 // what Today and Calendar (js/today.js) draw with, read at draw time: the plan, rides, WHOOP and settings change, colors follow the theme
-const todayView = () => ({ plan: app.plan, library: app.library, rows: app.rows, whoop: app.whoop, settings: app.settings, today: dkey(new Date()), gradeHex, zoneHex, woMeta, profileSvg, isSim, workSummary });
+const todayView = () => ({ plan: app.plan, library: app.library, rows: app.rows, whoop: app.whoop, settings: app.settings, today: dkey(new Date()), gradeHex, zoneHex, prof: profileLook() });
 const NUM_FONT = 'Archivo, system-ui, sans-serif';
 const zoneHex = (f) => ZC[ZONES[zoneOf(f)].color]; // Coggan zones from zones.js
-/** A ramp as hard color stops [[t 0..1, hex], ...]: each stretch in the zone its target is in at that moment
- *  (UX roadmap item 7: charts show a ramp's zones along it, the live card and current row its zone right now). */
-function rampStops(from, to) {
-  const cuts = ZONES.slice(0, 6).map((z) => z.max).filter((b) => (b - from) * (b - to) < 0).map((b) => (b - from) / (to - from)).sort((a, b) => a - b);
-  const edges = [0, ...cuts, 1], out = [];
-  for (let k = 0; k < edges.length - 1; k++) {
-    const c = zoneHex(from + (to - from) * (edges[k] + edges[k + 1]) / 2);
-    out.push([edges[k], c], [edges[k + 1], c]);
-  }
-  return out;
-}
-let rampN = 0;
+// rampStops(from, to, zoneHex), a ramp's zone color stops, lives in js/profile.js (profiles and the ride chart)
 /** Fill an interval card / phone hero; the darkest grade (12%+) needs light text. */
 const setZc = (el, c) => { el.style.setProperty('--zc', c); el.style.setProperty('--on-zone', c === GRADE[5] ? 'var(--on-zone-inv)' : ''); };
 // gradeBand(g), the grade -> GRADE index, lives in js/library.js (the open row's Time by grade uses the same bands)
@@ -428,160 +415,8 @@ function applyLibrary() {
 }
 
 // ------------------------------------------------------------------ workout profiles and meta line
-// Shared by the Workouts library (js/library.js gets them through libView()), Today and Calendar (js/today.js, todayView())
-// and the builder; so are workSummary() and the profile readout (bindProfileHover) below.
-// The library itself (switch, groups, rows, open row, real-climb detail slider) lives in js/library.js.
-
-// Elevation profiles are at least this tall in metres, so a flat ride looks flat instead of filling the chart.
-const ELEV_MIN = 60;
-const ascentText = (m) => `+${Math.round(m / 5) * 5} m`;
-
-/** Slope-only workouts: elevation over distance, each stretch filled with its grade color, an ink line on top. */
-function trackSvg(segs, width, height) {
-  const tr = track(segs), rng = Math.max(tr.hi - tr.lo, ELEV_MIN);
-  const top = height * 0.06, floor = height * 0.14; // floor: the lowest stretch still shows a band (and stays tappable)
-  const X = (d) => +((d / tr.D) * width).toFixed(1);
-  const Y = (h) => +(top + (1 - (h - tr.lo) / rng) * (height - top - floor)).toFixed(1);
-  let out = '';
-  segs.forEach((g, i) => {
-    const p = tr.parts[i], x0 = X(p.d0), x1 = X(p.d1) + 0.3; // 0.3: no hairline gaps between stretches
-    out += `<polygon data-i="${i}" points="${x0},${height} ${x0},${Y(p.h0)} ${x1},${Y(p.h1)} ${x1},${height}" fill="${gradeHex(g.grade)}" opacity=".9"/>`;
-  });
-  out += `<polyline class="prof-line" points="${tr.parts.map((p) => `${X(p.d0)},${Y(p.h0)}`).join(' ')} ${width},${Y(tr.parts.at(-1).h1)}"/>`;
-  return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
-}
-
-function profileSvg(w, width = 340, height = 54) {
-  w = previewOf(w);
-  const segs = flatten(w, app.settings.ftp);
-  if (isTrack(segs)) return trackSvg(segs, width, height);
-  const T = segs.length ? segs[segs.length - 1].end : 1;
-  const maxF = 1.5;
-  let out = '';
-  segs.forEach((s, i) => {
-    const x = (s.start / T) * width, wd = Math.max(0.5, (s.dur / T) * width);
-    if (s.kind === 'erg') {
-      const y0 = height - (Math.min(s.from, maxF) / maxF) * height, y1 = height - (Math.min(s.to, maxF) / maxF) * height;
-      let fill = zoneHex(s.from);
-      if (s.from !== s.to) {
-        const id = `rmp${++rampN}`;
-        out += `<defs><linearGradient id="${id}">${rampStops(s.from, s.to).map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient></defs>`;
-        fill = `url(#${id})`;
-      }
-      out += `<polygon data-i="${i}" points="${x},${height} ${x},${y0} ${x + wd},${y1} ${x + wd},${height}" fill="${fill}" opacity=".9"/>`;
-    } else {
-      const g = s.grade;
-      const h = Math.max(4, ((g + 0.03) / 0.15) * height);
-      out += `<rect data-i="${i}" x="${x}" y="${height - h}" width="${wd}" height="${h}" fill="${gradeHex(g)}" opacity=".9"/>`;
-    }
-  });
-  return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
-}
-
-const isSim = (w) => flatten(w).some((s) => s.kind === 'sim');
-function woMeta(w) {
-  const segs = flatten(w);
-  const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
-  const mins = Math.round(totalDuration(w) / 60);
-  // numbers wrapped for their own style (premium look: phone Nov 12, desktop Nov 13)
-  const n = (x) => `<span class="n">${x}</span>`;
-  if (isTrack(segs)) return `${n(`${dist ? '~' : ''}${mins}`)} min &middot; ${ascentText(track(segs).ascent)}`; // short: library meta column
-  if (dist) return `${n(`~${mins}`)} min &middot; ${n(+(dist / 1000).toFixed(1))} km`; // short: must fit the library's meta column
-  const tss = estimateTSS(w);
-  return `${n(mins)} min${isSim(w) ? '' : ` &middot; TSS ${n(`~${tss}`)}`}`;
-}
-
-/** The main set in one phrase at the rider's FTP (`mainSet()` in js/engine/workout.js). */
-const workSummary = (w) => mainSet(w, app.settings.ftp);
-
-/** What one interval asks for, for the profile readout: "216 W", "120-180 W", "7% grade". */
-function tipTarget(g, ftp) {
-  if (g.kind === 'sim') return g.free ? 'Free ride' : `${+(g.grade * 100).toFixed(1)}% grade`;
-  const a = Math.round(g.from * ftp), b = Math.round(g.to * ftp);
-  return a === b ? `${a} W` : `${a}-${b} W`;
-}
-
-/** Height gained or lost over one stretch of an elevation profile: " +90 m" / " -12 m", nothing on the flat. */
-function riseHtml(p) {
-  const m = Math.round(p.h1 - p.h0);
-  return m ? ` <span>${m > 0 ? '+' : '&minus;'}${Math.abs(m)} m</span>` : '';
-}
-
-/** Which stretch a finger at `f` across the chart (0 left, 1 right) is on: anywhere in its column counts, -1 for none. */
-function profileHit(f, segs, tr) {
-  const T = segs[segs.length - 1].end;
-  f = Math.min(Math.max(f, 0), 0.9999);
-  return tr ? tr.parts.findIndex((p) => f * tr.D >= p.d0 && f * tr.D < p.d1) : segs.findIndex((g) => f * T >= g.start && f * T < g.end);
-}
-
-/** The readout over stretch i: its label and rep, what it asks for (+ % FTP, + height on a road), its length and when. */
-function profileTip(segs, i, ftp, tr) {
-  const g = segs[i];
-  const pct = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * 100)}%` : `${Math.round(g.from * 100)}-${Math.round(g.to * 100)}%`) + ' FTP' : '';
-  const rep = g.rep ? ` &middot; ${g.rep.i} of ${g.rep.of}` : '';
-  const len = g.dist ? `${fmtDist(g.dist)} (~${fmtTime(g.dur)})` : fmtTime(g.dur);
-  const cad = g.cadence !== '' ? ` &middot; ${esc(g.cadence)} rpm` : '';
-  return `<div class="pt-lbl">${esc(g.label)}${rep}</div>
-        <div class="pt-tgt">${tipTarget(g, ftp)}${pct ? ` <span>${pct}</span>` : ''}${tr ? riseHtml(tr.parts[i]) : ''}</div>
-        <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
-}
-
-/** The middle of stretch i across the chart (0 left, 1 right): where the readout centres. */
-const profileMid = (segs, i, tr) => (tr ? (tr.parts[i].d0 + tr.parts[i].d1) / 2 / tr.D : (segs[i].start + segs[i].end) / 2 / segs[segs.length - 1].end);
-/** The readout's centre (px) over `mid`, kept inside a chart `width` px wide; `half` = half the readout's width. */
-const tipLeft = (mid, half, width) => Math.min(Math.max(mid, half), width - half);
-
-/** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
-function bindProfileHover(box, w) {
-  if (!box) return;
-  w = previewOf(w); // same steps as the chart it reads
-  const segs = flatten(w, app.settings.ftp);
-  if (!segs.length) return;
-  const ftp = app.settings.ftp;
-  const tr = isTrack(segs) ? track(segs) : null; // elevation profile: the x axis is distance
-  const tip = document.createElement('div');
-  tip.className = 'prof-tip';
-  tip.setAttribute('role', 'status');
-  box.append(tip);
-  const svg = box.querySelector('.profile');
-  let cur = -1;
-  const show = (e) => {
-    const r = svg.getBoundingClientRect();
-    let i;
-    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
-      // A finger is imprecise: anywhere in the interval's column counts.
-      i = profileHit((e.clientX - r.left) / r.width, segs, tr);
-    } else {
-      // Mouse: only inside the filled area under the curve, not the empty space above it.
-      const hit = e.target.closest?.('[data-i]');
-      i = hit && svg.contains(hit) ? +hit.dataset.i : -1; // library rows carry data-i too
-    }
-    if (i < 0) return hide();
-    if (i !== cur) {
-      cur = i;
-      svg.querySelectorAll('[data-i]').forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
-      tip.innerHTML = profileTip(segs, i, ftp, tr);
-      box.classList.add('hov');
-    }
-    // Centered over the interval, kept inside the chart.
-    const b = box.getBoundingClientRect();
-    const mid = r.left - b.left + profileMid(segs, cur, tr) * r.width;
-    tip.style.left = `${tipLeft(mid, tip.offsetWidth / 2, b.width)}px`;
-  };
-  const hide = () => {
-    cur = -1;
-    box.classList.remove('hov');
-    svg.querySelectorAll('.on').forEach((el) => el.classList.remove('on'));
-  };
-  box.addEventListener('pointermove', show);
-  box.addEventListener('pointerdown', show);
-  // Fallback for phone browsers that don't send pointer events for a tap on a plain chart (iOS web views): the click does.
-  if (matchMedia('(hover: none)').matches) box.addEventListener('click', (e) => show({ clientX: e.clientX, pointerType: 'touch' }));
-  // A finger lifts right after the tap, so on touch the readout stays until a tap elsewhere.
-  box.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') hide(); });
-  const outside = (e) => { if (!box.isConnected) return document.removeEventListener('pointerdown', outside); if (!box.contains(e.target)) hide(); };
-  document.addEventListener('pointerdown', outside);
-}
+// js/profile.js: profileSvg, trackSvg, woMeta, workSummary, the readout (bindProfileHover) and rampStops, shared by the
+// library, Today, Calendar, the builder, the ride page and the ride screen. Their colors come in profileLook() (top).
 
 // ---- Training tab (stats card, charts, rides list): js/training.js. trainingRows() is in js/today.js with refreshPlanViews().
 // Touch screens have no hover: tap (i) to toggle the tip, tap anywhere else to close it (infoTip() tips: the Training tab and
@@ -1106,7 +941,7 @@ function renderRidePage() {
   const season = powerCurve((app.rows || []).filter((r) => !r.demo).map((r) => r.summary), 90);
   $('#rd').innerHTML = pageHtml(doc, {
     segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
-    profile: w ? profileSvg(w, 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
+    profile: w ? profileSvg(w, profileLook(), 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
     canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!rd.local,
     done: rd.done,
   });
@@ -1245,7 +1080,7 @@ function show(name) {
   $$('.screen').forEach((s) => s.classList.toggle('active', s.id === name));
   if (name === 'home') { renderDevices(); applyFocus(); }
 }
-initRide({ app, isPhone, renderPhone, setDevPop, look: rideLook, zoneHex, gradeHex, rampStops, setZc, ELEV_MIN, NUM_FONT });
+initRide({ app, isPhone, renderPhone, setDevPop, look: rideLook, zoneHex, gradeHex, setZc, NUM_FONT });
 
 // ------------------------------------------------------------------ phone ride screen (Zwift Companion style)
 // Keep this query identical to the phone @media rule in css/app.css.
@@ -1358,9 +1193,9 @@ $('#pz-bike').onclick = () => openGarage('bikes');
 $('#pz-gearing').onclick = () => openGearing();
 $('#pz-settings').onclick = () => $('#btn-settings').click();
 // ---- Workouts library: js/library.js
-initLibrary({ app, view: libView, profileSvg, woMeta, saveSettings, refreshPlanViews, startWorkout, bindProfileHover, focusables, applyFocus, signedIn });
+initLibrary({ app, view: libView, saveSettings, refreshPlanViews, startWorkout, focusables, applyFocus, signedIn });
 initBuilder({
-  ask, profileSvg, woMeta, zoneHex, gradeHex, plannedOn, signedIn,
+  ask, zoneHex, gradeHex, plannedOn, signedIn,
   ftp: () => app.settings.ftp,
   maxMinutes: () => app.plan?.maxMinutes || 0,
   onSave: saveMine,
@@ -1500,7 +1335,7 @@ function setTab(t) {
 }
 $$('#tabs button').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
 // ---- Today + Calendar (overview, hero, Next days, calendar): js/today.js
-initToday({ app, view: todayView, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, bindProfileHover, setTab });
+initToday({ app, view: todayView, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, setTab });
 // ---- controller and keyboard (action(), Ride buttons, hold to confirm, keys, home focus): js/controls.js
 initControls({ app, modalOpen, devPopOpen, setDevPop, setTab, TABS, startWorkout, rideAction, modalAction, renderRide, tooShort, endSession });
 $('#r-pause').onclick = () => { app.session?.togglePause(); renderRide(); };

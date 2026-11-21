@@ -9,18 +9,19 @@
 import { POWER_SHOW_S } from './engine/session.js?v=202611102147';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js?v=202611102147';
 import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
-import { fmtTime } from './ridepage.js?v=202611102147';
+import { fmtTime, fmtDist } from './ridepage.js?v=202611102147';
+import { ELEV_MIN, rampStops } from './profile.js?v=202611102147';
 import { action } from './controls.js?v=202611102147';
 import { $, esc, reducedMotion } from './ui.js?v=202611102147';
 
-let app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, rampStops, setZc, ELEV_MIN, NUM_FONT;
+let app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, setZc, NUM_FONT;
 /**
  * deps: app state and app.js hooks. `look()` = { INK, MUTED, RULE, FTP_LINE, HR_LINE, TOK } read at draw time (the
- * light / dark theme); zoneHex, gradeHex, rampStops and setZc are app.js's color helpers; ELEV_MIN and NUM_FONT are
- * shared with the workout profiles and the phone chart.
+ * light / dark theme); zoneHex, gradeHex and setZc are app.js's color helpers; NUM_FONT is shared with the phone chart.
+ * rampStops and ELEV_MIN come from js/profile.js (the workout profiles use them too).
  */
 export function initRide(deps) {
-  ({ app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, rampStops, setZc, ELEV_MIN, NUM_FONT } = deps);
+  ({ app, isPhone, renderPhone, setDevPop, look, zoneHex, gradeHex, setZc, NUM_FONT } = deps);
   canvas = $('#r-chart');
   new ResizeObserver(() => { if (app.screen === 'ride') { sizeChart(); drawChart(); } }).observe(canvas);
   for (const id of ['r-interval', 'rp-hero']) {
@@ -55,7 +56,7 @@ export function renderRideStatus() {
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 
-export const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
+export { fmtDist }; // lives in js/ridepage.js next to fmtTime (js/profile.js uses it too)
 export const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
 
 /** Remaining workout time ("~" while distance steps make it an estimate), shared by the desktop list and the phone. */
@@ -460,7 +461,7 @@ function drawChart() {
         if (g.from === g.to) ctx.fillStyle = zoneHex(g.from) + a;
         else {
           const gr = ctx.createLinearGradient(X(g.start), 0, X(g.end), 0);
-          for (const [o, c] of rampStops(g.from, g.to)) gr.addColorStop(o, c + a);
+          for (const [o, c] of rampStops(g.from, g.to, zoneHex)) gr.addColorStop(o, c + a);
           ctx.fillStyle = gr;
         }
         const [p0, p1, p2, p3] = ergShape(g, X, Yp, ftp, s.intensity, H - pad);

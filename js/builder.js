@@ -5,6 +5,7 @@
 import { flatten, parseMessageLines, formatMessageLines } from './engine/workout.js?v=202611102147';
 import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mine.js?v=202611102147';
 import { $, $$, esc, placeInk, reducedMotion as reduced } from './ui.js?v=202611102147';
+import { woMeta } from './profile.js?v=202611102147';
 
 let D = null;   // deps from app.js
 let st = null;  // { w, isNew, mine, snap, kind, sel, untouched, undo: [], scale }
@@ -277,7 +278,7 @@ function renderMeta() {
   const w = st.w, segs = flatten(w, D.ftp());
   const total = segs.length ? segs.at(-1).end : 0, cap = D.maxMinutes();
   const s = st.sel != null && safeStep(st.sel);
-  $('#b-meta').innerHTML = `<span class="b-tot">${segs.length ? D.woMeta(w) : '0 min'}</span>${s ? `<span class="b-selinfo">${esc(describe(s))}</span>` : ''}${cap && total > cap * 60 ? `<span class="b-cap">Over the plan's ${cap}-min cap</span>` : ''}`;
+  $('#b-meta').innerHTML = `<span class="b-tot">${segs.length ? woMeta(w) : '0 min'}</span>${s ? `<span class="b-selinfo">${esc(describe(s))}</span>` : ''}${cap && total > cap * 60 ? `<span class="b-cap">Over the plan's ${cap}-min cap</span>` : ''}`;
 }
 function describe(s) {
   const ftp = D.ftp(), t = typeOf(s);

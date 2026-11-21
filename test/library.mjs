@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  gradeBand, climbLevel, cutClimb, sliderOf, detailText, previewOf, gradeRangeHtml, detailRow, isSlopeOnly, HIDDEN_TAGS,
+  gradeBand, climbLevel, cutClimb, sliderOf, detailText, gradeRangeHtml, detailRow, isSlopeOnly, HIDDEN_TAGS,
   workoutCard, GROUPS, GROUP_TAGS, groupOf, groupedHtml, woFacts, GRADE_LABEL,
 } from '../js/library.js';
+import { previewOf, woMeta } from '../js/profile.js';
 import { flatten, totalDuration, estimateTSS, mainSet } from '../js/engine/workout.js';
 import { defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -23,7 +24,7 @@ const GRADE = ['#g-down', '#g0', '#g1', '#g2', '#g3', '#g4'];
 const settings = { ...DEFAULT_SETTINGS };
 const v = {
   settings, plan: { days: { '2026-11-18': 'vo2-30-15', '2026-11-20': 'sweetspot-3x12', '2026-11-10': 'z2-60' } }, today: '2026-11-18', signedIn: false, GRADE, ZC,
-  profileSvg: (w, width = 340) => `<svg class="profile" data-w="${width}" data-id="${w.id}"></svg>`, woMeta: (w) => `meta ${w.id}`, workSummary: (w) => mainSet(w, settings.ftp),
+  prof: { ftp: settings.ftp, zoneHex: (f) => `zone(${+f.toFixed(3)})`, gradeHex: (g) => `grade(${g})` }, // the profile charts' look (js/profile.js)
 };
 const count = (s, re) => (s.match(re) || []).length;
 
@@ -119,9 +120,9 @@ ok('grouped lists: groups in order, none empty, ERG easiest first, slope shortes
 const card = (w, i, x = {}) => workoutCard(w, i, { ...v, ...x });
 const c = card(ss, 4);
 assert.match(c, /<div class="wo" data-i="4" tabindex="0">/);
-assert.match(c, /<div class="wo-meta">meta sweetspot-3x12<\/div>/);
-assert.match(c, /data-w="340" data-id="sweetspot-3x12"/, 'mini profile');
-assert.match(c, /<div class="wo-prof prof-hover"><svg class="profile" data-w="1000"/, 'big chart in the open row');
+assert.ok(c.includes(`<div class="wo-meta">${woMeta(W('sweetspot-3x12'))}</div>`), 'the meta line');
+assert.match(c, /<\/div>\s*<svg class="profile" viewBox="0 0 340 54" preserveAspectRatio="none">[^\n]*fill="zone\(0\.9\)"/, 'mini profile, in the look\'s colors');
+assert.match(c, /<div class="wo-prof prof-hover"><svg class="profile" viewBox="0 0 1000 100"/, 'big chart in the open row');
 assert.match(c, /<button class="primary small" data-start="4" tabindex="-1">Start<\/button><\/div>/, 'signed out: Start only');
 assert.ok(c.includes(`<div class="wo-desc">${ss.description}</div>`));
 assert.doesNotMatch(c, /class="tag">threshold/, 'the group label says it');
@@ -153,7 +154,7 @@ assert.doesNotMatch(woFacts(W('z2-60'), v), /In the plan/, 'only dates from toda
 assert.match(f, /Time in zones/);
 const legend = [...f.matchAll(/<span><i style="background:([^"]+)"><\/i>(Z\d) (\d+) min<\/span>/g)].map((m) => [m[2], +m[3], m[1]]);
 assert.deepEqual(legend[0], ['Z3', 36, ZC.z3], 'hardest zone first: 3 x 12 min at 90%');
-const ramp = woFacts({ id: 'r', name: 'r', steps: [{ dur: 600, from: 0.5, to: 1.0 }] }, { ...v, workSummary: () => '' });
+const ramp = woFacts({ id: 'r', name: 'r', steps: [{ dur: 600, from: 0.5, to: 1.0 }] }, v);
 assert.deepEqual([...ramp.matchAll(/<\/i>(Z\d) (\d+) min</g)].map((m) => `${m[1]} ${m[2]}`), ['Z4 2', 'Z3 3', 'Z2 4', 'Z1 1'], 'a ramp counts in every zone it crosses');
 assert.ok(legend.length <= 4);
 const flex = [...f.matchAll(/flex:([\d.]+)/g)].reduce((a, m) => a + +m[1], 0);

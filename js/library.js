@@ -2,9 +2,9 @@
 // big chart, Start / Edit), and a real climb's detail slider and grade range. Moved out of js/app.js Nov 18
 // (code-health plan step 4) with no change in behavior.
 // The row builders are pure (data and a view `v` in, markup out; tested in test/library.mjs):
-// `v` = { settings, plan, today, signedIn, GRADE, ZC, profileSvg, woMeta, workSummary }, which app.js builds at draw
-// time (libView()): settings and the plan change, the colors follow the light / dark theme, and the profile charts,
-// meta line and main set phrase are shared with Today, Calendar and the builder, so they stay in app.js for now.
+// `v` = { settings, plan, today, signedIn, GRADE, ZC, prof }, which app.js builds at draw time (libView()): settings and
+// the plan change, the colors follow the light / dark theme. The profile charts, meta line, main set phrase and the
+// readout come from js/profile.js, drawn with `v.prof` (their look).
 // The DOM part (renderLibrary, setWoKind, the detail slider) gets app.js state and hooks through initLibrary().
 // Never import app.js from here.
 import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
@@ -16,14 +16,15 @@ import { ZONES, zoneOf } from './zones.js?v=202611102147';
 import { ls } from './store.js?v=202611102147';
 import { dayDate } from './dates.js?v=202611102147';
 import { openBuilder } from './builder.js?v=202611102147';
+import { previewOf, profileSvg, woMeta, workSummary, bindProfileHover } from './profile.js?v=202611102147';
 import { $, $$, esc, placeInk, slideIn } from './ui.js?v=202611102147';
 
 // from app.js, set by initLibrary()
-let app, view, profileSvg, woMeta, saveSettings, refreshPlanViews, startWorkout, bindProfileHover, focusables, applyFocus, signedIn;
+let app, view, saveSettings, refreshPlanViews, startWorkout, focusables, applyFocus, signedIn;
 
 /** Wires the ERG / Slope / Mine switch. Called once from app.js, before the library first loads. */
 export function initLibrary(deps) {
-  ({ app, view, profileSvg, woMeta, saveSettings, refreshPlanViews, startWorkout, bindProfileHover, focusables, applyFocus, signedIn } = deps);
+  ({ app, view, saveSettings, refreshPlanViews, startWorkout, focusables, applyFocus, signedIn } = deps);
   setWoKind(app.woKind);
   $$('#wo-kind button').forEach((b) => (b.onclick = () => { setWoKind(b.dataset.kind, true); app.focus = Math.max(0, focusables().indexOf(b)); applyFocus(); }));
 }
@@ -41,8 +42,6 @@ export const sliderOf = (lv) => DETAIL_MAX + DETAIL_MIN - lv; // slider value gr
 const climbSteps = (w) => w.steps.length - (w.profile?.lead?.length || 0);
 export const detailText = (w) => `${detailLabel(w.profile, w.detail)} &middot; ${climbSteps(w)} steps`;
 
-/** Profile previews of a real climb leave out its warm-up (lead steps): the chart is the climb (Nov 11, Agustín). */
-export const previewOf = (w) => (w?.profile?.lead?.length ? { ...w, steps: w.steps.slice(w.profile.lead.length) } : w);
 
 const WARN_ICO = '<svg class="ico-warn" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'; // Lucide triangle-alert (ISC)
 const pct1 = (f) => `${+(f * 100).toFixed(1)}%`;
@@ -96,16 +95,17 @@ function setClimbDetail(i, lv, commit) {
   app.library[i] = w;
   const card = document.querySelector(`.wo[data-i="${i}"]`);
   if (card) {
+    const pl = view().prof;
     const mini = card.querySelector(':scope > .profile');
-    if (mini) mini.outerHTML = profileSvg(w);
+    if (mini) mini.outerHTML = profileSvg(w, pl);
     card.querySelector('.wo-meta').innerHTML = woMeta(w);
     const old = card.querySelector('.wo-prof');
     if (old) {
       const box = document.createElement('div');
       box.className = 'wo-prof prof-hover';
-      box.innerHTML = profileSvg(w, 1000, 100);
+      box.innerHTML = profileSvg(w, pl, 1000, 100);
       old.replaceWith(box);
-      if (card.classList.contains('expanded')) { card.dataset.prof = '1'; bindProfileHover(box, w); } else delete card.dataset.prof;
+      if (card.classList.contains('expanded')) { card.dataset.prof = '1'; bindProfileHover(box, w, pl); } else delete card.dataset.prof;
     }
     card.querySelector('.wo-det-v').innerHTML = detailText(w);
     const gr = card.querySelector('.wo-grades');
@@ -139,14 +139,14 @@ export function workoutCard(w, i, v) {
   const facts = woFacts(w, v);
   return `
     <div class="wo" data-i="${i}" tabindex="0">
-      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${v.woMeta(w)}</div></div>
-      ${v.profileSvg(w)}
+      <div class="wo-top"><div class="wo-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</div><div class="wo-meta">${woMeta(w)}</div></div>
+      ${profileSvg(w, v.prof)}
       <div class="wo-more"><div class="wo-more-in">
         <div class="wo-info${facts ? '' : ' nofacts'}"><div class="wo-text">
           <div class="wo-tags">${(w.tags || []).filter((t) => !HIDDEN_TAGS.has(t) && !GROUP_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
           <div class="wo-desc">${esc(w.description)}</div>
         </div>${facts}</div>
-        <div class="wo-prof prof-hover">${v.profileSvg(w, 1000, 100)}</div>
+        <div class="wo-prof prof-hover">${profileSvg(w, v.prof, 1000, 100)}</div>
         ${gradeRangeHtml(w, i, v.settings)}
         ${detailRow(w, i)}
         <div class="start-row"><button class="primary small" data-start="${i}" tabindex="-1">Start</button>${w._source === 'mine' ? `<button class="ghost small" data-edit="${i}" tabindex="-1">Edit</button>` : v.signedIn ? `<button class="ghost small" data-copy="${i}" tabindex="-1">Edit a copy</button>` : ''}${w.tags?.includes('imported') ? `<button class="ghost small" data-remove="${i}" tabindex="-1">Remove</button>` : ''}</div>
@@ -187,7 +187,7 @@ export function groupedHtml(items, kind, v) {
 /** Open row, right of the description: main set, next date in the plan, time in zones (ERG) or by grade (slope). */
 export function woFacts(w, v) {
   const out = [];
-  const main = v.workSummary(w);
+  const main = workSummary(w, v.prof.ftp);
   if (main) out.push(`<div class="f"><span class="fl">Main set</span><span class="fv">${main}</span></div>`);
   const today = v.today;
   const next = Object.keys(v.plan?.days || {}).sort().find((k) => k >= today && v.plan.days[k] === w.id);
@@ -242,7 +242,7 @@ export function renderLibrary() {
     c.classList.toggle('expanded', open);
     if (open) c.querySelectorAll('.start-row button, .wo-detail input, .wo-detail button').forEach((b) => (b.tabIndex = 0));
     // Big chart with the same readout as the today hero; bound on first open (one document listener per chart).
-    if (open && !c.dataset.prof) { c.dataset.prof = '1'; bindProfileHover(c.querySelector('.wo-prof'), app.library[+c.dataset.i]); }
+    if (open && !c.dataset.prof) { c.dataset.prof = '1'; bindProfileHover(c.querySelector('.wo-prof'), app.library[+c.dataset.i], view().prof); }
   }));
   applyFocus();
 }

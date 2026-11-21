@@ -124,7 +124,7 @@ const zoneHex = (f) => `#z${Math.round(f * 100)}`, gradeHex = (g) => `#g${Math.r
 const setZc = (el, c) => el.style.setProperty('--zc', c);
 initRide({
   app, isPhone: () => phone.on, renderPhone, setDevPop: (x) => log.push(`setDevPop ${x}`), look, zoneHex, gradeHex,
-  rampStops: (a, b) => [[0, `#z${Math.round(a * 100)}`], [1, `#z${Math.round(b * 100)}`]], setZc, ELEV_MIN: 60, NUM_FONT: 'Archivo',
+  setZc, NUM_FONT: 'Archivo',
 });
 initControls({
   app, modalOpen: () => false, devPopOpen: () => false, setDevPop: () => {}, setTab: () => {}, TABS: ['today'], startWorkout: () => {},

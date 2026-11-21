@@ -3,10 +3,9 @@
 // on them. Moved out of js/app.js Nov 18 (code-health plan step 4) with no change in behavior.
 // The day facts and the markup (overview tiles, Next days cards, hero pieces, month grid, day detail, the coach's call) are
 // pure: data and a view `v` in, markup out, tested in test/today.mjs.
-// `v` = { plan, library, rows, whoop, settings, today, gradeHex, zoneHex, woMeta, profileSvg, isSim, workSummary }, which
-// app.js builds at draw time (todayView()): the plan, rides, WHOOP and settings change, the colors follow the light / dark
-// theme, and the profile charts, meta line and main set phrase are shared with the library and the builder, so they stay
-// in app.js. The DOM part (renderOverview, renderHero, renderWeek, renderCalendar, plan views, WHOOP loading) gets app.js
+// `v` = { plan, library, rows, whoop, settings, today, gradeHex, zoneHex, prof }, which app.js builds at draw time
+// (todayView()): the plan, rides, WHOOP and settings change, the colors follow the light / dark theme. The profile
+// charts, meta line, main set phrase and the readout come from js/profile.js, drawn with `v.prof` (their look). The DOM part (renderOverview, renderHero, renderWeek, renderCalendar, plan views, WHOOP loading) gets app.js
 // state and hooks through initToday(). Never import app.js from here.
 import { flatten, totalDuration, estimateTSS, isTrack } from './engine/workout.js?v=202611102147';
 import { loadSeries, ftpEstimate, formLabel, loadNow } from './stats.js?v=202611102147';
@@ -15,14 +14,15 @@ import { ls, rides } from './store.js?v=202611102147';
 import { dkey, dayDate, addDays, mondayOf } from './dates.js?v=202611102147';
 import { fmtTime } from './ridepage.js?v=202611102147';
 import { LOAD_INFO, infoTip } from './training.js?v=202611102147';
+import { profileSvg, woMeta, isSim, workSummary, bindProfileHover } from './profile.js?v=202611102147';
 import { $, esc } from './ui.js?v=202611102147';
 
 // from app.js, set by initToday()
-let app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, bindProfileHover, setTab;
+let app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, setTab;
 
 /** Wires the Calendar's month buttons. Called once from app.js, where that wiring sat, before anything renders. */
 export function initToday(deps) {
-  ({ app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, bindProfileHover, setTab } = deps);
+  ({ app, view, isPhone, syncClient, syncHint, startFree, startWorkout, openRide, setTab } = deps);
   const shiftMonth = (n) => { const [y, m] = (app.calMonth || dkey(new Date()).slice(0, 7)).split('-').map(Number); const d = new Date(y, m - 1 + n, 1, 12); app.calMonth = dkey(d).slice(0, 7); renderCalendar(); };
   $('#cal-prev').onclick = () => shiftMonth(-1);
   $('#cal-next').onclick = () => shiftMonth(1);
@@ -135,7 +135,7 @@ export function dayCardHtml(info, v) {
   // Slim cards for the "Next days" strip (today is the hero above it): name + duration, no chart.
   if (info.workout) {
     const w = info.workout;
-    body = `<div class="d-name">${esc(w.name)}</div><div class="d-meta">${v.woMeta(w)}</div>`;
+    body = `<div class="d-name">${esc(w.name)}</div><div class="d-meta">${woMeta(w)}</div>`;
   } else if (info.kind === 'strength') body = '<div class="d-name muted">Strength</div>';
   else if (info.kind === 'rest') body = '<div class="d-name muted">Rest</div>';
   else body = '<div class="d-name muted">Nothing planned</div>';
@@ -186,7 +186,7 @@ export function rideStatsHtml(w, r, v) {
   return [
     r.durSec != null && stat(fmtTime(r.durSec), 'Time', same ? `plan ${fmtTime(totalDuration(w))}` : ''),
     r.np && stat(`${r.np} W`, 'NP', r.avgP ? `avg ${r.avgP} W` : ''),
-    r.tss != null && stat(r.tss, 'TSS', same && !v.isSim(w) ? `plan ~${estimateTSS(w)}` : ''),
+    r.tss != null && stat(r.tss, 'TSS', same && !isSim(w) ? `plan ~${estimateTSS(w)}` : ''),
     r.if && stat(Number(r.if).toFixed(2), 'IF', r.kj ? `${r.kj} kJ` : ''),
     r.avgHr && stat(r.avgHr, 'Avg HR', r.maxHr ? `max ${r.maxHr}` : '', 'hr'),
     c && stat(`${c.avg}%`, 'Intervals', `${c.reps} ${c.reps === 1 ? 'rep' : 'reps'} &middot; min ${c.min}%`, c.min >= 95 ? 'ok' : 'warn'),
@@ -215,7 +215,7 @@ export function heroDoneBody(w, r, date, v) {
       </div>
     </div>
     ${stats ? `<div class="hero-stats">${stats}</div>` : ''}
-    ${same ? `<div class="hero-prof prof-hover">${v.profileSvg(w, 1000, 100)}</div>` : ''}`;
+    ${same ? `<div class="hero-prof prof-hover">${profileSvg(w, v.prof, 1000, 100)}</div>` : ''}`;
 }
 
 /** Phone hero numbers (premium look, Nov 12): the main set's watts big with the set under it, then time and TSS.
@@ -230,7 +230,7 @@ export function heroNums(w, work, v) {
   if (m) items.push([m[1], 'W', work.replace(m[0], '').trim(), 'main']);
   items.push([`${dist ? '~' : ''}${mins}`, 'min', 'Time']);
   if (dist) items.push([+(dist / 1000).toFixed(1), 'km', 'Distance']);
-  else if (!v.isSim(w)) items.push([`~${estimateTSS(w)}`, '', 'TSS']);
+  else if (!isSim(w)) items.push([`~${estimateTSS(w)}`, '', 'TSS']);
   return `<div class="hero-nums">${items.map(([v, u, l, c]) => `<div class="hn${c ? ` ${c}` : ''}"><div class="v">${v}${u ? `<small>${u}</small>` : ''}</div><div class="l">${l}</div></div>`).join('')}</div>`;
 }
 
@@ -256,11 +256,11 @@ export function renderHero() {
     el.innerHTML = `${src}<section class="hero done" style="--c:${workoutColor(w, v)}" aria-label="Today, done">${heroDoneBody(w, doneRide, date, v)}</section>`;
     $('#btn-free').onclick = (e) => startFree(e.currentTarget);
     $('#hero-see').onclick = () => openRide(doneRide.id);
-    if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w);
+    if (doneRide.workoutId === w.id) bindProfileHover(el.querySelector('.hero-prof'), w, v.prof);
     return;
   }
   if (w) {
-    const work = v.workSummary(w);
+    const work = workSummary(w, v.prof.ftp);
     const status = today.done
       ? `<div class="hero-done"><span class="ck">&#10003;</span> ${today.done.workoutId === w.id ? 'Done' : esc(today.done.name)} &middot; ${today.done.tss} TSS<button class="ghost small hero-done-see" data-ride="${esc(today.done.id)}">See ride</button></div>` : '';
     const start = `<button class="primary hero-start" id="hero-start">${PLAY_ICO}<span class="hs-label">Start workout</span></button>`;
@@ -268,13 +268,13 @@ export function renderHero() {
         <div class="hero-text">
           <div class="hero-top"><b>Today</b><span>${date}</span></div>
           <h2 class="hero-name">${esc(w.name)}${w._source === 'coach' ? ' <span class="tag coach">coach</span>' : ''}</h2>
-          <div class="hero-meta">${v.woMeta(w)}${work ? ` &middot; ${work}` : ''}</div>${heroNums(w, work, v)}
+          <div class="hero-meta">${woMeta(w)}${work ? ` &middot; ${work}` : ''}</div>${heroNums(w, work, v)}
           ${today.note ? `<p class="hero-desc"><b>Coach:</b> ${esc(today.note)}</p>` : w.description ? `<p class="hero-desc">${esc(w.description)}</p>` : ''}
           ${status}
         </div>
         <div class="hero-btns">${start}${free(false)}</div>
       </div>
-      <div class="hero-prof prof-hover">${v.profileSvg(w, 1000, 100)}</div>
+      <div class="hero-prof prof-hover">${profileSvg(w, v.prof, 1000, 100)}</div>
       ${heroRecovery(today, v)}`;
   } else {
     const [name, sub] = today.kind === 'strength' ? ['Strength day', 'Gym day, no ride planned.']
@@ -295,7 +295,7 @@ export function renderHero() {
   el.querySelectorAll('.hero-done-see').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   const s = $('#hero-start');
   if (s) s.onclick = () => startWorkout(w, 1, s);
-  if (w) bindProfileHover(el.querySelector('.hero-prof'), w);
+  if (w) bindProfileHover(el.querySelector('.hero-prof'), w, v.prof);
   bindRecoveryAdvice(el);
 }
 
@@ -348,7 +348,7 @@ export function renderCalendar() {
   $('#cal-detail').style.setProperty('--c', info.workout ? workoutColor(info.workout, v) : 'transparent'); // phone: soft glow in the day's color
   $('#cal-detail').querySelectorAll('[data-ride]').forEach((b) => (b.onclick = () => openRide(b.dataset.ride)));
   $('#cal-detail').querySelectorAll('[data-startday]').forEach((b) => (b.onclick = () => startWorkout(info.workout)));
-  if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout);
+  if (info.workout) bindProfileHover($('#cal-detail .cal-prof'), info.workout, v.prof);
 }
 
 /** The month grid (Monday first, up to six weeks) for `ym` = "YYYY-MM", with the day `sel` selected. */
@@ -388,11 +388,11 @@ export function calDayHtml(sel, v) {
     html += `<div class="cal-wo cal-done-wo">
       <div class="cal-done-head">${DONE_ICO}<div><div class="cal-done-name"><span class="ok">Done.</span> ${esc(w.name)}</div>${sub ? `<div class="cal-done-sub">${sub}</div>` : ''}</div></div>
       <div class="hero-stats cal-stats">${rideStatsHtml(w, r, v)}</div>
-      <div class="cal-prof prof-hover">${v.profileSvg(w, 600, 60)}</div>
+      <div class="cal-prof prof-hover">${profileSvg(w, v.prof, 600, 60)}</div>
       <button class="primary small cal-see-main" data-ride="${esc(r.id)}">${SEE_ICO}See ride</button></div>`;
   } else if (info.workout) {
     const w = info.workout;
-    html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${v.woMeta(w)}</div></div><div class="cal-prof prof-hover">${v.profileSvg(w, 600, 60)}</div>
+    html += `<div class="cal-wo"><div class="wo-top"><div class="wo-name">${esc(w.name)}</div><div class="wo-meta">${woMeta(w)}</div></div><div class="cal-prof prof-hover">${profileSvg(w, v.prof, 600, 60)}</div>
       ${info.note && !info.isPast ? `<p><b>Coach:</b> ${esc(info.note)}</p>` : ''}<p class="muted">${esc(w.description)}</p>
       ${info.isPast ? `<p class="cal-missed-line">${info.optional ? 'Skipped (optional).' : 'Missed.'}</p>` : ''}
       <button class="${info.isPast ? 'ghost' : 'primary'} small" data-startday="${sel}">${info.isToday ? 'Start' : 'Ride it now'}</button></div>`;

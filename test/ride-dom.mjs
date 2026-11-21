@@ -110,8 +110,8 @@ const app = { screen: 'ride', settings: { ...DEFAULT_SETTINGS }, demo: true, con
 const look = () => ({ INK: 'ink', MUTED: 'muted', RULE: 'rule', FTP_LINE: 'ftpline', HR_LINE: 'hrline', TOK: { sheet: 'sheet' } });
 initRide({
   app, isPhone: () => phone.on, renderPhone: (s) => log.push(`renderPhone ${s.name}`), setDevPop: (v) => log.push(`setDevPop ${v}`), look,
-  zoneHex: (f) => `#z${Math.round(f * 100)}`, gradeHex: (g) => `#g${Math.round(g * 100)}`, rampStops: (a, b) => [[0, `#z${Math.round(a * 100)}`], [1, `#z${Math.round(b * 100)}`]],
-  setZc: (el, c) => el.style.setProperty('--zc', c), ELEV_MIN: 60, NUM_FONT: 'Archivo',
+  zoneHex: (f) => `#z${Math.round(f * 100)}`, gradeHex: (g) => `#g${Math.round(g * 100)}`,
+  setZc: (el, c) => el.style.setProperty('--zc', c), NUM_FONT: 'Archivo',
 });
 const canvas = $('#r-chart'), ctx = canvas.ctx;
 canvas.rect = { left: 0, top: 0, width: 800, height: 300 };
@@ -167,6 +167,10 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   draw();
   assert.equal(count('fill'), 8);
   assert.equal(count('createLinearGradient'), 2); // warm-up and cool-down ramps
+  // each ramp in its zones along it (rampStops in js/profile.js), not yet ridden: the warm-up 45 -> 70% FTP crosses
+  // 55% at 40% of the way, so Z1 then Z2, each colored at its middle (50% and 62.5%)
+  const warm = ctx.calls.find((c) => c[0] === 'createLinearGradient')[1].stops.map(([o, c]) => [+o.toFixed(3), c]);
+  assert.deepEqual(warm, [[0, '#z50cc'], [0.4, '#z50cc'], [0.4, '#z63cc'], [1, '#z63cc']]);
   assert.deepEqual(texts(), ['FTP 200']);
   const s = app.session, X = ride.workoutX(s, canvas.width);
   const hr = ride.smoothHr(s.samples), runs = hr.filter((h, i) => h && !hr[i - 1]).length;

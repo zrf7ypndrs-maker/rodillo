@@ -8,6 +8,7 @@ import {
   dayInfo, workoutColor, dayCardHtml, rideStatsHtml, complianceLine, heroDoneBody, heroNums, heroRecovery, recoveryAdvice,
   coachDecision, DECISION_LABEL, isHard, recZone, whoopDay, fmtHours, BIKE_ICO, overviewHtml, calGridHtml, calDayHtml,
 } from '../js/today.js';
+import { woMeta } from '../js/profile.js';
 import { flatten, totalDuration, estimateTSS, mainSet, isTrack } from '../js/engine/workout.js';
 import { fmtTime } from '../js/ridepage.js';
 import { loadSeries, loadNow, formLabel } from '../js/stats.js';
@@ -40,8 +41,7 @@ const v = {
   settings: { ...DEFAULT_SETTINGS, ftp: 250, riderKg: 80 },
   today: '2026-11-18',
   gradeHex: (g) => `grade(${g})`, zoneHex: (f) => `zone(${+f.toFixed(3)})`,
-  woMeta: (w) => `meta ${w.id}`, profileSvg: (w, width, height) => `<svg class="profile" data-id="${w.id}" data-size="${width}x${height}"></svg>`,
-  isSim: (w) => flatten(w).some((s) => s.kind === 'sim'), workSummary: (w) => mainSet(w, ftp),
+  prof: { ftp, zoneHex: (f) => `zone(${+f.toFixed(3)})`, gradeHex: (g) => `grade(${g})` }, // the profile charts' look (js/profile.js)
 };
 const count = (s, re) => (s.match(re) || []).length;
 
@@ -80,7 +80,7 @@ const card = (key) => dayCardHtml(dayInfo(key, v), v);
 const wedCard = card('2026-11-18');
 assert.match(wedCard, /data-day="2026-11-18"/);
 assert.match(wedCard, />Wed 18</, 'weekday and date (local noon, same in every time zone)');
-assert.match(wedCard, /<div class="d-name">Sweet spot 3 x 12<\/div><div class="d-meta">meta sweetspot-3x12<\/div>/);
+assert.ok(wedCard.includes(`<div class="d-name">Sweet spot 3 x 12</div><div class="d-meta">${woMeta(W('sweetspot-3x12'))}</div>`));
 assert.match(wedCard, new RegExp(`--c:zone\\(${+ssWork.toFixed(3)}\\)`));
 assert.match(wedCard, /&#10003; Free &lt;ride&gt; &middot; 15 TSS/, 'another ride: its (escaped) name');
 assert.match(wedCard, /class="day\s+done"/);
@@ -127,7 +127,8 @@ const doneSame = heroDoneBody(vo2, { ...r, start: '2026-11-17T18:30:00' }, 'Tue,
 assert.match(doneSame, /<span class="ok">Done\.<\/span> VO2max 30\/15 x 3 sets/);
 assert.match(doneSame, /<p class="hero-desc">Weakest rep at 93% of target\.<\/p>/);
 assert.match(doneSame, /<span>Tue, Nov 17 &middot; \d{1,2}:30/, 'the time it was ridden');
-assert.match(doneSame, /data-id="vo2-30-15" data-size="1000x100"/, 'the planned workout\'s profile');
+assert.equal(count(doneSame, /<div class="hero-prof prof-hover"><svg class="profile" viewBox="0 0 1000 100" /g), 1, 'the planned workout\'s profile');
+assert.equal(count(doneSame, /<(polygon|rect) data-i=/g), flatten(W('vo2-30-15'), ftp).length, 'a shape per step');
 assert.equal(count(doneSame, /class="hs"/g), 6);
 assert.match(doneSame, /id="hero-see"/);
 assert.match(doneSame, /id="btn-free"/);
@@ -265,8 +266,8 @@ ok('month grid: Monday first, five or six rows, other-month days, today and sele
 
 const det = (day, x = v) => calDayHtml(day, x);
 const tday = det('2026-11-18');
-assert.match(tday, /^<h3>Wednesday, November 18<\/h3><div class="cal-wo"><div class="wo-top"><div class="wo-name">Sweet spot 3 x 12<\/div><div class="wo-meta">meta sweetspot-3x12<\/div>/);
-assert.match(tday, /data-size="600x60"/);
+assert.ok(tday.startsWith(`<h3>Wednesday, November 18</h3><div class="cal-wo"><div class="wo-top"><div class="wo-name">Sweet spot 3 x 12</div><div class="wo-meta">${woMeta(W('sweetspot-3x12'))}</div>`));
+assert.match(tday, /<svg class="profile" viewBox="0 0 600 60" /);
 assert.match(tday, /<p><b>Coach:<\/b> Steady &lt;not&gt; heroic\.<\/p>/);
 assert.match(tday, /<button class="primary small" data-startday="2026-11-18">Start<\/button>/);
 assert.match(tday, /WHOOP: recovery <b class="rz red">25%<\/b>/);
