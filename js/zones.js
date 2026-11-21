@@ -1,3 +1,4 @@
+// @ts-check
 // Power zones (Coggan), the single source for zone colors, time-in-zone stats and charts.
 // `max` is the zone's upper bound as a fraction of FTP, inclusive: 75% is Z2, 76% is Z3.
 // Pure data + functions, no DOM: runs in the browser and in Node.

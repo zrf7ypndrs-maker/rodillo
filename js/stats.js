@@ -1,9 +1,29 @@
+// @ts-check
 // Training analytics shared by the app and the coach's review scripts.
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
 import { ZONES, zoneOfWatts, WORK_FTP } from './zones.js?v=202611102147';
 import { dkey, dayDate } from './dates.js?v=202611102147';
+/** @typedef {import('./types.js').Sample} Sample */
+/** @typedef {import('./types.js').Segment} Segment */
+/** @typedef {import('./types.js').RideSummary} RideSummary */
+/** @typedef {import('./types.js').RideDoc} RideDoc */
+/** @typedef {import('./types.js').IntervalResult} IntervalResult */
+/** @typedef {import('./types.js').LoadRow} LoadRow */
+/**
+ * @typedef {object} RideMeta What buildRide() needs besides the samples.
+ * @property {string} name
+ * @property {string | null} [workoutId]
+ * @property {string[]} [tags]
+ * @property {number} ftp
+ * @property {number} startMs
+ * @property {Segment[]} [segs]
+ * @property {boolean} [segsChanged] Steps changed while riding (open-ended ramp test): store them with the ride.
+ * @property {string} [source]
+ * @property {string} [bike]
+ * @property {string} [gearing]
+ */
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -52,7 +72,13 @@ export function decoupling(power, hr) {
   return e1 ? r1(((e1 - e2) / e1) * 100) : null;
 }
 
-/** Per-interval results for a structured workout. samples carry wt (workout time) and target. */
+/**
+ * Per-interval results for a structured workout. samples carry wt (workout time) and target.
+ * @param {Sample[]} samples
+ * @param {Segment[] | null | undefined} segs
+ * @param {number} ftp
+ * @returns {IntervalResult[]}
+ */
 export function intervalResults(samples, segs, ftp) {
   if (!segs) return [];
   const out = [];
@@ -99,7 +125,10 @@ export function timeInZones(power, ftp) {
   return z;
 }
 
-/** Sum time-in-zone over ride summaries (each ride is binned at its own FTP). */
+/**
+ * Sum time-in-zone over ride summaries (each ride is binned at its own FTP).
+ * @param {RideSummary[]} summaries
+ */
 export function zoneTotals(summaries) {
   const z = new Array(ZONES.length).fill(0);
   for (const r of summaries) (r.zones || []).forEach((sec, i) => { if (i < z.length) z[i] += sec || 0; });
@@ -115,7 +144,9 @@ export function rideIdFor(ms) {
 
 /**
  * Build the full ride document (summary + intervals + streams) from session samples.
- * meta: { name, workoutId, tags, ftp, startMs, segs, source }
+ * @param {Sample[]} samples
+ * @param {RideMeta} meta
+ * @returns {RideDoc}
  */
 export function buildRide(samples, meta) {
   const power = samples.map((s) => Math.round(s.power || 0));
@@ -181,6 +212,8 @@ export function buildRide(samples, meta) {
  * Daily CTL (42 d), ATL (7 d), TSB from ride summaries, as of the START of each day:
  * a day's ride moves fitness, fatigue and form the next morning, and tsb = ctl - atl on every row.
  * Days are calendar days (compared by key), so today's row exists from midnight.
+ * @param {RideSummary[]} rides
+ * @returns {LoadRow[]}
  */
 export function loadSeries(rides, until = new Date(), days = 120) {
   const byDay = {};
@@ -212,6 +245,7 @@ const ZONE_MID_IF = [0.45, 0.655, 0.83, 0.98, 1.13, 1.355, 1.75];
  * A ride's TSS split by power zone (Z1..Z7), or null when the ride has no power zones
  * (HR-scored imports). TSS grows with time x IF squared, so each zone's seconds are
  * weighted by its typical IF squared, then scaled so the parts add up to the ride's TSS.
+ * @param {RideSummary} r
  */
 export function tssByZone(r) {
   const z = r?.zones;
@@ -221,7 +255,10 @@ export function tssByZone(r) {
   return sum > 0 ? w.map((x) => (x / sum) * r.tss) : null;
 }
 
-/** Monday-start weekly totals for the last n weeks; zoneTss splits the TSS by power zone, otherTss is TSS without power. */
+/**
+ * Monday-start weekly totals for the last n weeks; zoneTss splits the TSS by power zone, otherTss is TSS without power.
+ * @param {RideSummary[]} rides
+ */
 export function weekly(rides, n = 12, now = new Date()) {
   const monday = new Date(now);
   monday.setHours(0, 0, 0, 0);
@@ -230,7 +267,7 @@ export function weekly(rides, n = 12, now = new Date()) {
   for (let i = n - 1; i >= 0; i--) {
     const start = new Date(monday); start.setDate(start.getDate() - 7 * i);
     const end = new Date(start); end.setDate(end.getDate() + 7);
-    const rs = rides.filter((r) => { const t = Date.parse(r.start); return t >= start && t < end; });
+    const rs = rides.filter((r) => { const t = Date.parse(r.start); return t >= start.getTime() && t < end.getTime(); });
     const zoneTss = new Array(ZONES.length).fill(0);
     let otherTss = 0;
     for (const r of rs) {
@@ -242,7 +279,11 @@ export function weekly(rides, n = 12, now = new Date()) {
   return weeks;
 }
 
-/** Max of per-ride bests across rides started within the last `days` (all if null). */
+/**
+ * Max of per-ride bests across rides started within the last `days` (all if null).
+ * @param {RideSummary[]} rides
+ * @param {number | null} [days]
+ */
 export function powerCurve(rides, days = null, now = Date.now()) {
   const out = {};
   for (const r of rides) {
@@ -255,6 +296,7 @@ export function powerCurve(rides, days = null, now = Date.now()) {
 /**
  * FTP this one ride proves, or null. Ramp test: 75% of best 1 min. Any other ride: 95% of best 20 min
  * (so raising ERG effort or riding hard in slope mode counts).
+ * @param {RideSummary | null | undefined} st
  */
 export function ftpFromRide(st) {
   if (st?.tags?.includes('test') && st.bests?.[60]) return { ftp: Math.round(st.bests[60] * 0.75), basis: `best 1-min ${st.bests[60]} W x 75%`, test: true };
@@ -262,7 +304,10 @@ export function ftpFromRide(st) {
   return null;
 }
 
-/** FTP estimates from the last 90 days: 95% of best 20 min, and 75% of best 1 min in ramp tests. */
+/**
+ * FTP estimates from the last 90 days: 95% of best 20 min, and 75% of best 1 min in ramp tests.
+ * @param {RideSummary[]} rides
+ */
 export function ftpEstimate(rides, now = Date.now()) {
   const recent = rides.filter((r) => now - Date.parse(r.start) < 90 * 864e5);
   const b20 = Math.max(0, ...recent.map((r) => r.bests?.[1200] || 0));

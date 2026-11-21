@@ -198,7 +198,7 @@
 
 /**
  * @typedef {object} RideSummary A ride's summary (rides/index.json in rodillo-data, buildRide().summary).
- * @property {string} id 'YYYY-MM-DDTHH-MM' (rideIdFor()).
+ * @property {string} id Local start time 'YYYY-MM-DDTHHMM' (rideIdFor()).
  * @property {string} start ISO time.
  * @property {string} name
  * @property {string | null} [workoutId]

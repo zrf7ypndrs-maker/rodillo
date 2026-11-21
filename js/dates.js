@@ -1,3 +1,4 @@
+// @ts-check
 // Calendar days, shared by app.js, library.js, training.js and stats.js (one copy, no local twins).
 // A day key is the local date "YYYY-MM-DD" (rides, the plan and the calendar all use it); a key turns back into a
 // Date at local noon, so stepping a day at a time never skips or repeats one across a DST change.
