@@ -1,3 +1,4 @@
+// @ts-check
 // Ride history import: a Strava bulk export (.zip), a Garmin Connect export (.zip),
 // or loose .fit / .fit.gz / .gpx / .tcx files. Turns each cycling activity into a
 // Rodillo ride document (same summary fields as rides recorded in the app), so the
@@ -346,6 +347,8 @@ async function parseActivityFile(name, bytes, since) {
 /**
  * Reads the chosen files (zip exports and/or loose activity files) and returns the cycling
  * activities since `since` (ms). onProgress(done, total) while reading.
+ * @param {Iterable<File>} files FileList or File[].
+ * @param {{ since?: number, onProgress?: (done: number, total: number) => void }} [opts]
  */
 export async function scanFiles(files, { since, onProgress = () => {} } = {}) {
   const found = [];
@@ -400,14 +403,19 @@ export async function scanFiles(files, { since, onProgress = () => {} } = {}) {
 }
 
 // ---------------------------------------------------------------- planning and building
+/** @type {(start: number, sec: number) => [number, number]} */
 const span = (start, sec) => [start, start + sec * 1000];
 const overlap = ([a0, a1], [b0, b1]) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0)) / Math.max(1, Math.min(a1 - a0, b1 - b0));
 
 /**
  * Builds the ride documents. existing = summaries already in index.json (Rodillo rides win).
  * opts: { ftp, restHr } . Returns { docs, stats }.
+ * @param {any[]} found Activities from scanFiles().
+ * @param {import("./types.js").RideSummary[]} existing
+ * @param {{ ftp: number, restHr?: number }} opts FTP is needed: TSS and zones are worked out at it.
+ * @returns {{ docs: import("./types.js").RideDoc[], stats: { noData: number, already: number, dupes: number, short: number }, hrCfg: { rest: number, max: number, lthr: number }, withPower: number }}
  */
-export function buildImport(found, existing, { ftp, restHr = 55 } = {}) {
+export function buildImport(found, existing, { ftp, restHr = 55 }) {
   const acts = found.map((a) => {
     const samples = toSamples(a.points);
     const hr = samples.map((s) => s.hr);
