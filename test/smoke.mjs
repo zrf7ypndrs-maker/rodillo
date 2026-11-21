@@ -1,7 +1,8 @@
 // Browser smoke test: the whole app in Chrome, demo trainer, no Bluetooth or network.
 // Opens every home screen and panel (Today and Calendar also on a seeded week with a fixed clock), rides a demo workout (start, skip, end), opens the ride page,
 // drives home and a ride with a fake Zwift Ride (both hoods, real button bytes) and the keyboard, checks the desktop ride
-// screen on demo rides with a paused clock (ERG, slope, real climb, free ride, workout messages, the ramp test takeover),
+// screen on demo rides with a paused clock (ERG, slope, real climb, free ride, workout messages, the ramp test takeover)
+// and the phone ride screen the same way (hero, power gauge, chart and list view, the ··· sheet and its holds),
 // and fails on any uncaught error or console error. Covers js/app.js, which the unit tests don't load.
 // Needs Chrome: CHROME_PATH, or /usr/bin/google-chrome (GitHub's ubuntu-latest has it).
 import http from 'node:http';
@@ -9,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { loadSeries, loadNow } from '../js/stats.js';
-import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts } from '../js/engine/workout.js';
+import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts, segTarget } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
@@ -1039,6 +1040,297 @@ async function rideRun() {
   await ctx.close();
 }
 
+// ---- the phone ride screen on demo rides, the clock paused and moved only by runFor(): the top line, the hero card
+// (interval, countdown, target), the power gauge and its aim, cadence / effort / gear, the Next line, chart and list
+// view, the buttons and the ··· sheet (grade, Skip and End holds, Lap, theme, Close). Each ride its own context (and
+// clock), 390 x 844 with touch. Expected numbers come from the workout files and the engine in Node, plus the
+// session's own state for what the rider does (time left, progress, gears, power shown).
+async function phoneRideRun() {
+  const FTP = DEFAULT_SETTINGS.ftp;
+  const fail = (what) => { throw new Error(`phone ride screen: ${what}`); };
+  let ctx, page;
+  const run = (ms) => page.clock.runFor(ms);
+  const tapBtn = async (id) => { await page.click(`#${id}`); await run(300); };
+  /** A sheet hold button pressed for `ms` (pointer events, the clock moved meanwhile); returns whether it was filling. */
+  const sheetHold = async (id, ms) => {
+    await page.evaluate((x) => document.getElementById(x).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })), id);
+    await run(ms);
+    const filling = await page.$eval(`#${id}`, (el) => el.classList.contains('filling'));
+    await page.evaluate((x) => document.getElementById(x).dispatchEvent(new PointerEvent('pointerup', { bubbles: true })), id);
+    await run(300);
+    return filling;
+  };
+  async function ride(name, start) {
+    ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+    await ctx.clock.install({ time: new Date('2026-11-19T18:00:00') });
+    page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`phone ride ${name}: ${e.message}`));
+    page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`phone ride ${name} console: ${m.text()}`); });
+    await page.goto(base, { waitUntil: 'load' });
+    await page.waitForFunction(() => document.querySelectorAll('#workout-list .wo').length > 0, null, { timeout: 5000 });
+    await page.evaluate(() => localStorage.removeItem('rodillo.phoneView'));
+    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 1000));
+    await page.click('#btn-devices'); await page.click('#btn-demo'); await page.keyboard.press('Escape');
+    await start();
+    for (let i = 0; i < 60 && !(await page.evaluate(() => document.querySelector('#ride.active') && window.rodillo.session?.started && !window.rodillo.launching)); i++) { await run(250); await page.waitForTimeout(40); }
+    if (!(await page.evaluate(() => window.rodillo.session?.started))) fail(`${name}: the ride did not start`);
+  }
+  const fromLibrary = (wname, kind) => async () => {
+    await page.click('#tabs button[data-tab="workouts"]');
+    await page.click(`#wo-kind button[data-kind="${kind}"]`);
+    const row = await rowSel(page, kind === 'erg' ? '#workout-list' : '#slope-list', wname);
+    await page.click(`${row} .wo-name`);
+    await page.click(`${row} button[data-start]`);
+  };
+  const screen = () => page.evaluate(() => {
+    const q = (sel) => document.querySelector(sel), tx = (sel) => q(sel)?.textContent ?? '', s = window.rodillo.session;
+    const hid = (sel) => q(sel).classList.contains('hidden'), has = (sel, c) => q(sel).classList.contains(c);
+    const vis = (sel) => { const r = q(sel).getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(q(sel)).visibility !== 'hidden'; };
+    const cv = q('#rp-chart'), px = cv.width ? cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data : [];
+    let drawn = 0; for (let i = 3; i < px.length; i += 4) if (px[i]) drawn++;
+    const rows = [...q('#rp-segs').children];
+    return {
+      phone: vis('#rp') && !vis('.tiles'),
+      elapsed: tx('#rp-elapsed'), name: tx('#rp-name'), leftK: tx('#rp-left-k'), left: tx('#rp-left'),
+      label: tx('#rp-int-label'), count: tx('#rp-count'), target: tx('#rp-target'), targetSub: tx('#rp-target-sub'),
+      zc: q('#rp').style.getPropertyValue('--zc'), fresh: has('#rp-hero', 'int-fresh'), ending: has('#rp-hero', 'int-ending'),
+      power: tx('#rp-power'), gaugeOff: has('#rp-gauge', 'off'), gaugeAt: q('#rp-gauge b').style.left,
+      powerCls: ['ok', 'bad'].filter((c) => has('#rp-power-box', c)).join(), powerSub: tx('#rp-power-sub'),
+      hr: tx('#rp-hr'), cad: tx('#rp-cad'), cadCls: ['ok', 'bad'].filter((c) => has('#rp-cad-box', c)).join(), cadSub: tx('#rp-cad-sub'),
+      m3k: tx('#rp-m3-k'), m3: tx('#rp-m3'), m3sub: tx('#rp-m3-sub'), m3cls: ['up', 'down'].filter((c) => q('#rp-m3').parentElement.classList.contains(c)).join(),
+      next: tx('#rp-next'), nextSw: !!q('#rp-next .sw'),
+      minus: tx('#rp-minus'), plus: tx('#rp-plus'), pause: tx('#rp-pause'),
+      gradeRow: !hid('#rp-grade-row'), skip: !hid('#rp-skip'), lap: !hid('#rp-lap'), erg: !hid('#rp-erg'), ergText: tx('#rp-erg'),
+      sheet: !hid('#rp-sheet'), paused: !hid('#r-paused'), pausedSub: tx('#r-paused-sub'),
+      noSegs: has('#rp-wrap', 'no-segs'), asList: has('#rp-wrap', 'as-list'), viewOn: [...q('#rp-view-tg').children].filter((b) => b.classList.contains('on')).map((b) => b.dataset.view).join(),
+      viewK: tx('#rp-view-k'), chartShown: vis('#rp-chart'), drawn, listShown: vis('#rp-segs'),
+      rows: rows.length, current: rows.findIndex((r) => r.classList.contains('current')), checks: rows.filter((r) => r.querySelector('.check')).length,
+      toast: q('#toast').classList.contains('show') ? tx('#toast') : '', theme: window.rodillo.theme, themeBtn: tx('#rp-theme'),
+      screen: window.rodillo.screen,
+      s: s && { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, progress: s.segProgress, chartPos: s.chartPos,
+        mode: s.mode, target: s.target, aim: s.aimStatus, paused: s.paused, elapsed: s.elapsed, dist: s.bike.dist, v: s.bike.v, segs: s.segs, name: s.name,
+        gb: { label: s.gb.label, seq: s.gb.seq, isDouble: s.gb.isDouble, front: s.gb.front, rear: s.gb.rear, ring: s.gb.ring, cog: s.gb.cog } },
+    };
+  });
+  const expect = (what, got, want) => { if (got !== want) fail(`${what}: "${got}", expected "${want}"`); };
+  const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
+  const count = (rem) => (rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m));
+  /** Elapsed and time left on the top line (workouts with no distance steps). */
+  const top = (v, name) => {
+    expect(`${name}: elapsed`, v.elapsed, fmtTime(v.s.elapsed));
+    expect(`${name}: workout name`, v.name, v.s.name);
+    expect(`${name}: time left label`, v.leftK, 'Left');
+    expect(`${name}: time left`, v.left, fmtTime(v.s.segs.at(-1).end - v.s.chartPos));
+  };
+  /** The gauge's dot: the target in the middle, ±20% at the ends. */
+  const gauge = (v, gt, name) => {
+    if (v.gaugeOff) fail(`${name}: power gauge off with a target of ${gt} W`);
+    const want = Math.max(0, Math.min(1, (+v.power / gt - 0.8) / 0.4)) * 100;
+    // the browser keeps 4 decimals of the style's percentage
+    if (Math.abs(parseFloat(v.gaugeAt) - want) > 1e-3) fail(`${name}: gauge dot at ${v.gaugeAt}, expected ${want}% for ${v.power} W of ${gt} W`);
+  };
+  const gearOf = (gb) => (gb.seq ? gb.label : gb.isDouble ? `${gb.front + 1}×${gb.rear + 1}` : `${gb.rear + 1}`);
+  /** The third box in slope mode: the gear, ring × cog and the speed. */
+  const gearBox = (v, name) => {
+    expect(`${name}: third box label`, v.m3k, 'Gear');
+    expect(`${name}: gear`, v.m3, gearOf(v.s.gb));
+    expect(`${name}: gear sub line`, v.m3sub, v.s.gb.seq ? `${Math.round(v.s.v * 3.6)} km/h` : `${v.s.gb.ring}×${v.s.gb.cog} · ${Math.round(v.s.v * 3.6)} km/h`);
+    if (v.m3cls) fail(`${name}: gear box marked ${v.m3cls}`);
+    expect(`${name}: minus button`, v.minus, 'Gear −');
+    expect(`${name}: plus button`, v.plus, 'Gear +');
+  };
+  const pct = (x) => Math.round(x * 100);
+
+  // ERG workout: Sweet spot 3 x 12 (a ramp warm-up, then 12 min at 90% with a cadence target)
+  const ss = flatten(SS), cadOf = (g) => (g.cad ? ` · ${g.cad.label}` : '');
+  await ride('ERG', fromLibrary(SS.name, 'erg'));
+  await run(5000);
+  let v = await screen();
+  if (!v.phone) fail('the phone ride screen is not the one showing (or the desktop tiles show too)');
+  top(v, 'ERG');
+  expect('ERG hero label', v.label, ss[0].label);
+  expect('ERG hero countdown', v.count, count(v.s.rem));
+  if (!(v.s.target >= Math.round(ss[0].from * FTP) && v.s.target <= Math.round(ss[0].to * FTP))) fail(`ERG target ${v.s.target} W outside the ramp`);
+  expect('ERG hero target', v.target, `${v.s.target} W`);
+  expect('ERG hero sub line', v.targetSub, `${pct(segTarget(ss[0], v.s.progress))}% FTP${cadOf(ss[0])}`);
+  if (!v.zc) fail('ERG hero has no zone color');
+  gauge(v, v.s.target, 'ERG');
+  if (v.powerCls || v.powerSub) fail(`ERG power box marked "${v.powerCls}" "${v.powerSub}" (only slope aims mark it)`);
+  expect('ERG third box', [v.m3k, v.m3, v.m3sub, v.m3cls].join('|'), 'Effort|100%|as planned|');
+  expect('ERG Next line', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP)} W${cadOf(ss[1])}`);
+  if (!v.nextSw) fail('ERG Next line has no zone swatch');
+  expect('ERG buttons', [v.minus, v.plus, v.pause].join('|'), '−1%|+1%|Pause');
+  if (v.gradeRow || !v.skip || v.lap || !v.erg || v.ergText !== 'ERG off') fail(`ERG sheet buttons: grade ${v.gradeRow}, skip ${v.skip}, lap ${v.lap}, erg ${v.erg} "${v.ergText}"`);
+  if (v.noSegs || v.asList || v.viewOn !== 'chart' || !v.chartShown || v.listShown) fail(`ERG view: no-segs ${v.noSegs}, list ${v.asList}, on ${v.viewOn}, chart ${v.chartShown}, list shown ${v.listShown}`);
+  expect('ERG view label', v.viewK, `Workout · 0/${ss.length} done`);
+  if (v.drawn < 1000) fail(`ERG chart drew ${v.drawn} pixels`);
+  // +1% from the plus button: effort box, hero and Next line follow
+  await tapBtn('rp-plus');
+  v = await screen();
+  if (v.s.intensity !== 1.01) fail(`plus button in ERG: effort ${v.s.intensity}`);
+  expect('effort box at 101%', [v.m3, v.m3sub, v.m3cls].join('|'), '101%|harder than plan|up');
+  expect('ERG hero sub line at 101%', v.targetSub, `${pct(segTarget(ss[0], v.s.progress) * 1.01)}% FTP${cadOf(ss[0])}`);
+  expect('ERG Next line at 101%', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP * 1.01)} W${cadOf(ss[1])}`);
+  gauge(v, v.s.target, 'ERG at 101%');
+  // pause / resume from the middle button
+  await tapBtn('rp-pause');
+  v = await screen();
+  if (!v.s.paused || !v.paused || v.pause !== 'Resume' || v.pausedSub !== 'Tap Resume or press A') fail(`pause button: paused ${v.s.paused}, screen ${v.paused}, "${v.pause}", "${v.pausedSub}"`);
+  await tapBtn('rp-pause');
+  v = await screen();
+  if (v.s.paused || v.paused || v.pause !== 'Pause') fail(`resume button: paused ${v.s.paused}, screen ${v.paused}, "${v.pause}"`);
+  ok('phone: ride, ERG: top line, hero card (ramp, countdown, target), power gauge, effort box and Next line at 100% and 101%, pause');
+
+  // the ··· sheet: Close; Skip held 0.4 s does nothing, 1.2 s skips and closes the sheet
+  await tapBtn('rp-more');
+  if (!(await screen()).sheet) fail('··· did not open the sheet');
+  await tapBtn('rp-sheet-close');
+  if ((await screen()).sheet) fail('Close did not close the sheet');
+  await tapBtn('rp-more');
+  if (!(await sheetHold('rp-skip', 400))) fail('sheet Skip did not fill while held');
+  v = await screen();
+  if (v.s.seg !== 0 || !v.sheet) fail(`sheet Skip let go after 0.4 s: segment ${v.s.seg}, sheet ${v.sheet}`);
+  await sheetHold('rp-skip', 1200);
+  v = await screen();
+  if (v.s.seg !== 1 || v.toast !== 'Skipped' || v.sheet) fail(`sheet Skip held 1.2 s: segment ${v.s.seg}, toast "${v.toast}", sheet ${v.sheet}`);
+  await run(3000);
+  v = await screen();
+  expect('ERG hero label after the skip', v.label, `${ss[1].label} 1/3`);
+  expect('ERG hero countdown after the skip', v.count, count(v.s.rem));
+  expect('ERG hero target, hold', v.target, `${Math.round(ss[1].from * FTP * 1.01)} W`);
+  expect('ERG hero sub line, hold', v.targetSub, `${pct(ss[1].from * 1.01)}% FTP${cadOf(ss[1])}`);
+  expect('ERG Next line after the skip', v.next, `Next ${fmtTime(ss[2].dur)} @ ${Math.round(ss[2].from * FTP * 1.01)} W${cadOf(ss[2])}`);
+  expect('ERG view label after the skip', v.viewK, `Workout · 1/${ss.length} done`);
+  if (v.s.target !== Math.round(ss[1].from * FTP * 1.01)) fail(`ERG target ${v.s.target} after the skip`);
+  gauge(v, v.s.target, 'ERG hold');
+  // list view: every interval, the current one marked, the done one ticked; remembered; back to the chart
+  await page.click('#rp-view-tg button[data-view="list"]'); await run(300);
+  v = await screen();
+  if (!v.asList || v.viewOn !== 'list' || !v.listShown || v.chartShown) fail(`list view: list ${v.asList}, on ${v.viewOn}, shown ${v.listShown}, chart ${v.chartShown}`);
+  if (v.rows !== ss.length || v.current !== 1 || v.checks !== 1) fail(`list view: ${v.rows} rows, current ${v.current}, ${v.checks} ticked`);
+  if (await lsGet(page, 'phoneView') !== 'list') fail('list view not remembered');
+  await page.click('#rp-view-tg button[data-view="chart"]'); await run(300);
+  v = await screen();
+  if (v.asList || v.viewOn !== 'chart' || !v.chartShown || v.drawn < 1000) fail(`chart view again: list ${v.asList}, on ${v.viewOn}, ${v.drawn} pixels`);
+  if (await lsGet(page, 'phoneView') !== 'chart') fail('chart view not remembered');
+  // End: let go after 0.6 s keeps riding, 2.3 s ends the ride (more than 10 s ridden: the done page)
+  await tapBtn('rp-more');
+  await sheetHold('rp-end', 600);
+  if (!(await screen()).s) fail('sheet End let go after 0.6 s ended the ride');
+  await sheetHold('rp-end', 2300);
+  await page.waitForSelector('#ridepage.active', { timeout: 10000 });
+  if (await page.evaluate(() => !!window.rodillo.session)) fail('sheet End held 2.3 s: the session is still there');
+  ok('phone: ride, ERG: the ··· sheet (Close, Skip held 1 s), hero after the skip, list view and back, End held 2 s');
+  await ctx.close();
+
+  // slope workout (a road): grade hero, gear box, the sheet's grade buttons, a gear from the plus button, the power aim
+  const CR = byName('Climb repeats 4 x 6 min at 6%'), cr = flatten(CR), tr = track(cr);
+  const roadK = (v) => { const d = trackDist(tr, v.s.segs, v.s.chartPos); return `${(d / 1000).toFixed(1)} of ${(tr.D / 1000).toFixed(1)} km · +${Math.round(trackClimbed(tr, d))} of ${Math.round(tr.ascent / 5) * 5} m`; };
+  await ride('slope', fromLibrary(CR.name, 'slope'));
+  await run(20000);
+  v = await screen();
+  if (v.s.mode !== 'sim') fail(`slope workout in ${v.s.mode} mode`);
+  top(v, 'slope');
+  expect('slope hero label', v.label, cr[0].label);
+  expect('slope hero countdown', v.count, count(v.s.rem));
+  expect('slope hero target', v.target, `${(cr[0].grade * 100).toFixed(0)}%`);
+  expect('slope hero sub line', v.targetSub, `grade, use your gears${cadOf(cr[0])}`);
+  if (!v.gaugeOff || v.powerCls || v.powerSub) fail(`warm-up has no aim: gauge off ${v.gaugeOff}, box "${v.powerCls}" "${v.powerSub}"`);
+  gearBox(v, 'slope');
+  expect('slope Next line', v.next, `Next ${fmtTime(cr[1].dur)} @ ${(cr[1].grade * 100).toFixed(0)}%${cadOf(cr[1])}`);
+  if (!v.gradeRow || !v.skip || v.lap || v.erg) fail(`slope sheet buttons: grade ${v.gradeRow}, skip ${v.skip}, lap ${v.lap}, erg ${v.erg}`);
+  expect('slope view label (road)', v.viewK, roadK(v));
+  if (v.drawn < 1000) fail(`slope road chart drew ${v.drawn} pixels`);
+  const rear0 = v.s.gb.rear;
+  await tapBtn('rp-plus');
+  v = await screen();
+  if (v.s.gb.rear !== rear0 + 1) fail(`Gear + did not shift (rear ${rear0} -> ${v.s.gb.rear})`);
+  gearBox(v, 'slope after Gear +');
+  await tapBtn('rp-minus');
+  if ((await screen()).s.gb.rear !== rear0) fail('Gear − did not shift back');
+  await tapBtn('rp-more');
+  await tapBtn('rp-gup');
+  v = await screen();
+  if (Math.abs(v.s.offset - 0.01) > 1e-9 || !v.sheet) fail(`Grade +1%: offset ${v.s.offset}, sheet ${v.sheet}`);
+  expect('slope hero target, profile +1%', v.target, `${((cr[0].grade + 0.01) * 100).toFixed(0)}%`);
+  expect('slope Next line, profile +1%', v.next, `Next ${fmtTime(cr[1].dur)} @ ${((cr[1].grade + 0.01) * 100).toFixed(0)}%${cadOf(cr[1])}`);
+  await tapBtn('rp-gdown');
+  if (Math.abs((await screen()).s.offset) > 1e-9) fail('Grade −1% did not put the profile back');
+  await sheetHold('rp-skip', 1200);
+  await run(5000);
+  v = await screen();
+  if (v.s.seg !== 1) fail(`slope: segment ${v.s.seg} after the sheet skip`);
+  const aim = cr[1].aim, band = `${Math.round(aim.lo * FTP)}-${Math.round(aim.hi * FTP)} W`;
+  expect('slope hero on the climb', v.target, `${(cr[1].grade * 100).toFixed(0)}%`);
+  expect('slope hero sub line on the climb', v.targetSub, `grade, aim ${Math.round(aim.mid * FTP)} W${cadOf(cr[1])}`);
+  expect('slope Next line on the climb', v.next, `Next ${fmtTime(cr[2].dur)} @ ${(cr[2].grade * 100).toFixed(0)}%${cadOf(cr[2])}`);
+  gauge(v, aim.mid * FTP, 'slope aim');
+  if (v.s.aim !== null || v.powerCls) fail(`aim while settling: ${v.s.aim}, box "${v.powerCls}"`);
+  expect('power sub line while settling', v.powerSub, band);
+  expect('slope view label on the climb', v.viewK, roadK(v));
+  await run(8000);
+  v = await screen();
+  if (!v.s.aim) fail('no power aim status 13 s into the climb');
+  expect('power box class', v.powerCls, v.s.aim === 'ok' ? 'ok' : 'bad');
+  expect('power sub line', v.powerSub, v.s.aim === 'ok' ? band : v.s.aim === 'low' ? '▲ push harder' : '▼ ease off');
+  gauge(v, aim.mid * FTP, 'slope aim, settled');
+  if (v.s.segs[1].cad) {
+    const cs = await page.evaluate(() => window.rodillo.session.cadStatus);
+    expect('cadence box class', v.cadCls, cs === 'ok' ? 'ok' : cs ? 'bad' : '');
+    expect('cadence sub line', v.cadSub, cs === 'low' ? '▲ faster' : cs === 'high' ? '▼ slower' : v.s.segs[1].cad.label);
+  }
+  ok('phone: ride, slope workout: grade hero, gear box and Gear +/−, the sheet\'s grade buttons, road label, sheet Skip, power aim on the gauge');
+  await ctx.close();
+
+  // a real climb (distance steps): metres on the hero, an estimated time left, the road label past the warm-up roll
+  await ride('real climb', fromLibrary(CLIMB.name, 'slope'));
+  await run(10000);
+  await tapBtn('rp-more');
+  await sheetHold('rp-skip', 1200);
+  await run(20000);
+  v = await screen();
+  const g1 = v.s.segs[1], ctr = track(v.s.segs);
+  if (v.s.seg !== 1 || !g1.dist) fail(`real climb: segment ${v.s.seg} after the skip`);
+  expect('real climb hero label', v.label, g1.label);
+  expect('real climb hero, metres left', v.count, fmtDist(v.s.rem.m));
+  expect('real climb hero target', v.target, `${(g1.grade * 100).toFixed(0)}%`);
+  expect('real climb time left (an estimate)', v.left, `~${fmtTime(v.s.segs.at(-1).end - v.s.chartPos)}`);
+  const lead = CLIMB.profile.lead.length, v0 = ctr.parts[lead].d0, up0 = trackClimbed(ctr, v0), d = trackDist(ctr, v.s.segs, v.s.chartPos);
+  expect('real climb road label', v.viewK, `${((d - v0) / 1000).toFixed(1)} of ${((ctr.D - v0) / 1000).toFixed(1)} km · +${Math.round(trackClimbed(ctr, d) - up0)} of ${Math.round((ctr.ascent - up0) / 5) * 5} m`);
+  if (v.drawn < 1000) fail(`real climb chart drew ${v.drawn} pixels`);
+  ok('phone: ride, real climb: metres left on the hero, ~time left, the road label past the warm-up');
+  await ctx.close();
+
+  // free ride: grade hero, distance, no list, the sheet's grade buttons, Lap and the theme switch
+  await ride('free ride', async () => { await page.click('#tabs button[data-tab="today"]'); await page.click('#btn-free'); });
+  v = await screen();
+  expect('free ride hero', [v.label, v.count, v.target, v.targetSub].join('|'), 'Free ride|0.0%||D-pad ▲▼ changes the grade');
+  expect('free ride top line', [v.leftK, v.left].join('|'), `Distance|${fmtDist(v.s.dist)}`);
+  if (!v.gaugeOff || v.powerSub) fail(`free ride gauge off ${v.gaugeOff}, sub "${v.powerSub}"`);
+  if (!v.noSegs || v.asList) fail(`free ride view: no-segs ${v.noSegs}, list ${v.asList}`);
+  if (v.gradeRow !== true || v.skip || !v.lap || v.erg) fail(`free ride sheet buttons: grade ${v.gradeRow}, skip ${v.skip}, lap ${v.lap}, erg ${v.erg}`);
+  gearBox(v, 'free ride');
+  await tapBtn('rp-more');
+  await tapBtn('rp-gup'); await tapBtn('rp-gup');
+  await run(60000);
+  v = await screen();
+  expect('free ride hero at 2%', v.count, '2.0%');
+  expect('free ride Next line', v.next, `${(v.s.v * 3.6).toFixed(1)} km/h · ${fmtDist(v.s.dist)}`);
+  if (v.drawn < 1000) fail(`free ride chart drew ${v.drawn} pixels`);
+  await tapBtn('rp-lap');
+  if ((await screen()).sheet) fail('Lap did not close the sheet');
+  if (await page.evaluate(() => window.rodillo.session.laps.length) !== 1) fail('Lap did not close one lap');
+  const theme0 = v.theme;
+  await tapBtn('rp-more'); await tapBtn('rp-theme');
+  v = await screen();
+  if (v.theme === theme0 || v.sheet) fail(`theme switch: ${theme0} -> ${v.theme}, sheet ${v.sheet}`);
+  await tapBtn('rp-more'); await tapBtn('rp-theme');
+  if ((await screen()).theme !== theme0) fail('theme switch did not switch back');
+  ok('phone: ride, free ride: grade hero, distance, no list, Grade +1% twice, Lap, the theme switch');
+  await ctx.close();
+}
+
 async function run(viewport, label) {
   const phone = label === 'phone';
   const ctx = await browser.newContext({ viewport, hasTouch: label === 'phone', isMobile: label === 'phone' });
@@ -1305,6 +1597,7 @@ try {
   await controlsRun({ width: 1280, height: 800 }, 'desktop');
   await controlsRun({ width: 390, height: 844 }, 'phone');
   await rideRun();
+  await phoneRideRun();
   await lateCssRun({ width: 1280, height: 800 }, 'desktop');
   await lateCssRun({ width: 390, height: 844 }, 'phone');
 } finally {
