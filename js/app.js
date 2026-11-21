@@ -9,7 +9,7 @@ import { flatten, totalDuration, estimateTSS, mainSet, parseZwo, isTrack, track 
 import { encodeActivity } from './fit.js?v=202611102147';
 import { buildRide, powerCurve, ftpFromRide } from './stats.js?v=202611102147';
 import { ZONES, zoneOf } from './zones.js?v=202611102147';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH } from './sync.js?v=202611102147';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, syncedToPrune } from './sync.js?v=202611102147';
 import { reconcile, applyPending } from './settings-sync.js?v=202611102147';
 import { ls, rides, docs } from './store.js?v=202611102147';
 import { dkey, dayDate } from './dates.js?v=202611102147';
@@ -924,6 +924,7 @@ async function syncPending() {
     if (await syncRide(ride)) logMsg('sync', `synced ${ride.summary.id}`);
   }
   await refreshRemoteIndex();
+  await pruneSynced();
 }
 
 async function refreshRemoteIndex() {
@@ -973,21 +974,43 @@ async function openRide(id, done = null) {
   }
 }
 
-/** This device's recording first (full samples), then the cached copy, then rodillo-data (cached after). */
+/**
+ * Where a ride comes from: an unsynced ride from this device's recording; a synced one from rodillo-data (fresh on
+ * every open, so a fix made in the repo shows), then the cached copy (offline), then the recording. `rideSources()`.
+ */
 async function loadRideDoc(id) {
-  let row = null;
+  let row = null, full = null;
   try { row = (await rides.list()).find((r) => r.summary?.id === id); } catch { /* no idb */ }
-  if (row) {
-    const full = await rides.get(row.id);
-    if (full?.samples?.length && full.meta) return { doc: { ...rideDoc(full), laps: full.laps }, local: full };
+  const fromLocal = async () => {
+    full ||= row && await rides.get(row.id);
+    return full?.samples?.length && full.meta ? { doc: { ...rideDoc(full), laps: full.laps }, local: full } : null;
+  };
+  const fromCache = async () => { try { const c = await docs.get(id); return c ? { doc: c, local: null } : null; } catch { return null; } };
+  const fromRemote = async () => {
+    const gh = syncClient();
+    if (!gh) return null;
+    try {
+      const r = await gh.getJson(`rides/${id.slice(0, 4)}/${id}.json`);
+      if (!r?.json?.summary) return null;
+      try { await docs.put(id, r.json); } catch { /* cache is optional */ }
+      return { doc: r.json, local: null };
+    } catch (e) { logMsg('sync', `ride ${id}: ${e.message}`); return null; }
+  };
+  const read = { local: fromLocal, cache: fromCache, remote: fromRemote };
+  for (const src of rideSources(row)) {
+    const got = await read[src]();
+    if (got) return got;
   }
-  try { const c = await docs.get(id); if (c) return { doc: c, local: null }; } catch { /* no idb */ }
-  const gh = syncClient();
-  if (!gh) return null;
-  const r = await gh.getJson(`rides/${id.slice(0, 4)}/${id}.json`);
-  if (!r?.json?.summary) return null;
-  try { await docs.put(id, r.json); } catch { /* cache is optional */ }
-  return { doc: r.json, local: null };
+  return null;
+}
+
+/** Drop full recordings of rides rodillo-data has had for a few days (`syncedToPrune()`); the repo copy is the ride. */
+async function pruneSynced() {
+  try {
+    const ids = syncedToPrune(await rides.list(), ls.get('remoteIndex', []).map((r) => r.id));
+    for (const k of ids) await rides.del(k);
+    if (ids.length) logMsg('sync', `removed ${ids.length} synced ride${ids.length > 1 ? 's' : ''} from this device`);
+  } catch (e) { logMsg('sync', `prune: ${e.message}`); }
 }
 
 function closeRide() {

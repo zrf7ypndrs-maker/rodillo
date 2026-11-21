@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, tssByZone, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
-import { GitHubSync } from '../js/sync.js';
+import { GitHubSync, rideSources, syncedToPrune, KEEP_SYNCED_DAYS } from '../js/sync.js';
 import { flatten } from '../js/engine/workout.js';
 import fs from 'node:fs';
 
@@ -28,6 +28,29 @@ ok('bests and NP');
   assert.deepEqual(r2.summary.compliance, { avg: 100, min: 100, reps: 1 });
 }
 ok('tempo counts as work');
+
+// ---- the repo is the source once a ride is synced (Nov 20)
+{
+  assert.deepEqual(rideSources(null), ['remote', 'cache', 'local']);
+  assert.deepEqual(rideSources({ synced: true, status: 'done' }), ['remote', 'cache', 'local']);
+  assert.deepEqual(rideSources({ synced: false, status: 'done' }), ['local', 'cache', 'remote']);
+  assert.deepEqual(rideSources({ synced: true, status: 'inprogress' }), ['local', 'cache', 'remote']);
+  assert.deepEqual(rideSources({ synced: true, status: 'done', demo: true }), ['local', 'cache', 'remote']);
+  const now = Date.parse('2026-11-24T12:00:00Z'), day = 864e5;
+  const mk = (id, start, extra = {}) => ({ id: Date.parse(start), status: 'done', synced: true, summary: { id, start }, ...extra });
+  const list = [
+    mk('old', '2026-11-20T01:21:55Z'), // 4+ days, synced, in the repo: goes
+    mk('new', '2026-11-23T01:00:00Z'), // 1 day: stays
+    mk('unsynced', '2026-11-10T01:00:00Z', { synced: false }),
+    mk('notInRepo', '2026-11-10T01:00:00Z'),
+    mk('demo', '2026-11-10T01:00:00Z', { demo: true }),
+    mk('open', '2026-11-10T01:00:00Z', { status: 'inprogress' }),
+    { id: 5, status: 'done', synced: true }, // no summary
+  ];
+  assert.deepEqual(syncedToPrune(list, ['old', 'new', 'unsynced', 'demo', 'open'], now), [Date.parse('2026-11-20T01:21:55Z')]);
+  assert.deepEqual(syncedToPrune(list, ['old'], now - KEEP_SYNCED_DAYS * day), []);
+}
+ok('synced rides read from the repo; local copies pruned after a few days');
 
 // ---- decoupling: steady power, HR drifting up 8% in second half
 const N = 3600;

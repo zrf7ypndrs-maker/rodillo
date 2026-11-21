@@ -17,6 +17,24 @@ function unb64(s) {
   return new TextDecoder().decode(bytes);
 }
 
+// A ride recorded on this device stays here only until rodillo-data has it (Nov 20, Agustín: "shouldn't the app
+// always read from the repo?"). After that the repo is the source: the ride page reads it, and the full local
+// recording is removed once it's KEEP_SYNCED_DAYS old, so a stale copy can't hide a fix made in the repo.
+export const KEEP_SYNCED_DAYS = 3;
+
+/** Where the ride page reads a ride from, in order: unsynced (or demo / interrupted) = this device first, else the repo. */
+export function rideSources(local) {
+  const mine = local && (!local.synced || local.demo || local.status !== 'done');
+  return mine ? ['local', 'cache', 'remote'] : ['remote', 'cache', 'local'];
+}
+
+/** Local ride ids (keys) safe to drop: done, synced, in the repo's index and older than KEEP_SYNCED_DAYS. */
+export function syncedToPrune(list, remoteIds, now = Date.now(), days = KEEP_SYNCED_DAYS) {
+  const inRepo = new Set(remoteIds);
+  return list.filter((r) => r.status === 'done' && r.synced && !r.demo && r.summary?.id && inRepo.has(r.summary.id)
+    && now - (Date.parse(r.summary.start) || r.id) > days * 864e5).map((r) => r.id);
+}
+
 export class GitHubSync {
   // token: a string (pasted fine-grained token) or async (force) => string (GitHub sign-in, refreshes itself)
   constructor({ token, repo = DEFAULT_REPO, branch = 'main', fetchImpl } = {}) {
