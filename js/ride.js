@@ -651,7 +651,9 @@ export function drawHrTrace(ctx, samples, xOf, W, H, pad, dpr) {
   if (!sm.some((h) => h > 0)) return;
   let lo = 80, hi = 190;
   for (const h of sm) { if (!h) continue; if (h < lo + 5) lo = h - 5; if (h > hi - 5) hi = h + 5; }
-  const Y = (h) => H - pad - ((h - lo) / (hi - lo)) * (H - pad * 2);
+  // HR keeps to the top half of the chart so it doesn't sit on the power line.
+  const bottom = H / 2;
+  const Y = (h) => bottom - ((h - lo) / (hi - lo)) * (bottom - pad);
   ctx.save();
   ctx.strokeStyle = HR_LINE; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
   let pen = false;
