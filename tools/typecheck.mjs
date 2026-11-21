@@ -1,4 +1,4 @@
-// npm run typecheck: TypeScript over js/ (tsconfig.json), files with // @ts-check only.
+// npm run typecheck: TypeScript over every file in js/ (tsconfig.json, checkJs).
 //
 // Every relative import in js/ carries the build stamp (`./zones.js?v=202611102147`, see tools/stamp.mjs), and
 // TypeScript can't resolve a specifier with a query string (`paths` never applies to relative imports). So this
@@ -35,8 +35,7 @@ const r = spawnSync(tsc, ['-p', out, '--pretty', 'false', ...process.argv.slice(
 const text = `${r.stdout || ''}${r.stderr || ''}`.split(out + path.sep).join('').trim();
 if (text) console.log(text);
 const errors = (text.match(/error TS\d+/g) || []).length;
-const checked = fs.readdirSync(path.join(root, 'js'), { recursive: true })
-  .filter((f) => f.endsWith('.js') && /^\s*\/\/ @ts-check/m.test(fs.readFileSync(path.join(root, 'js', f), 'utf8').slice(0, 2000)));
-console.log(r.status === 0 ? `typecheck: ${checked.length} files with @ts-check, no errors`
+const checked = fs.readdirSync(path.join(root, 'js'), { recursive: true }).filter((f) => f.endsWith('.js')); // checkJs: all of them
+console.log(r.status === 0 ? `typecheck: ${checked.length} files checked, no errors`
   : `typecheck: ${errors} error(s)`);
 process.exit(r.status ?? 1);
