@@ -110,7 +110,19 @@
  * @property {string[]} [tags]
  * @property {WorkoutStep[]} steps
  * @property {string} [updatedAt] Mine workouts: newest wins.
+ * @property {string} [basedOn] Mine workouts made with Edit a copy: the coach workout's id.
  * @property {boolean} [imported] Imported .zwo (local only).
+ * @property {ClimbProfile} [profile] Real climbs (tools/climb.mjs): the road the steps are cut from.
+ */
+
+/**
+ * @typedef {object} ClimbProfile A real climb's road (js/engine/climb.js re-cuts it at the rider's detail level).
+ * @property {number[]} elev Elevation every `every` metres.
+ * @property {number} every
+ * @property {number} length Metres.
+ * @property {number} [detail] The climb's default detail level.
+ * @property {string} [source]
+ * @property {WorkoutStep[]} [lead] Steps before the climb (warm-up roll), left out of previews.
  */
 
 /** @typedef {{ i: number, of: number }} Rep Which rep of a repeat block a segment is. */

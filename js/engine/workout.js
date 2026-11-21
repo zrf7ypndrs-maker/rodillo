@@ -245,8 +245,7 @@ const keep = (s) => s.replace(/ /g, '\u00a0'); // one phrase never wraps inside;
  *  "3 x 9 min at 206/250 W" (over-unders), "60 min at 152 W, 3 x 5 min at 178 W" (Zone 2 ride with pickups).
  *  Work blocks = runs of steady steps at Z3+ (76%+ FTP), so an over-under is one block; the blocks holding the
  *  top power are the main set; a gap more than 3x the shortest gap starts a new set. When over half the ride is
- *  steady Zone 2 (56-75%), that leads. Empty for tests, slope sessions and rides with no main set. */
-/**
+ *  steady Zone 2 (56-75%), that leads. Empty for tests, slope sessions and rides with no main set.
  * @param {Workout} workout
  * @param {number} ftp
  * @returns {string}

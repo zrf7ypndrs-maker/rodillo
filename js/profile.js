@@ -1,3 +1,4 @@
+// @ts-check
 // Workout profiles and the meta line, shared by the Workouts library (js/library.js), Today and Calendar (js/today.js),
 // the builder (js/builder.js), the ride page and, for ramp colors and the road's minimum height, the ride screen
 // (js/ride.js). Moved out of js/app.js Nov 20 (code-health plan step 4) with no change in behavior.
@@ -12,9 +13,18 @@ import { flatten, totalDuration, estimateTSS, mainSet, isTrack, track } from './
 import { ZONES } from './zones.js?v=202611102147';
 import { fmtTime, fmtDist } from './ridepage.js?v=202611102147';
 import { esc } from './ui.js?v=202611102147';
+/** @typedef {import('./types.js').Workout} Workout */
+/** @typedef {import('./types.js').Segment} Segment */
+/** @typedef {import('./types.js').Track} Track */
+/** @typedef {import('./types.js').ProfileLook} ProfileLook */
+/** @typedef {import('./types.js').ZoneHex} ZoneHex */
 
 /** A ramp as hard color stops [[t 0..1, hex], ...]: each stretch in the zone its target is in at that moment
- *  (UX roadmap item 7: charts show a ramp's zones along it, the live card and current row its zone right now). */
+ *  (UX roadmap item 7: charts show a ramp's zones along it, the live card and current row its zone right now).
+ * @param {number} from
+ * @param {number} to
+ * @param {ZoneHex} zoneHex
+ */
 export function rampStops(from, to, zoneHex) {
   const cuts = ZONES.slice(0, 6).map((z) => z.max).filter((b) => (b - from) * (b - to) < 0).map((b) => (b - from) / (to - from)).sort((a, b) => a - b);
   const edges = [0, ...cuts, 1], out = [];
@@ -26,14 +36,23 @@ export function rampStops(from, to, zoneHex) {
 }
 let rampN = 0;
 
-/** Profile previews of a real climb leave out its warm-up (lead steps): the chart is the climb (Nov 11, Agustín). */
+/**
+ * Profile previews of a real climb leave out its warm-up (lead steps): the chart is the climb (Nov 11, Agustín).
+ * @param {Workout | null | undefined} w
+ */
 export const previewOf = (w) => (w?.profile?.lead?.length ? { ...w, steps: w.steps.slice(w.profile.lead.length) } : w);
 
 // Elevation profiles are at least this tall in metres, so a flat ride looks flat instead of filling the chart.
 export const ELEV_MIN = 60;
 export const ascentText = (m) => `+${Math.round(m / 5) * 5} m`;
 
-/** Slope-only workouts: elevation over distance, each stretch filled with its grade color, an ink line on top. */
+/**
+ * Slope-only workouts: elevation over distance, each stretch filled with its grade color, an ink line on top.
+ * @param {Segment[]} segs
+ * @param {number} width
+ * @param {number} height
+ * @param {ProfileLook} look
+ */
 export function trackSvg(segs, width, height, look) {
   const tr = track(segs), rng = Math.max(tr.hi - tr.lo, ELEV_MIN);
   const top = height * 0.06, floor = height * 0.14; // floor: the lowest stretch still shows a band (and stays tappable)
@@ -48,6 +67,12 @@ export function trackSvg(segs, width, height, look) {
   return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
 }
 
+/**
+ * @param {Workout} w
+ * @param {ProfileLook} look
+ * @param {number} [width]
+ * @param {number} [height]
+ */
 export function profileSvg(w, look, width = 340, height = 54) {
   w = previewOf(w);
   const segs = flatten(w, look.ftp);
@@ -75,7 +100,13 @@ export function profileSvg(w, look, width = 340, height = 54) {
   return `<svg class="profile" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${out}</svg>`;
 }
 
+/**
+ * @param {Workout} w
+ */
 export const isSim = (w) => flatten(w).some((s) => s.kind === 'sim');
+/**
+ * @param {Workout} w
+ */
 export function woMeta(w) {
   const segs = flatten(w);
   const dist = segs.filter((x) => x.dist).reduce((a, x) => a + x.dist, 0);
@@ -88,10 +119,18 @@ export function woMeta(w) {
   return `${n(mins)} min${isSim(w) ? '' : ` &middot; TSS ${n(`~${tss}`)}`}`;
 }
 
-/** The main set in one phrase at the rider's FTP (`mainSet()` in js/engine/workout.js). */
+/**
+ * The main set in one phrase at the rider's FTP (`mainSet()` in js/engine/workout.js).
+ * @param {Workout} w
+ * @param {number} ftp
+ */
 export const workSummary = (w, ftp) => mainSet(w, ftp);
 
-/** What one interval asks for, for the profile readout: "216 W", "120-180 W", "7% grade". */
+/**
+ * What one interval asks for, for the profile readout: "216 W", "120-180 W", "7% grade".
+ * @param {Segment} g
+ * @param {number} ftp
+ */
 export function tipTarget(g, ftp) {
   if (g.kind === 'sim') return g.free ? 'Free ride' : `${+(g.grade * 100).toFixed(1)}% grade`;
   const a = Math.round(g.from * ftp), b = Math.round(g.to * ftp);
@@ -104,14 +143,25 @@ export function riseHtml(p) {
   return m ? ` <span>${m > 0 ? '+' : '&minus;'}${Math.abs(m)} m</span>` : '';
 }
 
-/** Which stretch a finger at `f` across the chart (0 left, 1 right) is on: anywhere in its column counts, -1 for none. */
+/**
+ * Which stretch a finger at `f` across the chart (0 left, 1 right) is on: anywhere in its column counts, -1 for none.
+ * @param {number} f Pointer position across the chart, 0..1.
+ * @param {Segment[]} segs
+ * @param {Track | null} tr
+ */
 export function profileHit(f, segs, tr) {
   const T = segs[segs.length - 1].end;
   f = Math.min(Math.max(f, 0), 0.9999);
   return tr ? tr.parts.findIndex((p) => f * tr.D >= p.d0 && f * tr.D < p.d1) : segs.findIndex((g) => f * T >= g.start && f * T < g.end);
 }
 
-/** The readout over stretch i: its label and rep, what it asks for (+ % FTP, + height on a road), its length and when. */
+/**
+ * The readout over stretch i: its label and rep, what it asks for (+ % FTP, + height on a road), its length and when.
+ * @param {Segment[]} segs
+ * @param {number} i
+ * @param {number} ftp
+ * @param {Track | null} tr
+ */
 export function profileTip(segs, i, ftp, tr) {
   const g = segs[i];
   const pct = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * 100)}%` : `${Math.round(g.from * 100)}-${Math.round(g.to * 100)}%`) + ' FTP' : '';
@@ -123,12 +173,22 @@ export function profileTip(segs, i, ftp, tr) {
         <div class="pt-time">${len}${cad}<br><span>${fmtTime(g.start)} to ${fmtTime(g.end)}</span></div>`;
 }
 
-/** The middle of stretch i across the chart (0 left, 1 right): where the readout centres. */
+/**
+ * The middle of stretch i across the chart (0 left, 1 right): where the readout centres.
+ * @param {Segment[]} segs
+ * @param {number} i
+ * @param {Track | null} tr
+ */
 export const profileMid = (segs, i, tr) => (tr ? (tr.parts[i].d0 + tr.parts[i].d1) / 2 / tr.D : (segs[i].start + segs[i].end) / 2 / segs[segs.length - 1].end);
 /** The readout's centre (px) over `mid`, kept inside a chart `width` px wide; `half` = half the readout's width. */
 export const tipLeft = (mid, half, width) => Math.min(Math.max(mid, half), width - half);
 
-/** Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time. */
+/**
+ * Hover (or tap on the phone) on a workout profile (today hero, calendar day, open library row): highlight the interval under the pointer and show its watts and time.
+ * @param {HTMLElement} box
+ * @param {Workout} w
+ * @param {ProfileLook} look
+ */
 export function bindProfileHover(box, w, look) {
   if (!box) return;
   w = previewOf(w); // same steps as the chart it reads
@@ -156,7 +216,7 @@ export function bindProfileHover(box, w, look) {
     if (i < 0) return hide();
     if (i !== cur) {
       cur = i;
-      svg.querySelectorAll('[data-i]').forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
+      /** @type {NodeListOf<SVGElement>} */ (svg.querySelectorAll('[data-i]')).forEach((el) => el.classList.toggle('on', +el.dataset.i === i));
       tip.innerHTML = profileTip(segs, i, ftp, tr);
       box.classList.add('hov');
     }

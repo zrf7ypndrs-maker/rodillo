@@ -1,3 +1,4 @@
+// @ts-check
 // Workouts Agustín builds in the app (workout builder). Stored in rodillo-data `workouts/mine.json`
 // so the Mac and the phone share them, and the coach can schedule them by id.
 //
@@ -5,7 +6,10 @@
 // Each device keeps changes it hasn't written yet in localStorage `rodillo.minePending`:
 // { id: { w: workout | null (deleted), at: isoTime } }. Newest change wins, per workout.
 
+/** @typedef {import('./types.js').Workout} Workout */
+/** @typedef {{ version: number, workouts: Workout[], deleted: Record<string, string> }} MineDoc workouts/mine.json */
 export const MINE_PATH = 'workouts/mine.json';
+/** @returns {MineDoc} */
 export const emptyMine = () => ({ version: 1, workouts: [], deleted: {} });
 
 const stampOf = (doc, id) => {
@@ -13,7 +17,12 @@ const stampOf = (doc, id) => {
   return [w?.updatedAt || '', doc.deleted?.[id] || ''].sort().at(-1);
 };
 
-/** Writes pending changes into doc (in place) unless the file has a newer change for that workout. Returns the ids handled. */
+/**
+ * Writes pending changes into doc (in place) unless the file has a newer change for that workout. Returns the ids handled.
+ * @param {MineDoc} doc
+ * @param {Record<string, { w: Workout | null, at: string }>} pending
+ * @returns {string[]}
+ */
 export function applyMinePending(doc, pending) {
   doc.workouts ||= [];
   doc.deleted ||= {};
@@ -28,7 +37,12 @@ export function applyMinePending(doc, pending) {
   return handled;
 }
 
-/** What this device should show: the file plus its own unsent changes. */
+/**
+ * What this device should show: the file plus its own unsent changes.
+ * @param {MineDoc | null | undefined} doc
+ * @param {Record<string, { w: Workout | null, at: string }>} [pending]
+ * @returns {Workout[]}
+ */
 export function mineView(doc, pending = {}) {
   const d = JSON.parse(JSON.stringify(doc || emptyMine()));
   applyMinePending(d, pending);
@@ -56,7 +70,10 @@ export function fmtDur(sec) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`;
 }
 
-/** Problems that would stop the workout from riding. Empty array = fine. */
+/**
+ * Problems that would stop the workout from riding. Empty array = fine.
+ * @param {Workout} w
+ */
 export function workoutProblems(w) {
   const out = [];
   if (!String(w.name || '').trim()) out.push('Give it a name.');
@@ -81,7 +98,11 @@ export function workoutProblems(w) {
   return out;
 }
 
-/** Drops empty optional fields and builder-only state; numbers become numbers. */
+/**
+ * Drops empty optional fields and builder-only state; numbers become numbers.
+ * @param {Workout} w
+ * @returns {Workout}
+ */
 export function cleanWorkout(w) {
   const step = (s) => {
     if (s.repeat != null) return { repeat: +s.repeat, steps: s.steps.map(step) };

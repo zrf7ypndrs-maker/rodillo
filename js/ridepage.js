@@ -1,3 +1,4 @@
+// @ts-check
 // Ride page: one completed ride with stacked charts on one time axis, its intervals,
 // time in zones and best powers. Pure functions (no DOM reads): app.js loads the ride
 // document, measures the chart width, binds the pointer and passes the theme colors in.
@@ -10,6 +11,11 @@ import { ZONES, zoneRange, WORK_FTP } from './zones.js?v=202611102147';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** @typedef {import('./types.js').RideDoc} RideDoc */
+/** @typedef {import('./types.js').RideSummary} RideSummary */
+/** @typedef {import('./types.js').RideRow} RideRow */
+/** @typedef {import('./types.js').Segment} Segment */
+/** @typedef {import('./types.js').Sample} Sample */
 export const fmtTime = (s) => {
   s = Math.max(0, Math.round(s));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
@@ -48,6 +54,8 @@ export const segName = (s) => `${s.label || 'Interval'}${s.rep ? ` ${repText(s.r
  * i is the workout segment index (the same one doc.intervals uses). Timing comes from the `seg`
  * stream (rides since Nov 11, and every ride still on this device); older synced rides fall back
  * to the workout's own timing. wsegs = flatten(workout) when the workout is still in the library.
+ * @param {RideDoc} doc
+ * @param {Segment[] | null} [wsegs]
  */
 export function rideSegs(doc, wsegs = null) {
   const n = doc.streams?.power?.length || doc.streams?.hr?.length || doc.summary?.durSec || 0;
@@ -88,7 +96,10 @@ export function segColor(s, ftp, zoneHex, gradeHex) {
   return zoneHex(0);
 }
 
-/** Per-interval numbers straight from the streams (max HR, speed) for the table and the selection line. */
+/**
+ * Per-interval numbers straight from the streams (max HR, speed) for the table and the selection line.
+ * @param {RideDoc} doc
+ */
 export function segStats(doc, s) {
   const S = doc.streams, sl = (k) => (S[k] || []).slice(s.start, s.end);
   const hr = sl('hr').filter(Boolean);
@@ -109,7 +120,10 @@ function modeOf(doc) {
   return erg && slope ? 'ERG + slope' : erg ? 'ERG' : 'Slope';
 }
 
-/** The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel } */
+/**
+ * The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel }
+ * @param {RideDoc} doc
+ */
 export function pageHtml(doc, opts) {
   const st = doc.summary;
   const d = new Date(st.start || st.id);
@@ -199,6 +213,7 @@ const shortDay = (id) => {
 /**
  * { h: "Done. 4 of 5 reps on target.", note: "Effort lowered to 95% on 2 reps." | '' }.
  * On target = 95 to 105% of the planned watts (effort changes don't move the target, see stats.js).
+ * @param {RideDoc} doc
  */
 export function doneHeadline(doc) {
   let work = (doc.intervals || []).filter((x) => x.work && x.pct);
@@ -217,6 +232,8 @@ export function doneHeadline(doc) {
 /**
  * The last ride of the same workout before this one (rows = training rows, newest first), or null.
  * Demo rides and the ride itself don't count.
+ * @param {RideSummary} st
+ * @param {RideRow[]} rows
  */
 export function lastSameWorkout(st, rows) {
   if (!st?.workoutId) return null;
@@ -228,6 +245,8 @@ export function lastSameWorkout(st, rows) {
 /**
  * "vs last time" pieces for a repeat workout: [{ k, now, was, better }]. On target = average % of
  * target over the work reps. Avg HR only when both rides ran at the same FTP (same watts).
+ * @param {RideSummary} st
+ * @param {RideSummary | null | undefined} prev
  */
 export function vsLastTime(st, prev) {
   if (!prev) return null;
@@ -271,7 +290,10 @@ export function doneBarHtml(done) {
     </section>`;
 }
 
-/** Which lanes this ride has data for, top to bottom. */
+/**
+ * Which lanes this ride has data for, top to bottom.
+ * @param {RideDoc} doc
+ */
 export function laneKeys(doc) {
   const S = doc.streams || {}, out = [];
   if (has(S.power)) out.push('power');
@@ -293,6 +315,7 @@ const LANES = {
  * The chart: interval strip, then one lane per stream on one time axis.
  * o: { width, phone, ftp, segs, sel, tok: { ink, rule, faint, ftp, hr, info, infoLine, band, dim, sheet }, zoneHex, gradeHex }
  * Returns { svg (inner markup), height, geo } where geo maps time to x and values to y for the crosshair.
+ * @param {RideDoc} doc
  */
 export function chartSvg(doc, o) {
   const S = doc.streams, keys = laneKeys(doc);
@@ -393,7 +416,10 @@ export function chartSvg(doc, o) {
   return { svg: out, width: W, height: H, geo: { T, PW, X, lanes, yOf, vals: { power: pw, hr, cadence: cad, speed: sp }, top } };
 }
 
-/** The crosshair tag's contents at second t. */
+/**
+ * The crosshair tag's contents at second t.
+ * @param {RideDoc} doc
+ */
 export function tipHtml(doc, segs, t) {
   const S = doc.streams, seg = segs.find((s) => t >= s.start && t < s.end);
   const p = S.power ? Math.round(mean(S.power.slice(Math.max(0, t - 2), t + 1))) : null;
@@ -406,7 +432,10 @@ export function tipHtml(doc, segs, t) {
     ${p != null ? `<div class="pt-tgt">${p} W${tgt}</div>` : ''}${row ? `<div class="pt-row">${row}</div>` : ''}`;
 }
 
-/** The line above the chart while an interval is selected. */
+/**
+ * The line above the chart while an interval is selected.
+ * @param {RideDoc} doc
+ */
 export function selHtml(doc, s) {
   const x = s.res || {}, ss = segStats(doc, s);
   const avgP = x.avgP ?? ss.avgP;
@@ -417,7 +446,11 @@ export function selHtml(doc, s) {
     <button class="ghost small" data-rd="clear">Show all</button>`;
 }
 
-/** Turn a ride document back into 1 Hz samples, so a ride that's only in rodillo-data can still be exported as .FIT. */
+/**
+ * Turn a ride document back into 1 Hz samples, so a ride that's only in rodillo-data can still be exported as .FIT.
+ * @param {RideDoc} doc
+ * @returns {Sample[]}
+ */
 export function samplesFromDoc(doc) {
   const S = doc.streams || {}, n = Math.max(0, ...['power', 'hr', 'cadence', 'speed'].map((k) => S[k]?.length || 0));
   const t0 = Date.parse(doc.summary.start);

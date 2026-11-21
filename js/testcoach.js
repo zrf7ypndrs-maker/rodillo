@@ -1,3 +1,4 @@
+// @ts-check
 // Coach for the ramp test: what to say at each test step and when the test ends.
 // Pure: app.js shows the result as a full-screen takeover ({ line, big, sub }) and/or a chart message (msg).
 
@@ -13,7 +14,11 @@ const HARD_LINES = [
 /** "Great work{name}" helper: ", Agustín" or "" when no name is set. */
 export const withName = (name) => (String(name || '').trim() ? `, ${String(name).trim()}` : '');
 
-/** Best average power over `sec` seconds (1 Hz samples). */
+/**
+ * Best average power over `sec` seconds (1 Hz samples).
+ * @param {number[]} power
+ * @param {number} [sec]
+ */
 export function bestAvg(power, sec = 60) {
   if (power.length < sec) return power.length ? Math.round(power.reduce((a, b) => a + b, 0) / power.length) : 0;
   let sum = 0, best = 0;
@@ -31,6 +36,7 @@ export function bestAvg(power, sec = 60) {
  * prevBest = best minute of the last ramp test, or null.
  * Returns { takeover: { line, big, sub } | null, msg: string | null, finish: string | null }
  * (finish = the 15-seconds-left cue for this step).
+ * @param {{ n: number, watts: number, ftp: number, prevBest?: number | null, name?: string, st: { ftpCrossed?: boolean, prevPassed?: boolean, warned?: boolean } }} o
  */
 export function stepCue({ n, watts, ftp, prevBest = null, name = '', st }) {
   const pct = watts / ftp, nm = withName(name);
@@ -63,7 +69,10 @@ export function stepCue({ n, watts, ftp, prevBest = null, name = '', st }) {
   return out;
 }
 
-/** What the coach says when the test ends: congratulations and the FTP it gives. */
+/**
+ * What the coach says when the test ends: congratulations and the FTP it gives.
+ * @param {{ best60: number, ftp: number, name?: string }} o
+ */
 export function resultCue({ best60, ftp, name = '' }) {
   const nm = withName(name);
   const newFtp = Math.round(best60 * 0.75);
