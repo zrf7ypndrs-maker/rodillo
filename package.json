@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/run.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/sync-errors.mjs && node test/import.mjs && node test/ridepage.mjs && node test/training.mjs && node test/dates.mjs && node test/library.mjs && node test/today.mjs && node test/controls.mjs && node test/controls-dom.mjs && node test/ride.mjs && node test/ride-dom.mjs",
+    "test": "node test/run.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/sync-errors.mjs && node test/import.mjs && node test/ridepage.mjs && node test/training.mjs && node test/dates.mjs && node test/library.mjs && node test/today.mjs && node test/controls.mjs && node test/controls-dom.mjs && node test/ride.mjs && node test/ride-dom.mjs && node test/ridephone.mjs && node test/ridephone-dom.mjs",
     "lint": "eslint .",
     "coverage": "c8 --check-coverage --lines 90 --branches 78 --functions 85 --include 'js/**' --exclude js/app.js --exclude js/builder.js --exclude js/garage.js --exclude js/ui.js --exclude js/settings.js --reporter text-summary npm test",
     "smoke": "node test/smoke.mjs",
