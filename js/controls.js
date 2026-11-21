@@ -1,3 +1,4 @@
+// @ts-check
 // Controller and keyboard: what each Zwift Ride button and key does on each screen.
 // First half, pure (tested in test/controls.mjs): the screen from the app's state (screenOf), a button or key to a
 // verb, and the verb to the action the dispatch table runs (actionFor). Second half, the DOM part (tested with a fake
@@ -10,9 +11,21 @@ import { shiftStyleFor } from './engine/garage.js?v=202611102147';
 import { builderOpen, closeBuilder } from './builder.js?v=202611102147';
 import { logMsg } from './ble/base.js?v=202611102147';
 import { $, $$, toast } from './ui.js?v=202611102147';
+/**
+ * @typedef {object} ControlState
+ * @property {boolean} [launching]
+ * @property {boolean} [modal]
+ * @property {boolean} [builder]
+ * @property {string} [screen]
+ * @property {boolean} [session]
+ * @property {boolean} [erg]
+ * @property {boolean} [panel]
+ */
 
 /** What decides the controls, read from the app at the press: { launching, modal, builder, screen ('home' | 'ride' |
- *  'ridepage'), session (a ride exists), erg (the ride is in ERG mode), panel (a panel or Connections is open) }. */
+ *  'ridepage'), session (a ride exists), erg (the ride is in ERG mode), panel (a panel or Connections is open) }.
+ * @param {ControlState} st
+ */
 export function screenOf(st) {
   if (st.launching) return 'busy'; // the Start / Free ride launch animation is playing
   if (st.modal) return 'modal';
@@ -135,8 +148,11 @@ export const keyAction = (st, key, repeat = false) => actionFor(screenOf(st), ke
 // ---- the DOM part: runs the actions (dispatch table DO), Ride buttons, hold to confirm, the keyboard listener and
 // the home focus ring. Moved out of js/app.js Nov 18 (code-health plan step 4) with no change in behavior.
 // App state and app.js hooks come through initControls(); never import app.js from here.
-let app, modalOpen, devPopOpen, setDevPop, setTab, TABS, startWorkout, rideAction, modalAction, renderRide, tooShort, endSession;
+/** @type {import('./types.js').AppState} */
+let app;
+let modalOpen, devPopOpen, setDevPop, setTab, TABS, startWorkout, rideAction, modalAction, renderRide, tooShort, endSession;
 
+/** @param {import('./types.js').ControlsDeps} deps */
 export function initControls(deps) {
   ({ app, modalOpen, devPopOpen, setDevPop, setTab, TABS, startWorkout, rideAction, modalAction, renderRide, tooShort, endSession } = deps);
   // a key released while the window is in the background never sends keyup
@@ -144,7 +160,7 @@ export function initControls(deps) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) holdEnd(); });
 
   document.addEventListener('keydown', (e) => {
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(/** @type {HTMLElement} */ (e.target).tagName)) { if (e.key === 'Escape' && builderOpen()) closeBuilder(); return; }
     if (builderOpen() && e.key !== 'Escape') return; // Space/Enter press the builder's own buttons
     if (app.demo && app.trainer && (e.key === '+' || e.key === '=' || e.key === '-')) {
       app.trainer.riderPower = Math.max(0, app.trainer.riderPower + (e.key === '-' ? -20 : 20));
