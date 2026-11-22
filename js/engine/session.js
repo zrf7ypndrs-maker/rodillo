@@ -267,8 +267,30 @@ export class Session extends Emitter {
   get powerShown() { return this.powerAvg(POWER_SHOW_S); }
   get ratio() { return this.gb.ratio; }
 
-  /** Called ~4x per second with dt seconds. */
+  /** Called ~4x per second with dt seconds. One engine tick, in order: read the sensors, auto start / pause /
+   *  resume, then (riding only) the segment and its target, the trainer (ERG, slope in the trainer, or slope with
+   *  the trim), height, timed messages and the 1 Hz sample. */
   tick(dt) {
+    const { power, cadence, trainerV, hr } = this._sensors(dt);
+    this._autoPause(dt, power, cadence);
+    if (this.paused || this.finished) {
+      this.emit('tick');
+      return;
+    }
+    this.elapsed += dt;
+    this._nextSegment();
+    const ergTarget = this._targets(dt);
+    if (ergTarget !== null) this._ergStep(dt, ergTarget, power, cadence, trainerV);
+    else if (this.s.trainerShifting !== 'app' && this.trainer.zwiftShifting) this._zwiftStep(dt, power, cadence);
+    else this._slopeStep(dt, power, cadence, trainerV);
+    this._height(dt);
+    this._messages();
+    this._record(dt, power, cadence, hr);
+    this.emit('tick');
+  }
+
+  /** This tick's readings (trainer, HR strap); keeps the power and cadence buffers and learns the real gear. */
+  _sensors(dt) {
     const td = this.trainer.data || {};
     const power = Math.max(0, td.power || 0);
     const cadence = td.cadence || 0;
@@ -284,33 +306,37 @@ export class Session extends Emitter {
     while (this.cadBuf.length > Math.round(3 / dt)) this.cadBuf.shift();
     this._dt = dt;
     while (this.powerBuf.length > Math.round(POWER_BUF_S / dt)) this.powerBuf.shift();
+    return { power, cadence, trainerV, hr };
+  }
 
+  /** Auto start on the first second of pedalling, auto resume after an auto pause, auto pause when idle. */
+  _autoPause(dt, power, cadence) {
     if (this._noPauseFor > 0) this._noPauseFor -= dt;
-    // ---- auto start / pause / resume ----
-    if (!this.finished) {
-      const pedalling = cadence > 15 || power > 15;
-      this._activeFor = pedalling ? (this._activeFor || 0) + dt : 0;
-      if (!this.started && this._activeFor >= 1) { this.start(); this.emit('autostart'); }
-      else if (this.paused && this.autoPaused && this._activeFor >= 1) { this.paused = false; this.autoPaused = false; this.emit('autoresume'); }
-      else if (!this.paused && this.s.autoPauseSec > 0) {
-        const idle = this.mode === 'erg' ? power < 5 && cadence < 5 : this.bike.v < 0.3 && cadence < 5;
-        // no auto-pause in the hard part of a test or for 30 s after it ends (the rider is spent; the result is on screen)
-        const hold = (this.inTest && this._testHard) || this._noPauseFor > 0;
-        this._idleFor = idle && !hold ? (this._idleFor || 0) + dt : 0;
-        if (this._idleFor >= this.s.autoPauseSec) {
-          this.paused = true; this.autoPaused = true; this._idleFor = 0;
-          this.emit('autopause');
-        }
+    if (this.finished) return;
+    const pedalling = cadence > 15 || power > 15;
+    this._activeFor = pedalling ? (this._activeFor || 0) + dt : 0;
+    if (!this.started && this._activeFor >= 1) { this.start(); this.emit('autostart'); }
+    else if (this.paused && this.autoPaused && this._activeFor >= 1) { this.paused = false; this.autoPaused = false; this.emit('autoresume'); }
+    else if (!this.paused && this.s.autoPauseSec > 0) {
+      const idle = this.mode === 'erg' ? power < 5 && cadence < 5 : this.bike.v < 0.3 && cadence < 5;
+      // no auto-pause in the hard part of a test or for 30 s after it ends (the rider is spent; the result is on screen)
+      const hold = (this.inTest && this._testHard) || this._noPauseFor > 0;
+      this._idleFor = idle && !hold ? (this._idleFor || 0) + dt : 0;
+      if (this._idleFor >= this.s.autoPauseSec) {
+        this.paused = true; this.autoPaused = true; this._idleFor = 0;
+        this.emit('autopause');
       }
     }
-    if (this.paused || this.finished) {
-      this.emit('tick');
-      return;
-    }
-    this.elapsed += dt;
+  }
 
-    // ---- what are we riding right now? ----
+  /** Moves past every segment already done (an open-ended test's last step adds the next one first). */
+  _nextSegment() {
     while (this.seg && this.segProgress >= 1) { this._extendTest(); this._advance(); }
+  }
+
+  /** What the current segment asks for: sets planTarget, moves the ridden grade toward the target grade (at most
+   *  1 %/s, so the trainer doesn't lurch) and returns the ERG watts, or null when riding a slope. */
+  _targets(dt) {
     const seg = this.seg;
     let targetGrade = this.gradeOffset;
     let ergTarget = null;
@@ -327,101 +353,113 @@ export class Session extends Emitter {
     }
     targetGrade *= targetGrade > 0 ? this.s.gradeScale : 1;
 
-    // smooth grade changes (max 1 %/s) so the trainer doesn't lurch
     const maxStep = 0.01 * dt;
     this.grade += Math.max(-maxStep, Math.min(maxStep, targetGrade - this.grade));
+    return ergTarget;
+  }
 
-    if (ergTarget !== null) {
-      this.mode = 'erg';
-      // spiral-of-death guard: ease off if cadence collapses
-      if (this.s.ergCadenceGuard) {
-        if (cadence < 40 && power > 0) this._lowCad += dt; else if (cadence > 60) { this._lowCad = 0; this._guard = false; }
-        if (this._lowCad > 3) this._guard = true;
-      }
-      this.target = Math.round(this._guard ? ergTarget * 0.6 : ergTarget);
-      this.trainer.setErg(this.target);
-      this._watchTest(dt, ergTarget, power, cadence);
-      // speed and distance: the trainer's own speed (matches the FR970 with the KICKR paired);
-      // physics only when the trainer reports none (dropout, or coasting to a stop)
-      if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);
-      else this.bike.stepPower(dt, power, 0);
-      this.maxed = false;
-    } else if (this.s.trainerShifting !== 'app' && this.trainer.zwiftShifting) {
-      // Zwift protocol (Nov 11): send the road grade and the virtual gear; the trainer measures its real gear and
-      // sets the brake itself, many times a second. No feedforward, no trim, nothing to wind up. The ratio is scaled
-      // to the wheel the trainer assumes (700c) so its virtual speed matches this bike's.
-      this.mode = 'sim';
-      this.target = null;
-      this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
-      this.zwiftShifting = true;
-      this.maxed = false;
-      this.lastSentGrade = this.grade;
-      this.trainer.setZwiftSim({
-        grade: this.grade,
-        gearRatio: this.ratio * (this.s.wheelCirc / ZP_WHEEL),
-        riderKg: this.s.riderKg, bikeKg: this.s.bikeKg,
-      });
-    } else {
-      this.mode = 'sim';
-      this.target = null;
-      this.zwiftShifting = false;
-      const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
-      const k = this.bike.dev(this.ratio) / this.devEst.dev;
-      const vr = Math.max(trainerV, 2);
-      let gs = this.s.minSendGrade;
-      if (res.engaged) {
-        // feedforward: the grade that makes trainer force x its speed = road force x virtual speed
-        const ff = (k * res.force) / (this.s.trainerMassKg * G);
-        // feedback: slowly trim the grade until measured power matches the virtual demand.
-        // This cancels whatever the trainer adds on its own (built-in drag, different mass).
-        this.cadHist.push(cadence);
-        if (this.cadHist.length > 8) this.cadHist.shift();
-        const cadSteady = this.cadHist.length === 8 && Math.max(...this.cadHist) - Math.min(...this.cadHist) < 6;
-        const demand = res.force * res.v;
-        if (cadSteady && power > 15 && cadence > 30) {
-          const err = demand - power;
-          // Anti-windup (Nov 11, Agustín's 20% test): at the trainer's ceiling more grade can't add power, and at
-          // its floor less grade can't take any away. Trimming further that way only winds the correction up; it
-          // then stayed stuck after he shifted from 32x14 to 32x52, so the trainer stayed maxed in the easiest gear.
-          const raw = ff + this.gOff;
-          const stuck = (raw >= this.s.maxSendGrade && err > 0) || (raw <= this.s.minSendGrade && err < 0);
-          if (!stuck) {
-            this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / TRIM_TAU);
-            this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
-          }
-        }
-        gs = ff + this.gOff;
-      } else this.cadHist = [];
-      this.maxed = gs > this.s.maxSendGrade;
-      gs = Math.max(this.s.minSendGrade, Math.min(this.s.maxSendGrade, gs));
-      this.lastSentGrade = gs;
-      this.trainer.setGrade(gs);
+  /** ERG: the target watts to the trainer (60% while the cadence guard holds), test watch, speed and distance. */
+  _ergStep(dt, ergTarget, power, cadence, trainerV) {
+    this.mode = 'erg';
+    // spiral-of-death guard: ease off if cadence collapses
+    if (this.s.ergCadenceGuard) {
+      if (cadence < 40 && power > 0) this._lowCad += dt; else if (cadence > 60) { this._lowCad = 0; this._guard = false; }
+      if (this._lowCad > 3) this._guard = true;
     }
+    this.target = Math.round(this._guard ? ergTarget * 0.6 : ergTarget);
+    this.trainer.setErg(this.target);
+    this._watchTest(dt, ergTarget, power, cadence);
+    // speed and distance: the trainer's own speed (matches the FR970 with the KICKR paired);
+    // physics only when the trainer reports none (dropout, or coasting to a stop)
+    if (trainerV > 0.3) this.bike.stepTrainer(dt, trainerV);
+    else this.bike.stepPower(dt, power, 0);
+    this.maxed = false;
+  }
+
+  /** Slope with shifting in the trainer (Zwift protocol, Nov 11): send the road grade and the virtual gear; the
+   *  trainer measures its real gear and sets the brake itself, many times a second. No feedforward, no trim,
+   *  nothing to wind up. The ratio is scaled to the wheel the trainer assumes (700c) so its virtual speed matches
+   *  this bike's. */
+  _zwiftStep(dt, power, cadence) {
+    this.mode = 'sim';
+    this.target = null;
+    this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
+    this.zwiftShifting = true;
+    this.maxed = false;
+    this.lastSentGrade = this.grade;
+    this.trainer.setZwiftSim({
+      grade: this.grade,
+      gearRatio: this.ratio * (this.s.wheelCirc / ZP_WHEEL),
+      riderKg: this.s.riderKg, bikeKg: this.s.bikeKg,
+    });
+  }
+
+  /** Slope with shifting in Rodillo (FTMS): the grade that gives the virtual bike's force at the trainer's speed
+   *  (feedforward) plus the slow trim, clamped to the trainer's range. Freewheeling: the trainer's minimum. */
+  _slopeStep(dt, power, cadence, trainerV) {
+    this.mode = 'sim';
+    this.target = null;
+    this.zwiftShifting = false;
+    const res = this.bike.stepSim(dt, power, cadence, this.grade, this.ratio);
+    const k = this.bike.dev(this.ratio) / this.devEst.dev;
+    let gs = this.s.minSendGrade;
+    if (res.engaged) {
+      // feedforward: the grade that makes trainer force x its speed = road force x virtual speed
+      const ff = (k * res.force) / (this.s.trainerMassKg * G);
+      this._trim(dt, ff, res.force * res.v, power, cadence, Math.max(trainerV, 2));
+      gs = ff + this.gOff;
+    } else this.cadHist = [];
+    this.maxed = gs > this.s.maxSendGrade;
+    gs = Math.max(this.s.minSendGrade, Math.min(this.s.maxSendGrade, gs));
+    this.lastSentGrade = gs;
+    this.trainer.setGrade(gs);
+  }
+
+  /** Feedback: slowly trim the grade until measured power matches the virtual demand (W). This cancels whatever
+   *  the trainer adds on its own (built-in drag, different mass). Only at a steady cadence; never past the
+   *  trainer's range (`vr`: the trainer's speed, at least 2 m/s). */
+  _trim(dt, ff, demand, power, cadence, vr) {
+    this.cadHist.push(cadence);
+    if (this.cadHist.length > 8) this.cadHist.shift();
+    const cadSteady = this.cadHist.length === 8 && Math.max(...this.cadHist) - Math.min(...this.cadHist) < 6;
+    if (!(cadSteady && power > 15 && cadence > 30)) return;
+    const err = demand - power;
+    // Anti-windup (Nov 11, Agustín's 20% test): at the trainer's ceiling more grade can't add power, and at
+    // its floor less grade can't take any away. Trimming further that way only winds the correction up; it
+    // then stayed stuck after he shifted from 32x14 to 32x52, so the trainer stayed maxed in the easiest gear.
+    const raw = ff + this.gOff;
+    const stuck = (raw >= this.s.maxSendGrade && err > 0) || (raw <= this.s.minSendGrade && err < 0);
+    if (stuck) return;
+    this.gOff += (err / (this.s.trainerMassKg * G * vr)) * (dt / TRIM_TAU);
+    this.gOff = Math.max(-0.12, Math.min(0.12, this.gOff));
+  }
+
+  /** Height from the ridden grade; "Climbed" counts slope riding only (ride screen tile, UX roadmap item 7). */
+  _height(dt) {
     const dh = this.bike.v * dt * Math.sin(Math.atan(this.grade));
     this.altitude += dh;
-    if (this.mode === 'sim' && dh > 0) this.climbed += dh; // ride screen "Climbed" tile (UX roadmap item 7)
-    this._messages();
+    if (this.mode === 'sim' && dh > 0) this.climbed += dh;
+  }
 
-    // ---- record at 1 Hz ----
+  /** One sample a second of active riding (the FIT file, the ride chart and the per-interval stats). */
+  _record(dt, power, cadence, hr) {
     this._sampleAcc += dt;
-    if (this._sampleAcc >= 1) {
-      this._sampleAcc -= 1;
-      this.samples.push({
-        t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
-        speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
-        grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
-        // planned watts (effort 100%) and the effort multiplier when it isn't 1 (Nov 12: reps are scored against the plan)
-        plan: this.mode === 'erg' && this.planTarget != null ? Math.round(this.planTarget) : undefined,
-        eff: this.mode === 'erg' && this.planTarget != null && this.intensity !== 1 ? this.intensity : undefined,
-        // slope diagnostics (Nov 11): grade actually sent to the trainer and the closed-loop trim, both in %
-        sent: this.mode === 'sim' ? Math.round((this.lastSentGrade ?? 0) * 1000) / 10 : undefined,
-        trim: this.mode === 'sim' && !this.zwiftShifting ? Math.round(this.gOff * 1000) / 10 : undefined,
-        zp: this.mode === 'sim' && this.zwiftShifting ? 1 : undefined, // shifting done by the trainer (Zwift protocol)
-        wt: this.workoutTime, wx: this.chartPos, si: this.segIndex, st: Math.round(this.segElapsed),
-      });
-      this._aggregate(this.samples.at(-1));
-    }
-    this.emit('tick');
+    if (this._sampleAcc < 1) return;
+    this._sampleAcc -= 1;
+    this.samples.push({
+      t: Date.now(), power: Math.round(power), hr: hr ? Math.round(hr) : undefined, cadence: Math.round(cadence),
+      speed: this.bike.v, distance: this.bike.dist, altitude: this.altitude,
+      grade: this.mode === 'sim' ? this.grade * 100 : 0, target: this.target, gear: Math.round(this.ratio * 100) / 100,
+      // planned watts (effort 100%) and the effort multiplier when it isn't 1 (Nov 12: reps are scored against the plan)
+      plan: this.mode === 'erg' && this.planTarget != null ? Math.round(this.planTarget) : undefined,
+      eff: this.mode === 'erg' && this.planTarget != null && this.intensity !== 1 ? this.intensity : undefined,
+      // slope diagnostics (Nov 11): grade actually sent to the trainer and the closed-loop trim, both in %
+      sent: this.mode === 'sim' ? Math.round((this.lastSentGrade ?? 0) * 1000) / 10 : undefined,
+      trim: this.mode === 'sim' && !this.zwiftShifting ? Math.round(this.gOff * 1000) / 10 : undefined,
+      zp: this.mode === 'sim' && this.zwiftShifting ? 1 : undefined, // shifting done by the trainer (Zwift protocol)
+      wt: this.workoutTime, wx: this.chartPos, si: this.segIndex, st: Math.round(this.segElapsed),
+    });
+    this._aggregate(this.samples.at(-1));
   }
 
   /** Emits 'message' (text) for each timed message the rider just reached. Skipped steps stay silent. */
