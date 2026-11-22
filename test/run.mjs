@@ -533,6 +533,65 @@ test('slope trim stays steady when the trainer answers late', () => {
   assert.ok(lo > 200 && hi < 260, `about the road's ~230 W (${lo}-${hi})`);
 });
 
+test('Session.tick: a trainer with no data yet counts as stopped', () => {
+  const t = new SimTrainer(); t.data = undefined;
+  const s = new Session({ trainer: t, hr: null, settings: {} });
+  let ticks = 0; s.on('tick', () => ticks++);
+  for (let i = 0; i < 20; i++) s.tick(0.25);
+  assert.equal(ticks, 20, 'every tick still emits');
+  assert.ok(!s.started && s.elapsed === 0, 'no auto start');
+  s.start(); s.tick(0.25); s.tick(0.25); s.tick(0.25); s.tick(0.25);
+  assert.equal(s.samples.length, 1);
+  assert.deepEqual([s.samples[0].power, s.samples[0].cadence, s.samples[0].hr], [0, 0, undefined]);
+});
+
+test('Session.tick: a free step rides at 0% plus the rider offset, not its grade', () => {
+  const t = new SimTrainer();
+  const s = new Session({ trainer: t, hr: null, settings: {}, workout: { steps: [{ dur: 600, free: true }] } });
+  s.segs[0].grade = 0.08; // a free step's own grade is never ridden
+  s.start(); s.gradeOffset = 0.02;
+  for (let i = 0; i < 40; i++) { t.step(); s.tick(0.25); }
+  assert.ok(Math.abs(s.grade - 0.02) < 1e-9, `rides the offset (${s.grade})`);
+});
+
+test('slope trim at the trainer floor: a steep descent does not wind the trim down', () => {
+  class Fixed extends SimTrainer { step() { this.data = { power: 200, cadence: 80, speedKmh: (80 / 60) * 5.1 * 3.6 }; } }
+  const run = (minSendGrade) => {
+    const t = new Fixed();
+    const s = new Session({ trainer: t, hr: null, settings: { drivetrain: 'mtb-1x12-sram-32', minSendGrade, gradeTrim: 0.03 } });
+    s.gradeOffset = -0.15; s.start(); s.gb.rear = 0;
+    const at = [];
+    for (let x = 0; x < 120; x += 0.25) { t.step(); s.tick(0.25); if (x === 40 || x === 119.75) at.push(s.gOff); }
+    return { s, at };
+  };
+  const floor = run(-0.10);
+  assert.ok(floor.s.bike.engaged, 'pedalling the easiest gear keeps the drivetrain engaged');
+  assert.equal(floor.s.lastSentGrade, -0.10);
+  assert.ok(floor.at[0] > -0.07 && floor.at[0] === floor.at[1], `once at the floor the trim stops moving (${floor.at})`);
+  const open = run(-0.9);
+  assert.equal(open.at[1], -0.12, 'with room below, the same error trims down to its limit');
+});
+
+test('timed messages on slope steps: {watts} is the aim, or blank without one', () => {
+  const wo = { steps: [
+    { dur: 30, grade: 2, aim: 0.8, messages: [{ at: 1, text: 'Aim {watts} W' }] },
+    { dur: 30, grade: 2, messages: [{ at: 1, text: 'Ride [{watts}]' }] },
+  ] };
+  const t = new SimTrainer();
+  const s = new Session({ trainer: t, hr: null, settings: { ftp: 250 }, workout: wo });
+  const said = []; s.on('message', (m) => said.push(m));
+  s.start();
+  for (let x = 0; x < 40; x += 0.25) { t.step(); s.tick(0.25); }
+  assert.deepEqual(said, ['Aim 200 W', 'Ride []']);
+  // ERG turned off by the rider: an ERG step's {watts} is still its planned watts at the effort
+  const e = new Session({ trainer: t, hr: null, settings: { ftp: 250 }, workout: { steps: [{ dur: 60, power: 0.8, messages: [{ at: 2, text: 'Plan {watts} W' }] }] } });
+  const heard = []; e.on('message', (m) => heard.push(m));
+  e.start(); e.toggleErg(); e.intensity = 1.1;
+  for (let x = 0; x < 4; x += 0.25) { t.step(); e.tick(0.25); }
+  assert.equal(e.target, null);
+  assert.deepEqual(heard, ['Plan 220 W']);
+});
+
 console.log(`\n${passed} tests passed`);
 
 import { Gearbox, DRIVETRAINS, parseTeeth, checkSpec, presetFor, resolveDrivetrain } from '../js/engine/drivetrain.js';
