@@ -572,6 +572,44 @@ test('slope trim at the trainer floor: a steep descent does not wind the trim do
   assert.equal(open.at[1], -0.12, 'with room below, the same error trims down to its limit');
 });
 
+test('Session.tick timing: grade 1 %/s, 3 s cadence window, new segment\'s target on the tick it starts', () => {
+  const t = new SimTrainer();
+  const f = new Session({ trainer: t, hr: null, settings: { autoPauseSec: 0 } });
+  f.start(); f.gradeOffset = 0.05;
+  for (let i = 0; i < 4; i++) { t.step(); f.tick(0.25); }
+  assert.ok(Math.abs(f.grade - 0.01) < 1e-12, `1 % after 1 s (${f.grade})`);
+  assert.equal(f.cadBuf.length, 4);
+  for (let i = 0; i < 40; i++) { t.step(); f.tick(0.25); }
+  assert.ok(Math.abs(f.grade - 0.05) < 1e-12, 'there after 5 s, then holds');
+  assert.equal(f.cadBuf.length, 12, 'cadence window: 3 s of ticks');
+  const e = new Session({ trainer: t, hr: null, settings: { ftp: 200, autoPauseSec: 0 }, workout: { steps: [{ dur: 1, power: 0.5 }, { dur: 60, power: 1 }] } });
+  e.start();
+  const seen = [];
+  for (let i = 0; i < 5; i++) { t.step(); e.tick(0.25); seen.push([e.segI, e.target]); }
+  assert.deepEqual(seen, [[0, 100], [0, 100], [0, 100], [1, 200], [1, 200]], 'the tick that ends a step already rides the next');
+});
+
+test('Session.tick boundaries: ERG cadence guard and auto resume after 1 s of pedalling', () => {
+  class Fixed extends SimTrainer { step() { this.data = { power: this.p, cadence: this.c, speedKmh: 25 }; } }
+  const t = new Fixed(); t.p = 150; t.c = 35;
+  const s = new Session({ trainer: t, hr: null, settings: { ftp: 200, autoPauseSec: 0 }, workout: { steps: [{ dur: 600, power: 1 }] } });
+  s.start();
+  const go = (sec) => { for (let x = 0; x < sec; x += 0.25) { t.step(); s.tick(0.25); } };
+  go(3); assert.equal(s.target, 200, 'up to 3 s under 40 rpm: full target');
+  go(0.25); assert.equal(s.target, 120, 'past 3 s: eased to 60%');
+  t.c = 50; go(5); assert.equal(s.target, 120, '40-60 rpm: still eased');
+  t.c = 60; go(1); assert.equal(s.target, 120, 'exactly 60 rpm: still eased');
+  t.c = 61; go(0.25); assert.equal(s.target, 200, 'over 60 rpm: back to full');
+  // auto pause, then auto resume on the 4th tick of pedalling (exactly 1 s)
+  const a = new Session({ trainer: t, hr: null, settings: { ftp: 200, autoPauseSec: 2 }, workout: { steps: [{ dur: 600, power: 1 }] } });
+  a.start(); t.c = 80; t.p = 200;
+  const ga = (sec) => { for (let x = 0; x < sec; x += 0.25) { t.step(); a.tick(0.25); } };
+  ga(2); t.c = 0; t.p = 0; ga(2.5);
+  assert.ok(a.paused && a.autoPaused, 'auto paused');
+  t.c = 80; t.p = 200; ga(0.75); assert.ok(a.paused, '0.75 s: still paused');
+  ga(0.25); assert.ok(!a.paused, '1 s of pedalling: resumed');
+});
+
 test('timed messages on slope steps: {watts} is the aim, or blank without one', () => {
   const wo = { steps: [
     { dur: 30, grade: 2, aim: 0.8, messages: [{ at: 1, text: 'Aim {watts} W' }] },
