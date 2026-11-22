@@ -1,4 +1,5 @@
-// Cache-busting stamp. Run before every push:  node tools/stamp.mjs
+// Cache-busting stamp. Only the deploy runs it (.github/workflows/pages.yml), on its own copy: the code in the repo
+// has no ?v= (npm test fails if it does), so editors and the type checker read the imports as they are.
 //
 // GitHub Pages lets browsers cache files for ~10 minutes, and Bluefy (iPhone) can
 // end up with a fresh index.html but a stale app.js, which freezes the ride screen.

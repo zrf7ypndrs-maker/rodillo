@@ -4,13 +4,13 @@
 // (code-health plan step 4) with no change in behavior. Shared DOM helpers come from js/ui.js; app.js passes app
 // state and its own hooks in through initSettings(). Never import app.js from here. When a change here affects other
 // screens (sign-in, token, data repo, imported rides), call refreshAfterSettings(); never call a screen's renderer.
-import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
-import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange } from './engine/trainers.js?v=202611102147';
-import { GitHubSync } from './sync.js?v=202611102147';
-import { logMsg } from './ble/base.js?v=202611102147';
-import { ls } from './store.js?v=202611102147';
-import { authEnabled, authSession, startSignIn, signOut } from './auth.js?v=202611102147';
-import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
+import { DEFAULT_SETTINGS } from './engine/session.js';
+import { TRAINERS, CUSTOM_TRAINER, matchTrainer, trainerFor, trainerFits, cleanRange } from './engine/trainers.js';
+import { GitHubSync } from './sync.js';
+import { logMsg } from './ble/base.js';
+import { ls } from './store.js';
+import { authEnabled, authSession, startSignIn, signOut } from './auth.js';
+import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js';
 
 // from app.js, set by initSettings()
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
@@ -216,7 +216,7 @@ export function initSettings(deps) {
     if (!gh) { tell(`${syncHint()} above first: imported rides go to rodillo-data.`, 'Not connected'); return; }
     btn.classList.add('busy');
     try {
-      const { scanFiles, buildImport, IMPORT_DAYS } = await import('./importer.js?v=202611102147');
+      const { scanFiles, buildImport, IMPORT_DAYS } = await import('./importer.js');
       const since = Date.now() - IMPORT_DAYS * 864e5;
       st.textContent = 'Opening...';
       const { found, skip } = await scanFiles(files, { since, onProgress: (a, b) => { st.textContent = `Reading ${a} of ${b} activities...`; } });

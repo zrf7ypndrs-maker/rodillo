@@ -33,7 +33,7 @@
 // (rider's name from Settings; with no name, "Nice, {name}." reads "Nice.").
 // Distance steps time their messages on the estimated duration.
 
-import { speedForPower } from './physics.js?v=202611102147';
+import { speedForPower } from './physics.js';
 /** @typedef {import('../types.js').Workout} Workout */
 /** @typedef {import('../types.js').Segment} Segment */
 /** @typedef {import('../types.js').Track} Track */

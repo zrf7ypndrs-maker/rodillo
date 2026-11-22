@@ -2,11 +2,11 @@
 // A ride in progress: drives the trainer (ERG or simulated slope with virtual
 // gears), tracks intervals, and records 1 Hz samples.
 
-import { VirtualBike, DevEstimator, G } from './physics.js?v=202611102147';
-import { flatten, retime, segTarget, fillMessage } from './workout.js?v=202611102147';
-import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain, rideWheel } from './drivetrain.js?v=202611102147';
-import { Emitter } from '../ble/base.js?v=202611102147';
-import { ZP_WHEEL } from '../ble/zwifthub.js?v=202611102147';
+import { VirtualBike, DevEstimator, G } from './physics.js';
+import { flatten, retime, segTarget, fillMessage } from './workout.js';
+import { Gearbox, DEFAULT_DRIVETRAIN, resolveDrivetrain, rideWheel } from './drivetrain.js';
+import { Emitter } from '../ble/base.js';
+import { ZP_WHEEL } from '../ble/zwifthub.js';
 
 export const POWER_SHOW_S = 5; // power box smoothing, seconds
 const POWER_BUF_S = 10;

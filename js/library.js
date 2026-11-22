@@ -8,17 +8,17 @@
 // readout come from js/profile.js, drawn with `v.prof` (their look).
 // The DOM part (renderLibrary, setWoKind, the detail slider) gets app.js state and hooks through initLibrary().
 // Never import app.js from here.
-import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
-import { gearList, resolveDrivetrain } from './engine/drivetrain.js?v=202611102147';
-import { TRAINERS, steepestGrade } from './engine/trainers.js?v=202611102147';
-import { flatten, totalDuration, estimateTSS, isTrack } from './engine/workout.js?v=202611102147';
-import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js?v=202611102147';
-import { ZONES, zoneOf } from './zones.js?v=202611102147';
-import { ls } from './store.js?v=202611102147';
-import { dayDate } from './dates.js?v=202611102147';
-import { openBuilder } from './builder.js?v=202611102147';
-import { previewOf, profileSvg, woMeta, workSummary, bindProfileHover } from './profile.js?v=202611102147';
-import { $, $$, esc, placeInk, slideIn } from './ui.js?v=202611102147';
+import { DEFAULT_SETTINGS } from './engine/session.js';
+import { gearList, resolveDrivetrain } from './engine/drivetrain.js';
+import { TRAINERS, steepestGrade } from './engine/trainers.js';
+import { flatten, totalDuration, estimateTSS, isTrack } from './engine/workout.js';
+import { withDetail, defaultDetail, detailLabel, clampDetail, DETAIL_MIN, DETAIL_MAX } from './engine/climb.js';
+import { ZONES, zoneOf } from './zones.js';
+import { ls } from './store.js';
+import { dayDate } from './dates.js';
+import { openBuilder } from './builder.js';
+import { previewOf, profileSvg, woMeta, workSummary, bindProfileHover } from './profile.js';
+import { $, $$, esc, placeInk, slideIn } from './ui.js';
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 
 // from app.js, set by initLibrary()

@@ -7,13 +7,13 @@
 // Pure parts (unit tests: test/ride.mjs): rideTiles, intervalCard, nextCard, gearViz, the chart geometry (powerScale,
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
-import { POWER_SHOW_S } from './engine/session.js?v=202611102147';
-import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js?v=202611102147';
-import { stepCue, resultCue, bestAvg } from './testcoach.js?v=202611102147';
-import { fmtTime, fmtDist } from './ridepage.js?v=202611102147';
-import { ELEV_MIN, rampStops } from './profile.js?v=202611102147';
-import { action } from './controls.js?v=202611102147';
-import { $, esc, reducedMotion } from './ui.js?v=202611102147';
+import { POWER_SHOW_S } from './engine/session.js';
+import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
+import { stepCue, resultCue, bestAvg } from './testcoach.js';
+import { fmtTime, fmtDist } from './ridepage.js';
+import { ELEV_MIN, rampStops } from './profile.js';
+import { action } from './controls.js';
+import { $, esc, reducedMotion } from './ui.js';
 
 /** @typedef {import('./types.js').RideDeps} Deps */
 /** @typedef {import('./types.js').RideSession} Session */

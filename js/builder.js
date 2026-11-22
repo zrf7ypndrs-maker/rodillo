@@ -3,10 +3,10 @@
 // pull a selected bar's top edge for power/grade and its right edge for length. The selected block's
 // details (cadence, name, cue, exact numbers) are edited below the timeline.
 // Saving goes through deps.onSave (app.js stores it in rodillo-data workouts/mine.json).
-import { flatten, parseMessageLines, formatMessageLines } from './engine/workout.js?v=202611102147';
-import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mine.js?v=202611102147';
-import { $, $$, esc, placeInk, reducedMotion as reduced } from './ui.js?v=202611102147';
-import { woMeta } from './profile.js?v=202611102147';
+import { flatten, parseMessageLines, formatMessageLines } from './engine/workout.js';
+import { parseDur, fmtDur, workoutProblems, cleanWorkout, newMineId } from './mine.js';
+import { $, $$, esc, placeInk, reducedMotion as reduced } from './ui.js';
+import { woMeta } from './profile.js';
 
 /** @type {import('./types.js').BuilderDeps} */
 let D = null;   // deps from app.js

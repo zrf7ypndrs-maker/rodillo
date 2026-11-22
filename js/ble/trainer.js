@@ -2,8 +2,8 @@
 // Smart trainer over FTMS (Fitness Machine Service), with Cycling Power as a
 // fallback/supplement for power, cadence and wheel data.
 
-import { BleDevice, uuid16, logMsg, hex } from './base.js?v=202611102147';
-import { ZwiftHubLink, ZP_SERVICES } from './zwifthub.js?v=202611102147';
+import { BleDevice, uuid16, logMsg, hex } from './base.js';
+import { ZwiftHubLink, ZP_SERVICES } from './zwifthub.js';
 
 export const FTMS = uuid16(0x1826);
 export const CPS = uuid16(0x1818);

@@ -1,8 +1,8 @@
 # Deploys the site to GitHub Pages on every push to main, stamping it on the way.
 # tools/stamp.mjs puts one fresh build id on the CSS and every JS import, so a new
 # index.html never loads stale cached JS (the Bluefy freeze). Because the stamp is
-# applied here, nobody has to run it before pushing, and stamped files no longer
-# conflict when two sessions push.
+# applied here, the code in the repo carries no ?v= at all (npm test fails if it
+# does): editors and the type checker read the imports as they are.
 # Needs: repo Settings > Pages > Source = "GitHub Actions".
 name: Deploy
 
@@ -68,6 +68,9 @@ jobs:
           ids=$(grep -rhoE '\?v=[0-9]{12}' index.html whoop.html js | sort -u)
           echo "$ids"
           test "$(echo "$ids" | wc -l)" -eq 1
+          # and none was missed: no relative import or page link left without one
+          if grep -rnE "(from|import\()\s*['\"]\.{1,2}/[^'\"?]+\.js['\"]" js; then echo 'unstamped import above'; exit 1; fi
+          if grep -nE '(href|src)="(css|js)/[^"?]+\.(css|js)"' index.html whoop.html; then echo 'unstamped link above'; exit 1; fi
       - name: Site files only
         run: rm -rf node_modules test tools auth-worker .github
       - uses: actions/configure-pages@v5

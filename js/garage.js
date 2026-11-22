@@ -3,13 +3,13 @@
 // Nov 17 (code-health plan step 4) with no change in behavior. The editors work on `draft`, never on settings;
 // picking a bike or gearing writes settings and saves through app.js. Pure logic: js/engine/garage.js,
 // drivetrain.js, bikes.js. Shared DOM helpers come from js/ui.js; app.js passes app state and its own hooks in through initGarage().
-import { DEFAULT_SETTINGS } from './engine/session.js?v=202611102147';
-import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js?v=202611102147';
-import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js?v=202611102147';
-import { BIKE_MODELS, MAX_BIKES, MAX_GEARINGS, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, cleanBike, newBikeId, bikeLine, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, gearingLine, gearingName, cleanGearing } from './engine/garage.js?v=202611102147';
-import { logMsg } from './ble/base.js?v=202611102147';
-import { ls } from './store.js?v=202611102147';
-import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js?v=202611102147';
+import { DEFAULT_SETTINGS } from './engine/session.js';
+import { DRIVETRAINS, WHEELS, CUSTOM, checkSpec, presetFor, GEAR_COUNTS, COG_MINS, COG_MAXES, simpleSpec } from './engine/drivetrain.js';
+import { BIKE_TYPES, MATERIALS, BUILDS, BIKE_PRESETS, BIKE_CUSTOM, BIKE_EXACT, MAX_TRAVEL, cleanSpec, presetSpec, estimateBikeKg, bikePresetFor } from './engine/bikes.js';
+import { BIKE_MODELS, MAX_BIKES, MAX_GEARINGS, garageOf, currentBike, selectBike, shiftStyleFor, bikeFromModel, cleanBike, newBikeId, bikeLine, gearingsOf, myGearings, currentGearing, selectGearing, selectPreset, gearingLine, gearingName, cleanGearing } from './engine/garage.js';
+import { logMsg } from './ble/base.js';
+import { ls } from './store.js';
+import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js';
 
 // from app.js, set by initGarage()
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */

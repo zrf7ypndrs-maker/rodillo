@@ -1,5 +1,5 @@
 // @ts-check
-import { BleDevice, uuid16 } from './base.js?v=202611102147';
+import { BleDevice, uuid16 } from './base.js';
 
 const HRS = uuid16(0x180d);
 const HRM = uuid16(0x2a37);

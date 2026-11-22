@@ -102,11 +102,8 @@ Object.assign(globalThis, {
 });
 ResizeObserver.all = [];
 
-// js/ridephone.js imports ride.js and controls.js with the build stamp (?v=...): import them the same way, so the test
-// initialises the same module instances the phone screen calls into
-const stamp = fs.readFileSync(new URL('../js/ridephone.js', import.meta.url), 'utf8').match(/ride\.js(\?v=\w+)'/)[1];
-const { initRide, renderRide, smoothPower, smoothHr, trackProgress, workoutLeft } = await import(`../js/ride.js${stamp}`);
-const { initControls } = await import(`../js/controls.js${stamp}`);
+const { initRide, renderRide, smoothPower, smoothHr, trackProgress, workoutLeft } = await import('../js/ride.js');
+const { initControls } = await import('../js/controls.js');
 const { initRidePhone, renderPhone, drawPhoneChart, sizePhoneChart, phoneSlices } = await import('../js/ridephone.js');
 const { Session, DEFAULT_SETTINGS } = await import('../js/engine/session.js');
 const { SimTrainer, SimHr } = await import('../js/ble/sim.js');

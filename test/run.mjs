@@ -986,3 +986,9 @@ test('Ramp test coach and {name}', async () => {
   assert.deepEqual(['Nice, {name}.', '{name}, go!', 'Go {name}!', 'early'].map((t) => fillMessage(t, {})), ['Nice.', 'Go!', 'Go!', 'early']);
   assert.equal(fillMessage('Nice, {name}.', { name: 'Agustín' }), 'Nice, Agustín.');
 });
+
+test('no ?v= build stamps in the code: only the deploy adds them (tools/stamp.mjs), so editors and tsc read the imports', () => {
+  const files = ['index.html', 'whoop.html', ...fs.readdirSync('js', { recursive: true }).filter((f) => f.endsWith('.js')).map((f) => `js/${f}`)];
+  const stamped = files.filter((f) => /\.(?:js|css)\?v=/.test(fs.readFileSync(f, 'utf8')));
+  assert.deepEqual(stamped, [], 'run git checkout on these, or take ?v=... off by hand: never commit a stamped copy');
+});

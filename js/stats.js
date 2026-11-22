@@ -3,8 +3,8 @@
 // Pure functions, no DOM: runs in the browser and in Node.
 
 export const CURVE_DURS = [5, 15, 30, 60, 180, 300, 600, 1200, 3600];
-import { ZONES, zoneOfWatts, WORK_FTP } from './zones.js?v=202611102147';
-import { dkey, dayDate } from './dates.js?v=202611102147';
+import { ZONES, zoneOfWatts, WORK_FTP } from './zones.js';
+import { dkey, dayDate } from './dates.js';
 /** @typedef {import('./types.js').Sample} Sample */
 /** @typedef {import('./types.js').Segment} Segment */
 /** @typedef {import('./types.js').RideSummary} RideSummary */

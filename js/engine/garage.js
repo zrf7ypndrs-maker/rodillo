@@ -10,8 +10,8 @@
 // gears; settings.gearings = [gearing] are the rider's own. gearing = { id, name, drivetrain, customDrivetrain,
 // shiftStyle }. The gearing in use is whichever one matches settings.drivetrain; no extra key.
 
-import { DRIVETRAINS, CUSTOM, WHEELS, checkSpec } from './drivetrain.js?v=202611102147';
-import { cleanSpec } from './bikes.js?v=202611102147';
+import { DRIVETRAINS, CUSTOM, WHEELS, checkSpec } from './drivetrain.js';
+import { cleanSpec } from './bikes.js';
 
 // Known bikes. Weight = maker's claim for size M plus pedals, when the pedals are known. drivetrain + shiftStyle
 // are the bike's stock gearing (a built-in gearing). Ids are saved in settings: never rename one.

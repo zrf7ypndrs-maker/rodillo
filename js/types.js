@@ -1,8 +1,6 @@
 // @ts-check
 // Shared shapes for type checking (npm run typecheck). Types only: JSDoc @typedef, nothing runs.
 // A module uses one with   /** @typedef {import('./types.js').Settings} Settings */
-// Write them without the `?v=` build stamp. The browser never loads this file; if tools/stamp.mjs ever stamps an
-// import() type in a comment, npm run typecheck takes the stamp off again.
 //
 // Fields are listed as the code writes them. Optional (`?`) = not always there; `null` = written as null on purpose.
 

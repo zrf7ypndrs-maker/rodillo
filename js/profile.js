@@ -9,10 +9,10 @@
 // library and Today views carry it as `v.prof`. `bindProfileHover(box, w, look)` is the DOM part (the readout under
 // the pointer or finger), tested against a fake document in test/profile-dom.mjs.
 // Never imports app.js. No DOM access at import.
-import { flatten, totalDuration, estimateTSS, mainSet, isTrack, track } from './engine/workout.js?v=202611102147';
-import { ZONES } from './zones.js?v=202611102147';
-import { fmtTime, fmtDist } from './ridepage.js?v=202611102147';
-import { esc } from './ui.js?v=202611102147';
+import { flatten, totalDuration, estimateTSS, mainSet, isTrack, track } from './engine/workout.js';
+import { ZONES } from './zones.js';
+import { fmtTime, fmtDist } from './ridepage.js';
+import { esc } from './ui.js';
 /** @typedef {import('./types.js').Workout} Workout */
 /** @typedef {import('./types.js').Segment} Segment */
 /** @typedef {import('./types.js').Track} Track */

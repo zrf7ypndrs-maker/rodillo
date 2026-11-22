@@ -5,12 +5,12 @@
 // `look` = { phone, INK, MUTED, RULE, FAINT, UNDERLAY, FITNESS, FATIGUE, TOK, ZC, zoneHex }, which app.js builds at draw
 // time (chartLook()) because the colors follow the light / dark theme. Only renderTraining() needs app.js, through
 // initTraining(). Never import app.js from here.
-import { loadSeries, weekly, powerCurve, ftpEstimate, formLabel, loadNow, zoneTotals, CURVE_DURS } from './stats.js?v=202611102147';
-import { ZONES, zoneRange } from './zones.js?v=202611102147';
-import { fmtTime } from './ridepage.js?v=202611102147';
-import { ls, rides } from './store.js?v=202611102147';
-import { $, $$, esc } from './ui.js?v=202611102147';
-import { dkey, dayDate } from './dates.js?v=202611102147';
+import { loadSeries, weekly, powerCurve, ftpEstimate, formLabel, loadNow, zoneTotals, CURVE_DURS } from './stats.js';
+import { ZONES, zoneRange } from './zones.js';
+import { fmtTime } from './ridepage.js';
+import { ls, rides } from './store.js';
+import { $, $$, esc } from './ui.js';
+import { dkey, dayDate } from './dates.js';
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 
 // from app.js, set by initTraining()

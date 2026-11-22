@@ -16,8 +16,8 @@
 //         PhysicalParam   { 2 GearRatioX10000, 4 BikeWeightX100, 5 RiderWeightX100 }
 //  - Makinolo's example 04 2a 08 10 00 20 81 05 28 c4 3b = Physical { gear 0, bike 6.41 kg, rider 76.2 kg }.
 
-import { uuid16, logMsg, hex } from './base.js?v=202611102147';
-import { decodeProto } from './zwiftride.js?v=202611102147';
+import { uuid16, logMsg, hex } from './base.js';
+import { decodeProto } from './zwiftride.js';
 
 export const ZP_SERVICES = [uuid16(0xfc82), '00000001-19ca-4651-86e5-fa29dcdd09d1'];
 const ASYNC = '00000002-19ca-4651-86e5-fa29dcdd09d1';

@@ -7,12 +7,12 @@
 // the chart geometry (phoneFreeScale, phoneScale, phoneSlices), taking `v` = rideView(s) from js/ride.js like the desktop.
 // The DOM and canvas part: test/ridephone-dom.mjs. Never imports app.js: app state and app.js hooks come in
 // initRidePhone(deps); theme colors come from `look()` at draw time.
-import { segTarget, isTrack } from './engine/workout.js?v=202611102147';
-import { fmtTime } from './ridepage.js?v=202611102147';
-import { action, holdStart, holdEnd } from './controls.js?v=202611102147';
-import { renderRide, rideView, segRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js?v=202611102147';
-import { ls } from './store.js?v=202611102147';
-import { $, esc } from './ui.js?v=202611102147';
+import { segTarget, isTrack } from './engine/workout.js';
+import { fmtTime } from './ridepage.js';
+import { action, holdStart, holdEnd } from './controls.js';
+import { renderRide, rideView, segRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
+import { ls } from './store.js';
+import { $, esc } from './ui.js';
 
 /** @typedef {import('./types.js').RidePhoneDeps} Deps */
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */

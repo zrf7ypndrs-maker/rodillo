@@ -8,15 +8,15 @@
 // (todayView()): the plan, rides, WHOOP and settings change, the colors follow the light / dark theme. The profile
 // charts, meta line, main set phrase and the readout come from js/profile.js, drawn with `v.prof` (their look). The DOM part (renderOverview, renderHero, renderWeek, renderCalendar, plan views, WHOOP loading) gets app.js
 // state and hooks through initToday(). Never import app.js from here.
-import { flatten, totalDuration, estimateTSS, isTrack } from './engine/workout.js?v=202611102147';
-import { loadSeries, ftpEstimate, formLabel, loadNow } from './stats.js?v=202611102147';
-import { logMsg } from './ble/base.js?v=202611102147';
-import { ls, rides } from './store.js?v=202611102147';
-import { dkey, dayDate, addDays, mondayOf } from './dates.js?v=202611102147';
-import { fmtTime } from './ridepage.js?v=202611102147';
-import { LOAD_INFO, infoTip } from './training.js?v=202611102147';
-import { profileSvg, woMeta, isSim, workSummary, bindProfileHover } from './profile.js?v=202611102147';
-import { $, esc } from './ui.js?v=202611102147';
+import { flatten, totalDuration, estimateTSS, isTrack } from './engine/workout.js';
+import { loadSeries, ftpEstimate, formLabel, loadNow } from './stats.js';
+import { logMsg } from './ble/base.js';
+import { ls, rides } from './store.js';
+import { dkey, dayDate, addDays, mondayOf } from './dates.js';
+import { fmtTime } from './ridepage.js';
+import { LOAD_INFO, infoTip } from './training.js';
+import { profileSvg, woMeta, isSim, workSummary, bindProfileHover } from './profile.js';
+import { $, esc } from './ui.js';
 
 // from app.js, set by initToday()
 /** @typedef {import('./types.js').TodayDeps} Deps */

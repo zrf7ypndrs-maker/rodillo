@@ -7,10 +7,10 @@
 //
 // Verbs: up, down, left, right, select, back, skip, lap, ergToggle, easier, harder, front. The phone's on-screen
 // buttons send verbs too (action('down') ...); Ride buttons and keys become verbs here first.
-import { shiftStyleFor } from './engine/garage.js?v=202611102147';
-import { builderOpen, closeBuilder } from './builder.js?v=202611102147';
-import { logMsg } from './ble/base.js?v=202611102147';
-import { $, $$, toast } from './ui.js?v=202611102147';
+import { shiftStyleFor } from './engine/garage.js';
+import { builderOpen, closeBuilder } from './builder.js';
+import { logMsg } from './ble/base.js';
+import { $, $$, toast } from './ui.js';
 /** @typedef {import('./ble/sim.js').SimTrainer} SimTrainer */
 /**
  * @typedef {object} ControlState

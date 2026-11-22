@@ -7,7 +7,7 @@
 // rides/YYYY/<id>.json): { summary, intervals, streams: { power, hr, cadence, speed (m/s),
 // grade (%), target, gear, seg }, laps }. Imported rides can miss power, grade and target.
 
-import { ZONES, zoneRange, WORK_FTP } from './zones.js?v=202611102147';
+import { ZONES, zoneRange, WORK_FTP } from './zones.js';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
