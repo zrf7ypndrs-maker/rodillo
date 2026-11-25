@@ -237,6 +237,17 @@ assert.match(overviewHtml(now, true, { ...v, whoop: {}, rows: [] }), /<span clas
 assert.equal(tileOf(ovNone, 'This week'), `0:00 / ${fmtHours(planSec)}`);
 assert.doesNotMatch(ovNone, /ov-ftp/, 'no ride with an FTP: no FTP line');
 assert.equal(tileOf(overviewHtml(now, false, { ...v, plan: null, rows: [] }), 'This week'), '0:00', 'no plan: no planned hours');
+// the FTP line stays inside its 200-wide box at any time of day: a ride from earlier today sits at local noon (day keys),
+// which is after `now` in the morning (was drawn to x 228.6 at 9 am and clipped)
+const ftpXs = (h) => { const d = h.match(/<div class="ov-ftp">.*?<path d="([^"]*)" vector-effect/s)[1]; return [...d.matchAll(/[MH](-?[\d.]+)/g)].map((m) => +m[1]); };
+for (let hr = 0; hr < 24; hr++) {
+  const at = new Date(2026, 10, 18, hr, 30);
+  for (const ph of [false, true]) {
+    const xs = ftpXs(overviewHtml(at, ph, v));
+    assert.ok(xs.every((x) => x >= 0 && x <= 200), `FTP line at ${hr}:30 ${ph ? 'phone' : 'desktop'}: x ${xs.join(' ')}`);
+    assert.equal(xs.at(-1), 200, 'the line ends at today, on the right edge');
+  }
+}
 ok('overview tiles: recovery tile / phone card, this week done vs planned and its dots, form vs stats.js, FTP and its change');
 
 // ---- Calendar: month grid and the selected day's detail

@@ -72,7 +72,8 @@ function recCardHtml(pct, z, hero, v) {
  */
 function ftpTrend(real, now, v, est) {
   const since = dkey(addDays(now, -90));
-  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [+dayDate(r.id.slice(0, 10)), r.ftp]);
+  // a ride sits at its day's local noon, but never after now (a ride from earlier this morning would run off the right edge)
+  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [Math.min(+dayDate(r.id.slice(0, 10)), +now), r.ftp]);
   fp.push([+now, v.settings.ftp]);
   let ftpViz = '', ftpSub = '';
   if (fp.length > 1) {

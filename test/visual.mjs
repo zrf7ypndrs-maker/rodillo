@@ -261,10 +261,12 @@ async function homeScenes(look) {
   await ctx.close();
 }
 
-// Today on the day after a ride (done hero) and on a coach rest day
+// Today on the day after a ride (done hero), on a coach rest day, after a free ride, and a morning after a ride earlier today
 async function todayStates(look) {
-  if (!want('home-today-done', 'home-today-rest', 'home-today-free', 'home-signedout')) return;
-  for (const [name, at, index] of [['home-today-done', DAY_AT.done, [VO2, ...OLDER]], ['home-today-rest', DAY_AT.rest, [VO2, ...OLDER]], ['home-today-free', NOW, [FREE, VO2, ...OLDER]]]) {
+  if (!want('home-today-done', 'home-today-rest', 'home-today-free', 'home-today-morning', 'home-signedout')) return;
+  // home-today-morning: a short FTP history (yesterday's ride, then this morning's) at 9 am, so a ride from earlier today
+  // (its day key = local noon, after now) would push the FTP line past the right edge of its tile
+  for (const [name, at, index] of [['home-today-done', DAY_AT.done, [VO2, ...OLDER]], ['home-today-rest', DAY_AT.rest, [VO2, ...OLDER]], ['home-today-free', NOW, [FREE, VO2, ...OLDER]], ['home-today-morning', NOW, [FREE, VO2]]]) {
     const { ctx, page } = await context(look, { at, index });
     await shot(page, name, look, { full: true });
     await ctx.close();
