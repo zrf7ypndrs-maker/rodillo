@@ -425,6 +425,54 @@ function attrs(str) {
   return o;
 }
 
+// Zwift textevents inside a block become timed messages (offset from the block start)
+function zwoEvents(inner) {
+  const evs = [];
+  if (inner) inner.replace(/<textevent\b([^>]*)\/?>/g, (_, t) => { const ta = attrs(t); if (ta.message) evs.push({ at: Math.max(0, Math.round(Number(ta.timeoffset) || 0)), text: ta.message }); return ''; });
+  return evs;
+}
+
+const ZWO_LABEL = { Warmup: 'Warm-up', Cooldown: 'Cool-down', FreeRide: 'Free ride', MaxEffort: 'Max effort' };
+
+/** IntervalsT: one on/off repeat; each textevent goes to the rep and half it falls in. */
+function zwoIntervals(a, evs) {
+  const on = Number(a.OnDuration), off = Number(a.OffDuration), per = on + off || 1;
+  const onMsgs = [], offMsgs = [];
+  for (const e of evs) {
+    const rep = Math.floor(e.at / per) + 1, w = e.at % per;
+    (w < on ? onMsgs : offMsgs).push({ at: w < on ? w : w - on, rep, text: e.text });
+  }
+  return { repeat: Number(a.Repeat || 1), steps: [
+    { dur: on, power: Number(a.OnPower), cadence: a.Cadence || '', messages: onMsgs.length ? onMsgs : undefined },
+    { dur: off, power: Number(a.OffPower), cadence: a.CadenceResting || '', messages: offMsgs.length ? offMsgs : undefined },
+  ] };
+}
+
+/** One .zwo block (tag, attributes, its textevents) as a workout step. */
+function zwoStep(tag, a, evs) {
+  const dur = Number(a.Duration || 0);
+  const messages = evs.length ? evs : undefined;
+  const cad = a.Cadence ? String(a.Cadence) : '';
+  switch (tag) {
+    case 'Warmup': case 'Cooldown': case 'Ramp':
+      return { dur, from: Number(a.PowerLow), to: Number(a.PowerHigh), label: ZWO_LABEL[tag], messages, cadence: cad };
+    case 'SteadyState': case 'SolidState':
+      return { dur, power: Number(a.Power), messages, cadence: cad };
+    case 'IntervalsT':
+      return zwoIntervals(a, evs);
+    case 'FreeRide': case 'MaxEffort':
+      return { dur, free: true, label: ZWO_LABEL[tag], messages };
+  }
+  return null;
+}
+
+/** Drops empty fields ('' or undefined), nested steps too. */
+function zwoClean(o) {
+  for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === '') delete o[k];
+  if (o.steps) o.steps.forEach(zwoClean);
+  return o;
+}
+
 /**
  * @param {string} xml
  */
@@ -436,39 +484,9 @@ export function parseZwo(xml) {
   const re = /<(Warmup|Cooldown|SteadyState|IntervalsT|Ramp|FreeRide|MaxEffort|SolidState)\b([^>]*?)(\/>|>([\s\S]*?)<\/\1>)/g;
   let m;
   while ((m = re.exec(body))) {
-    const tag = m[1], a = attrs(m[2]);
-    const dur = Number(a.Duration || 0);
-    // Zwift textevents become timed messages (offset from the block start)
-    const evs = [];
-    if (m[4]) m[4].replace(/<textevent\b([^>]*)\/?>/g, (_, t) => { const ta = attrs(t); if (ta.message) evs.push({ at: Math.max(0, Math.round(Number(ta.timeoffset) || 0)), text: ta.message }); return ''; });
-    const messages = evs.length ? evs : undefined;
-    const cad = a.Cadence ? String(a.Cadence) : '';
-    switch (tag) {
-      case 'Warmup': case 'Cooldown': case 'Ramp':
-        steps.push({ dur, from: Number(a.PowerLow), to: Number(a.PowerHigh), label: tag === 'Ramp' ? undefined : tag === 'Warmup' ? 'Warm-up' : 'Cool-down', messages, cadence: cad });
-        break;
-      case 'SteadyState': case 'SolidState':
-        steps.push({ dur, power: Number(a.Power), messages, cadence: cad });
-        break;
-      case 'IntervalsT': {
-        const on = Number(a.OnDuration), off = Number(a.OffDuration), per = on + off || 1;
-        const onMsgs = [], offMsgs = [];
-        for (const e of evs) {
-          const rep = Math.floor(e.at / per) + 1, w = e.at % per;
-          (w < on ? onMsgs : offMsgs).push({ at: w < on ? w : w - on, rep, text: e.text });
-        }
-        steps.push({ repeat: Number(a.Repeat || 1), steps: [
-          { dur: on, power: Number(a.OnPower), cadence: a.Cadence || '', messages: onMsgs.length ? onMsgs : undefined },
-          { dur: off, power: Number(a.OffPower), cadence: a.CadenceResting || '', messages: offMsgs.length ? offMsgs : undefined },
-        ] });
-        break;
-      }
-      case 'FreeRide': case 'MaxEffort':
-        steps.push({ dur, free: true, label: tag === 'MaxEffort' ? 'Max effort' : 'Free ride', messages });
-        break;
-    }
+    const step = zwoStep(m[1], attrs(m[2]), zwoEvents(m[4]));
+    if (step) steps.push(step);
   }
-  const clean = (o) => { for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === '') delete o[k]; if (o.steps) o.steps.forEach(clean); return o; };
-  steps.forEach(clean);
+  steps.forEach(zwoClean);
   return { id: 'zwo-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: name.trim(), description: desc.trim(), tags: ['imported'], steps };
 }
