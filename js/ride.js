@@ -173,34 +173,54 @@ function slideNextIn(s) {
   }).catch(() => {});
 }
 
+// ---- segment rows (desktop sidebar, phone list view). Built on every tick: plain function calls, no arrays or
+// objects beyond the rows themselves.
+const CHECK = '<span class="check">&#10003;</span>';
+/** Progress bar under the current row. */
+const segBar = (s) => `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>`;
+/** Target: watts (a range on ramps, with the effort setting) or the grade with the rider's offset. */
+function segTgt(g, s, ftp) {
+  if (g.kind !== 'erg') return `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`;
+  const lo = Math.round(g.from * ftp * s.intensity);
+  return g.from === g.to ? `${lo} W` : `${lo}-${Math.round(g.to * ftp * s.intensity)} W`;
+}
+/** Cadence target and, on a sim step, its watts aim. */
+const cadChips = (g, ftp) => (g.cad ? `<span class="cad-chip">${g.cad.label}</span>` : '') + (g.kind === 'sim' && g.aim ? `<span class="cad-chip">~${Math.round(g.aim.mid * ftp)} W</span>` : '');
+
+/** An ERG row: target and time (time left on the current one). */
+function ergRow(g, i, s, state, color, tgtW, cadChip) {
+  const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
+  return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? CHECK : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${state === 'current' ? segBar(s) : ''}</div>`;
+}
+/** Right side of a slope or free row: the amount still to ride, or the average watts and HR so far. a = s.segAgg[i]. */
+function stepRight(g, s, state, a) {
+  if (state === 'todo') return `<span class="big">${segAmount(g)}</span>`;
+  const avgP = a?.n ? Math.round(a.p / a.n) : null;
+  if (!avgP) return state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
+  const avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
+  const left = state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : '';
+  return `<span class="big">${avgP} W</span><br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${left}</span>`;
+}
+/** A slope or free row: name (and rep), target and amount, right side. */
+function stepRow(g, i, s, state, color, tgtW, cadChip) {
+  const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
+  return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? CHECK : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${stepRight(g, s, state, s.segAgg[i])}</div>${state === 'current' ? segBar(s) : ''}</div>`;
+}
+/** Row i of the list; cur = index of the current step (segs.length once the workout is done). */
+function segRow(g, i, s, cur, ftp) {
+  const state = i < cur ? 'done' : i === cur ? 'current' : 'todo';
+  // ramps: the current row follows the live target like the interval card; other rows show the ramp's average
+  const color = g.kind !== 'erg' ? gradeHex(g.grade) : zoneHex(state === 'current' ? segTarget(g, s.segProgress) : (g.from + g.to) / 2);
+  const tgtW = segTgt(g, s, ftp), cadChip = cadChips(g, ftp);
+  return (g.kind === 'erg' ? ergRow : stepRow)(g, i, s, state, color, tgtW, cadChip);
+}
+
 /** Segment rows shared by the desktop sidebar and the phone list view. */
 /** @param {Session} s */
 export function segRows(s) {
   const ftp = app.settings.ftp, cur = s.segIndex < 0 ? s.segs.length : s.segIndex;
   const doneN = Math.min(cur, s.segs.length);
-  const rows = s.segs.map((g, i) => {
-    const state = i < cur ? 'done' : i === cur ? 'current' : 'todo';
-    // ramps: the current row follows the live target like the interval card; other rows show the ramp's average
-    const color = g.kind !== 'erg' ? gradeHex(g.grade) : zoneHex(state === 'current' ? segTarget(g, s.segProgress) : (g.from + g.to) / 2);
-    const tgtW = g.kind === 'erg' ? (g.from === g.to ? `${Math.round(g.from * ftp * s.intensity)} W` : `${Math.round(g.from * ftp * s.intensity)}-${Math.round(g.to * ftp * s.intensity)} W`) : `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`;
-    const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
-    const a = s.segAgg[i];
-    const avgP = a?.n ? Math.round(a.p / a.n) : null, avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
-    const cadChip = (g.cad ? `<span class="cad-chip">${g.cad.label}</span>` : '') + (g.kind === 'sim' && g.aim ? `<span class="cad-chip">~${Math.round(g.aim.mid * ftp)} W</span>` : '');
-    if (g.kind === 'erg') {
-      const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
-      const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
-      return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${bar}</div>`;
-    }
-    let right;
-    if (state === 'todo') right = `<span class="big">${segAmount(g)}</span>`;
-    else if (!avgP) right = state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
-    else {
-      right = `<span class="big">${avgP} W</span><br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : ''}</span>`;
-    }
-    const bar = state === 'current' ? `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>` : '';
-    return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? '<span class="check">&#10003;</span>' : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${right}</div>${bar}</div>`;
-  });
+  const rows = s.segs.map((g, i) => segRow(g, i, s, cur, ftp));
   return { rows, cur, doneN };
 }
 
