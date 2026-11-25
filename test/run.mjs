@@ -232,6 +232,16 @@ test('ZWO import', () => {
   assert.equal(totalDuration(w), 600 + 360 + 300 + 120 + 300);
 });
 
+test('ZWO import: XML escapes in the name, description and messages are decoded', () => {
+  const w = parseZwo(`<workout_file><name>Over &amp; unders</name><description>Z2 &lt; 75%, &quot;easy&quot;</description><workout>
+    <SteadyState Duration="60" Power="0.6"><textevent timeoffset="5" message="Don&apos;t stop &#8212; ok &#x2764;&amp;lt;"/></SteadyState></workout></workout_file>`);
+  assert.equal(w.name, 'Over & unders');
+  assert.equal(w.id, 'zwo-over-amp-unders'); // same id as before the fix: a re-import doesn't duplicate the workout
+  assert.equal(w.description, 'Z2 < 75%, "easy"');
+  assert.deepEqual(w.steps[0].messages, [{ at: 5, text: "Don't stop \u2014 ok \u2764&lt;" }]);
+  assert.equal(parseZwo('<workout_file><name>a &#0; &bogus; &#xFFFFFF;</name></workout_file>').name, 'a &#0; &bogus; &#xFFFFFF;');
+});
+
 {
   const { msgTime, parseMessageLines, formatMessageLines, fillMessage } = await import('../js/engine/workout.js');
   assert.equal(msgTime(0, 240), 0); assert.equal(msgTime(-30, 240), 210); assert.equal(msgTime('50%', 240), 120);

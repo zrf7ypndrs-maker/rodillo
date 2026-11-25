@@ -419,9 +419,17 @@ export function estimateTSS(workout) {
 
 // ---------- Zwift .zwo import ----------
 
+// XML escapes in names, descriptions and messages ("Don&apos;t" reads "Don't")
+const XML_ENT = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+const xmlText = (str) => str.replace(/&(lt|gt|quot|apos|amp|#\d+|#x[0-9a-f]+);/gi, (e, n) => {
+  if (n[0] !== '#') return XML_ENT[n.toLowerCase()];
+  const c = n[1] === 'x' || n[1] === 'X' ? parseInt(n.slice(2), 16) : Number(n.slice(1));
+  return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : e;
+});
+
 function attrs(str) {
   const o = {};
-  str.replace(/([A-Za-z_]+)\s*=\s*"([^"]*)"/g, (_, k, v) => { o[k] = v; return ''; });
+  str.replace(/([A-Za-z_]+)\s*=\s*"([^"]*)"/g, (_, k, v) => { o[k] = xmlText(v); return ''; });
   return o;
 }
 
@@ -488,5 +496,6 @@ export function parseZwo(xml) {
     if (step) steps.push(step);
   }
   steps.forEach(zwoClean);
-  return { id: 'zwo-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: name.trim(), description: desc.trim(), tags: ['imported'], steps };
+  // the id comes from the name as written in the file, so a file imported before keeps its id
+  return { id: 'zwo-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: xmlText(name).trim(), description: xmlText(desc).trim(), tags: ['imported'], steps };
 }
