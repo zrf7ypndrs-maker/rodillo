@@ -272,6 +272,51 @@ async function libraryStep(page, label) {
 }
 
 // Mine (desktop): signed in with a token, mine.json from the mocked GitHub API; then signed out and back in
+/** Builder (new ERG workout: warm-up, 20 min at 75%, cool-down): type into each field of the steady block, then a repeat. */
+async function builderFields(page, fail) {
+  const ftp = DEFAULT_SETTINGS.ftp;
+  await page.click('#b-tl .tl-b[data-p="1"]');
+  await page.waitForSelector('#b-steps [data-f="pct"][data-fp="1"]', { timeout: 3000 });
+  const info = () => page.textContent('#b-meta .b-selinfo');
+  const readout = (p = '1') => page.textContent(`#b-steps [data-w="${p}"]`);
+  /** Types v into field f of block p; bad = should it turn red; then info() / readout() are checked by the caller. */
+  const put = async (f, v, bad, p = '1') => {
+    const sel = `#b-steps [data-f="${f}"][data-fp="${p}"]`;
+    await page.fill(sel, v);
+    if ((await page.$eval(sel, (el) => el.classList.contains('bad'))) !== bad) fail(`builder ${f} "${v}": ${bad ? 'not' : ''} red`);
+  };
+  const want = async (what, got, exp) => { if ((await got) !== exp) fail(`builder ${what}: "${await got}", want "${exp}"`); };
+  await want('start', info(), `20:00 at 75% (${Math.round(0.75 * ftp)} W)`);
+  await put('pct', '90', false); await want('pct 90', readout(), `${Math.round(0.9 * ftp)} W`);
+  await put('pct', '400', true); await want('pct 400 ignored', info(), `20:00 at 90% (${Math.round(0.9 * ftp)} W)`);
+  await put('pct', '85,5', false); await want('pct 85,5', readout(), `${Math.round(0.855 * ftp)} W`);
+  await put('len', '25:00', false); await put('len', '3s', true); await put('len', '7:00:00', true); await put('len', '1:75', true);
+  await want('len', info(), `25:00 at 86% (${Math.round(0.855 * ftp)} W)`);
+  await put('cadence', '', false); await put('cadence', 'fast', true); await put('cadence', '80 - 90', false);
+  await put('label', 'Tempo', false); await put('text', '  Smooth  ', false);
+  await put('messages', '0:30 Settle in\nlast -0:20 Last one', false); await put('messages', '0:30', true);
+  await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'ramp'); // redraws the block's fields from what was stored
+  const val = (f) => page.inputValue(`#b-steps [data-f="${f}"][data-fp="1"]`);
+  await want('cadence stored', val('cadence'), '80-90');
+  await want('name stored', val('label'), 'Tempo');
+  await want('cue stored', val('text'), '  Smooth  ');
+  await want('messages stored', val('messages'), '0:30 Settle in\nlast -0:20 Last one');
+  await put('from', '50', false); await put('to', '80', false); await put('to', '0', true);
+  await want('ramp', readout(), `${Math.round(0.5 * ftp)}-${Math.round(0.8 * ftp)} W`);
+  await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'watts');
+  await put('watts', '251.4', false); await want('watts', readout(), `${Math.round((251 / ftp) * 100)}% FTP`); await put('watts', '5', true);
+  await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'grade');
+  await put('grade', '4.5', false); await put('grade', '30', true);
+  await want('grade', info(), '25:00 at 4.5%');
+  await page.focus('#builder [data-tile="intervals"]');
+  await page.keyboard.press('Enter'); // keyboard add: after the selected block, selected
+  await page.waitForSelector('#b-steps [data-f="repeat"][data-fp="2"]', { timeout: 3000 });
+  await put('repeat', '2.5', true, '2'); await put('repeat', '6', false, '2');
+  await want('repeat', page.textContent('#b-steps [data-sum="2"]'), '= 48:00');
+  await page.fill('#b-name', 'Smoke fields');
+  await page.fill('#b-desc', 'Typed in the smoke test');
+}
+
 async function mineRun() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
@@ -320,6 +365,17 @@ async function mineRun() {
   await page.waitForFunction(() => document.querySelectorAll('#mine-list .wo').length === 2, null, { timeout: 5000 });
   if (await kindsShown(page) !== 'mine') fail('signed in again: did not land on Mine');
   ok('desktop: Workouts: Mine signed in (seeded token), newest first, Edit; hidden signed out, back on sign-in');
+
+  // builder field edits: every field takes a good value (the block, its readout and the timeline follow) and turns red
+  // on a bad one, leaving the block as it was
+  await page.click('#btn-new-wo');
+  await page.waitForSelector('#builder:not(.hidden)', { timeout: 3000 });
+  await builderFields(page, fail);
+  await page.click('#b-close');
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#modal')) await page.click('#modal-ok');
+  await page.waitForSelector('#builder.hidden', { state: 'attached', timeout: 3000 });
+  ok('desktop: builder fields: good values applied, bad ones red and ignored (length, %, ramp, watts, grade, repeat, cadence, name, cue, messages)');
 
   // Settings > Sync, token cleared while the builder is open: the other screens follow (builder closed, no Mine,
   // Today's hero on the public plan), without Settings knowing which screens those are
