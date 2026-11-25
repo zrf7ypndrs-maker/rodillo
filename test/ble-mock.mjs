@@ -4,7 +4,7 @@ import { Trainer } from '../js/ble/trainer.js';
 import { ZwiftRide } from '../js/ble/zwiftride.js';
 import { ZWIFT_INIT } from '../js/ble/zwifthub.js';
 import { HeartRate } from '../js/ble/hr.js';
-import { uuid16, RETRY_MS } from '../js/ble/base.js';
+import { uuid16, RETRY_MS, log } from '../js/ble/base.js';
 import { HR_STALE_MS } from '../js/ble/hr.js';
 
 globalThis.performance ??= { now: () => Date.now() };
@@ -32,6 +32,48 @@ function fakeDevice(name, services) {
       async connect() { return { async getPrimaryService(u) { if (!map[u]) throw new Error('no svc ' + u); return map[u]; }, async getPrimaryServices() { return services; } }; },
     },
   };
+}
+const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
+/** Bytes laid out little-endian: [[value, byteCount], ...] (negatives come out as two's complement). */
+function le(fields) {
+  const out = [];
+  for (const [v, n] of fields) for (let i = 0; i < n; i++) out.push((v >> (8 * i)) & 0xff);
+  return out;
+}
+/**
+ * A KICKR on a fake GATT server that can drop and come back: Indoor Bike Data, a control point that answers every
+ * command (`answer(op)` picks the result code, 0x01 = success), and optional Cycling Power / FTMS status.
+ * `drop()` fires the disconnect the way Chrome does; `failConnects` makes the next reconnect tries fail.
+ */
+async function fakeKickr({ cps = false, status = false, answer = () => 0x01 } = {}) {
+  const ibd = new FakeChar(uuid16(0x2ad2));
+  const cp = new FakeChar(uuid16(0x2ad9));
+  cp.onWrite = (d) => setTimeout(() => cp.fire([0x80, d[0], answer(d[0])]), 1);
+  const cpm = new FakeChar(uuid16(0x2a63));
+  const st = new FakeChar(uuid16(0x2ada));
+  const ftmsChars = status ? [ibd, cp, st] : [ibd, cp];
+  const services = [new FakeService(uuid16(0x1826), ftmsChars)];
+  if (cps) services.push(new FakeService(uuid16(0x1818), [cpm]));
+  const dev = fakeDevice('KICKR CORE T', services);
+  const k = { ibd, cp, cpm, st, dev, failConnects: 0, disc: null, trainer: new Trainer() };
+  dev.addEventListener = (ev, f) => { if (ev === 'gattserverdisconnected') k.disc = f; };
+  const connect = dev.gatt.connect;
+  dev.gatt.connect = async () => {
+    if (k.failConnects > 0) { k.failConnects--; throw new Error('out of range'); }
+    dev.gatt.connected = true;
+    return connect();
+  };
+  dev.gatt.disconnect = () => { dev.gatt.connected = false; };
+  k.drop = () => { dev.gatt.connected = false; return k.disc(); };
+  await k.trainer.attach(dev);
+  return k;
+}
+/** Log lines from the trainer while `fn` runs. */
+async function trainerLog(fn) {
+  const lines = [];
+  const off = log.on('log', (e) => { if (e.src === 'trainer') lines.push(e.msg); });
+  try { await fn(); } finally { off(); }
+  return lines;
 }
 
 // ---- trainer
@@ -121,6 +163,145 @@ console.log('ok - trainer connect, control, coalescing');
   await off.attach(fakeDevice('KICKR CORE 8', [new FakeService(uuid16(0x1826), [new FakeChar(uuid16(0x2ad2)), cp4]), new FakeService(uuid16(0xfc82), [offRx])]));
   assert.equal(offRx.writes.length, 0); assert.equal(off.zwiftShifting, false);
   console.log('ok - silent trainer or setting off: shifting stays in Rodillo');
+}
+
+// ---- trainer: a drop mid-ride. Targets set while it's gone aren't lost: the trainer gets them when it's back.
+{
+  const saved = [...RETRY_MS];
+  RETRY_MS.splice(0, RETRY_MS.length, 1);
+  const k = await fakeKickr();
+  const t = k.trainer;
+  t.setErg(150);
+  await tick();
+  assert.deepEqual(k.cp.writes.at(-1), [0x05, 150, 0]);
+  k.failConnects = Infinity; // out of range until we say so
+  const back = k.drop();
+  assert.equal(t.state, 'disconnected');
+  const before = k.cp.writes.length;
+  t.setErg(180); // next interval starts while the trainer is gone
+  await tick();
+  assert.equal(k.cp.writes.length, before, 'nothing written to a dropped trainer');
+  assert.equal(t.state, 'disconnected');
+  k.failConnects = 0; // back in range
+  await back;
+  assert.equal(t.state, 'connected');
+  assert.deepEqual(k.cp.writes.slice(before), [[0x00], [0x07], [0x05, 180, 0]], JSON.stringify(k.cp.writes.slice(before)));
+  // same for a grade: the hill the rider was on is restored after the drop
+  t.setGrade(0.04);
+  await tick();
+  await k.drop();
+  assert.deepEqual(k.cp.writes.slice(-3), [[0x00], [0x07], [0x11, 0, 0, 0x90, 0x01, 0, 0]]);
+  // a target set before the trainer was ever connected waits for the first connect
+  const fresh = new Trainer();
+  fresh.setErg(120);
+  assert.equal(fresh.state, 'disconnected');
+  RETRY_MS.splice(0, RETRY_MS.length, ...saved);
+  console.log('ok - trainer drop: no writes while gone, latest ERG target or grade restored on reconnect');
+}
+
+// ---- trainer: what goes over the control point, tick after tick
+{
+  const k = await fakeKickr();
+  const t = k.trainer;
+  const sent = () => k.cp.writes.slice(2); // after request control + start
+  for (let i = 0; i < 8; i++) t.setErg(200); // the engine calls this every tick (4 Hz)
+  await tick();
+  assert.deepEqual(sent(), [[0x05, 200, 0]], 'same ERG target each tick: sent once');
+  t.setErg(2600); await tick();
+  t.setErg(-20); await tick();
+  assert.deepEqual(sent().slice(1), [[0x05, 0xd0, 0x07], [0x05, 0, 0]], 'ERG target kept within 0..2000 W');
+  k.cp.writes.length = 2;
+  for (let i = 0; i < 8; i++) t.setGrade(0.031); // same grade every tick
+  await tick();
+  t.setGrade(0.03104); // below the trainer's 0.01 % resolution: no new command
+  await tick();
+  assert.deepEqual(sent(), [[0x11, 0, 0, 0x36, 0x01, 0, 0]], 'same grade each tick: sent once');
+  t.setGrade(0.05); await tick();
+  t.setErg(0); await tick();
+  t.setGrade(0.05); await tick(); // back to the same grade after an ERG stretch: sent again
+  assert.deepEqual(sent().slice(1), [[0x11, 0, 0, 0xf4, 0x01, 0, 0], [0x05, 0, 0], [0x11, 0, 0, 0xf4, 0x01, 0, 0]]);
+  console.log('ok - trainer commands: one write per change, ERG clamped, grade back after ERG resent');
+}
+
+// ---- trainer: the control point says no
+{
+  let res = 0x01;
+  const k = await fakeKickr({ answer: (op) => (op === 0x00 ? 0x01 : res) });
+  const t = k.trainer;
+  // control taken away (another app, or the trainer reset itself): Rodillo asks for control again
+  res = 0x05;
+  const lines = await trainerLog(async () => { t.setErg(220); await tick(20); });
+  res = 0x01;
+  assert.deepEqual(k.cp.writes.slice(2, 4), [[0x05, 220, 0], [0x00]], JSON.stringify(k.cp.writes));
+  assert.ok(lines.some((l) => /op 0x5 result 5/.test(l)), lines.join('\n'));
+  // any other refusal shows in the log, and nothing else is written
+  res = 0x03; // invalid parameter
+  const n = k.cp.writes.length;
+  const lines2 = await trainerLog(async () => { t.setGrade(0.02); await tick(20); });
+  res = 0x01;
+  assert.equal(k.cp.writes.length, n + 1);
+  assert.ok(lines2.some((l) => /op 0x11 result 3/.test(l)), lines2.join('\n'));
+  // indications that aren't control point responses are ignored
+  const n2 = k.cp.writes.length;
+  const lines3 = await trainerLog(async () => { k.cp.fire([0x81, 0x05, 0x05]); await tick(); });
+  assert.equal(k.cp.writes.length, n2);
+  assert.deepEqual(lines3, []);
+  console.log('ok - trainer control point: re-requests control when refused, other refusals logged');
+}
+
+// ---- trainer: riding data from every Indoor Bike Data field, and cadence from Cycling Power when FTMS has none
+{
+  const k = await fakeKickr({ cps: true, status: true });
+  const t = k.trainer;
+  let seen = 0;
+  t.on('data', () => seen++);
+  // every optional field present: speed, avg speed, cadence, avg cadence, distance, resistance, power, avg power,
+  // energy (5 bytes), HR. Values read must not shift into the wrong field.
+  k.ibd.fire(le([[0x03fe, 2], [3150, 2], [3000, 2], [182, 2], [170, 2], [70000, 3], [-12, 2], [264, 2], [250, 2], [400, 2], [900, 2], [15, 1], [143, 1]]));
+  assert.deepEqual([t.data.speedKmh, t.data.cadence, t.data.distance, t.data.resistance, t.data.power, t.data.hr], [31.5, 91, 70000, -12, 264, 143]);
+  assert.equal(seen, 1);
+
+  // a trainer whose FTMS data has no cadence: cadence comes from the crank revolutions in Cycling Power
+  const c = await fakeKickr({ cps: true });
+  const ct = c.trainer;
+  c.ibd.fire(le([[0x0040, 2], [2800, 2], [230, 2]])); // speed + power, no cadence
+  assert.equal(ct.data.power, 230);
+  // flags: pedal balance, accumulated torque, wheel revs, crank revs
+  const cpm = (crank, time) => c.cpm.fire(le([[0x0035, 2], [230, 2], [50, 1], [1000, 2], [5000, 4], [2048, 2], [crank, 2], [time, 2]]));
+  cpm(10, 1024);
+  cpm(11, 1024 + 683);
+  assert.equal(Math.round(ct.data.cadence), 90);
+  for (let i = 0; i < 4; i++) cpm(11, 1024 + 683); // the rider stops pedalling: no new crank events
+  assert.equal(ct.data.cadence, 0, 'cadence drops to 0, never frozen');
+  cpm(12, 1024 + 683 + 700);
+  assert.ok(ct.data.cadence > 0);
+  // once FTMS reports cadence it wins; Cycling Power cadence is ignored
+  c.ibd.fire(le([[0x0044, 2], [2800, 2], [170, 2], [230, 2]]));
+  cpm(14, 1024 + 683 + 1000);
+  assert.equal(ct.data.cadence, 85);
+
+  // FTMS status notifications go to the log (what shows in the Connections log when the trainer resets)
+  const lines = await trainerLog(async () => k.st.fire([0x08, 0x00]));
+  assert.ok(lines.includes('status 08 00'), lines.join('\n'));
+  console.log('ok - trainer data: all FTMS fields, crank cadence fallback and stop, status logged');
+}
+
+// ---- trainer: Zwift protocol hand-off when the trainer has none
+{
+  const k = await fakeKickr();
+  const t = k.trainer;
+  t.setErg(180); await tick();
+  const n = k.cp.writes.length;
+  assert.equal(t.zwiftShifting, false);
+  t.setZwiftSim({ grade: 0.05, gearRatio: 34 / 17, riderKg: 77, bikeKg: 12.5 }); // a stale call from the engine
+  await tick();
+  assert.equal(k.cp.writes.length, n, 'no Zwift link: nothing sent, ERG target unchanged');
+  assert.equal(t.mode, 'erg');
+  // the picker offers KICKRs and FTMS trainers, and asks for the services the app needs
+  const o = Trainer.requestOptions();
+  assert.ok(o.filters.some((f) => f.namePrefix === 'KICKR') && o.filters.some((f) => f.services?.includes(uuid16(0x1826))));
+  assert.ok(o.optionalServices.includes(uuid16(0x1818)) && o.optionalServices.includes(uuid16(0xfc82)));
+  console.log('ok - trainer without Zwift protocol ignores Zwift sim; picker options');
 }
 
 // ---- zwift ride
