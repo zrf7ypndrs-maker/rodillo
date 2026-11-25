@@ -57,6 +57,8 @@ export const docs = {
   /** @param {string} id @returns {Promise<RideDoc | null>} */
   get: (id) => tx('readonly', (s) => s.get(id), 'docs').then((r) => r?.doc || null),
   clear: () => tx('readwrite', (s) => s.clear(), 'docs'),
+  /** @param {string} id */
+  del: (id) => tx('readwrite', (s) => s.delete(id), 'docs'),
   /** @param {string} id @param {RideDoc} doc */
   async put(id, doc) {
     await tx('readwrite', (s) => s.put({ id, doc, at: Date.now() }), 'docs');

@@ -545,7 +545,6 @@
  * @property {(pct: number) => string} recZone
  * @property {(id: string) => void} openRide
  * @property {(ride: any) => any} downloadFit
- * @property {(text: string, opts?: object) => Promise<boolean>} ask
  */
 
 export {};

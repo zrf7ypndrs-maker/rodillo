@@ -28,11 +28,10 @@ import { dkey, dayDate } from './dates.js';
 /** @type {Deps['recZone']} */ let recZone;
 /** @type {Deps['openRide']} */ let openRide;
 /** @type {Deps['downloadFit']} */ let downloadFit;
-/** @type {Deps['ask']} */ let ask;
 
 /** @param {import('./types.js').TrainingDeps} deps */
 export function initTraining(deps) {
-  ({ app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask } = deps);
+  ({ app, look, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit } = deps);
 }
 
 
@@ -240,7 +239,7 @@ export async function renderTraining() {
       return `<tr data-ride="${esc(x.id)}"><td>${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
       <td>${esc(x.name)} ${status}</td><td>${fmtTime(x.durSec)}</td><td>${x.np != null ? `${x.np} W` : '-'}</td><td>${x.if ?? '-'}</td><td>${x.tss}${x.tssFrom === 'hr' ? ' <span class="muted">HR</span>' : ''}</td><td>${x.avgHr ?? '-'}</td>
       <td>${comp}</td><td>${x.decoupling != null ? x.decoupling + '%' : ''}</td>
-      <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button> <button class="ghost small" data-del="${r.local.id}">Delete</button>` : ''}</td></tr>`;
+      <td class="nowrap">${r.local ? `<button class="ghost small" data-fit="${r.local.id}">.FIT</button>` : ''}</td></tr>`;
     }).join('')}</table>
     <div class="ride-list">${rows.map((r) => {
       const x = r.summary;
@@ -250,11 +249,10 @@ export async function renderTraining() {
       const st = (l, v, u = '') => `<span class="rl-s"><span class="v">${v}${u ? `<small>${u}</small>` : ''}</span><span class="l">${l}</span></span>`;
       return `<div class="rl" data-ride="${esc(x.id)}"><div class="rl-head"><span class="rl-name"><span class="rl-date">${new Date(x.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span>${esc(x.name)}${status}</span>${right}</div>
         <div class="rl-stats">${st('Time', fmtTime(x.durSec))}${st('NP', x.np != null ? x.np : '-', x.np != null ? ' W' : '')}${st('IF', x.if ?? '-')}${st(x.tssFrom === 'hr' ? 'TSS (HR)' : 'TSS', x.tss)}${st('HR', x.avgHr ?? '-')}</div>
-        ${r.local ? `<div class="rl-btns"><button class="ghost small" data-fit="${r.local.id}">.FIT</button><button class="ghost small" data-del="${r.local.id}">Delete</button></div>` : ''}</div>`;
+        ${r.local ? `<div class="rl-btns"><button class="ghost small" data-fit="${r.local.id}">.FIT</button></div>` : ''}</div>`;
     }).join('')}</div>` : '<p class="muted">No rides yet.</p>';
   $$('#ride-table .rl').forEach((el) => (el.onclick = (/** @type {ElementEvent} */ e) => { if (!e.target.closest('button')) openRide(el.dataset.ride); }));
-  // a row opens its ride page (the .FIT / Delete buttons keep their own job)
+  // a row opens its ride page (the .FIT button keeps its own job; Delete is on the ride page)
   $$('#ride-table tr[data-ride]').forEach((tr) => (tr.onclick = (/** @type {ElementEvent} */ e) => { if (!e.target.closest('button')) openRide(tr.dataset.ride); }));
   $$('[data-fit]').forEach((b) => (b.onclick = async () => downloadFit(await rides.get(+b.dataset.fit))));
-  $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this Mac?', ok: 'Delete', danger: true })) { await rides.del(+b.dataset.del); renderTraining(); } }));
 }

@@ -10,7 +10,7 @@ import { flatten, parseZwo } from './engine/workout.js';
 import { encodeActivity } from './fit.js';
 import { buildRide, powerCurve, ftpFromRide } from './stats.js';
 import { ZONES, zoneOf } from './zones.js';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, syncedToPrune } from './sync.js';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, syncedToPrune, deleteScope } from './sync.js';
 import { reconcile, applyPending } from './settings-sync.js';
 import { ls, rides, docs } from './store.js';
 import { dkey, dayDate } from './dates.js';
@@ -31,6 +31,7 @@ import { authEnabled, authSession, authToken, takeSignIn } from './auth.js';
 /** @typedef {import('./types.js').Settings} Settings */
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 /** @typedef {import('./types.js').FieldEvent} FieldEvent */
+/** @typedef {import('./types.js').LocalRide} LocalRide */
 
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 const ZC = { z1: '#a3a9ae', z2: '#2d7ff9', z3: '#1fa855', z4: '#f4be1a', z5: '#f47b20', z6: '#e23b44' }; // keep in sync with --z1..--z6 in app.css
@@ -903,23 +904,35 @@ function doneSync(ride, state, text) {
   if (el) { el.className = `dn-sync ${state}`; el.textContent = text; }
 }
 
-async function doneDiscard() {
+function doneDiscard() {
   const d = rd.done, ride = d.ride;
-  const remote = !ride.demo && !!syncClient();
-  const ok = await ask(remote ? 'It will be deleted here and from your synced history in rodillo-data.' : 'It will be deleted from this device.',
-    { title: 'Discard this ride?', ok: 'Discard', danger: true });
-  if (!ok || rd.done !== d) return;
-  ride.discarded = true;
-  try { await rides.del(ride.id); } catch { /* ignore */ }
+  return deleteRideEverywhere({ id: ride.summary.id, local: ride, demo: ride.demo, pushing: !!d.syncP, wait: d.syncP, title: 'Discard this ride?', ok: 'Discard', said: 'Ride discarded' });
+}
+
+/**
+ * Deletes one ride everywhere after asking (the done page's Discard and the ride page's Delete): this device's recording
+ * and cached copy, then rodillo-data when `deleteScope()` says it's there. The id goes into pendingDeletes first, so the
+ * lists drop it right away and an offline delete retries in `syncPending()`. `wait`: a push still in flight lands first.
+ * @param {{ id: string, local?: LocalRide | null, demo?: boolean, pushing?: boolean, wait?: Promise<any>, title: string, ok: string, said: string }} o
+ */
+async function deleteRideEverywhere({ id, local = null, demo = false, pushing = false, wait, title, ok, said }) {
+  const gh = syncClient();
+  const scope = deleteScope({ demo, synced: !!local?.synced, inIndex: ls.get('remoteIndex', []).some((r) => r.id === id), pushing, signedIn: !!gh });
+  if (!(await ask(scope.text, { title, ok, danger: true })) || rd.id !== id) return;
+  if (scope.remote) ls.set('pendingDeletes', [...new Set([...ls.get('pendingDeletes', []), id])]);
+  if (local) { local.discarded = true; try { await rides.del(local.id); } catch { /* ignore */ } }
+  try { await docs.del(id); } catch { /* ignore */ }
   closeRide();
-  toast('Ride discarded');
-  if (!remote) return;
-  await d.syncP; // a push still in flight lands first, then it's removed
-  if (!ride.synced) return;
-  const id = ride.summary.id;
-  try { ls.set('remoteIndex', (await syncClient().deleteRide(id)).rides); }
-  catch (e) { logMsg('sync', `delete ${id} failed: ${e.message}`); ls.set('pendingDeletes', [...new Set([...ls.get('pendingDeletes', []), id])]); }
+  toast(said);
+  if (app.tab === 'training') renderTraining();
   refreshPlanViews();
+  if (!scope.remote) return;
+  await wait;
+  try {
+    ls.set('remoteIndex', (await gh.deleteRide(id)).rides);
+    ls.set('pendingDeletes', ls.get('pendingDeletes', []).filter((x) => x !== id));
+    logMsg('sync', `deleted ${id}`);
+  } catch (e) { logMsg('sync', `delete ${id} failed: ${e.message}`); }
 }
 
 async function doneFtp(take) {
@@ -947,7 +960,7 @@ function renderRidePage() {
   $('#rd').innerHTML = pageHtml(doc, {
     segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
     profile: w ? profileSvg(w, profileLook(), 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
-    canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!rd.local,
+    canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!(rd.local || syncClient()),
     done: rd.done,
   });
   bindRideChart();
@@ -1052,13 +1065,9 @@ $('#rd').addEventListener('click', async (/** @type {ElementEvent} */ e) => {
     else if (a === 'fit') {
       const st = rd.doc.summary;
       downloadFit(rd.local || { id: Date.parse(st.start), name: st.name, samples: samplesFromDoc(rd.doc), laps: rd.doc.laps, summary: st });
-    } else if (a === 'delete' && rd.local) {
-      if (!(await ask('Synced copies stay in rodillo-data.', { title: 'Delete this ride from this device?', ok: 'Delete', danger: true }))) return;
-      await rides.del(rd.local.id);
-      closeRide();
-      toast('Ride deleted');
-      if (app.tab === 'training') renderTraining();
-      refreshPlanViews();
+    } else if (a === 'delete' && rd.doc) {
+      const st = rd.doc.summary;
+      deleteRideEverywhere({ id: rd.id, local: rd.local, demo: !!(rd.local?.demo || st.source === 'demo'), title: 'Delete this ride?', ok: 'Delete', said: 'Ride deleted' });
     }
     return;
   }
@@ -1220,7 +1229,7 @@ document.addEventListener('click', (/** @type {ElementEvent} */ e) => {
   $('#btn-garage').click();
 });
 // ---- Training tab: js/training.js
-initTraining({ app, look: chartLook, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit, ask });
+initTraining({ app, look: chartLook, trainingRows, syncClient, dataRepo, syncHint, syncPending, whoopDay, recZone, openRide, downloadFit });
 // ---- Settings panel (Rider / Ride / Road feel / Trainer / Sync): js/settings.js
 /**
  * Settings changed what other screens show: who is signed in, the token or data repo (Mine workouts, the plan and its source

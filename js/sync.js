@@ -29,6 +29,17 @@ export function rideSources(local) {
   return mine ? ['local', 'cache', 'remote'] : ['remote', 'cache', 'local'];
 }
 
+/**
+ * What deleting a ride removes, and what the confirm says (Nov 25, Agustín: "why is there no option to delete
+ * sessions?"). This device's recording and cached copy always go; rodillo-data too when signed in and the ride is
+ * there or on its way (synced, in the repo's index, or a push in flight). Demo rides never reach the repo.
+ * @param {{ demo?: boolean, synced?: boolean, inIndex?: boolean, pushing?: boolean, signedIn?: boolean }} r
+ */
+export function deleteScope({ demo, synced, inIndex, pushing, signedIn }) {
+  const remote = !!signedIn && !demo && !!(synced || inIndex || pushing);
+  return { remote, text: remote ? 'It will be deleted here and from your synced history in rodillo-data.' : 'It will be deleted from this device.' };
+}
+
 /** Local ride ids (keys) safe to drop: done, synced, in the repo's index and older than KEEP_SYNCED_DAYS. */
 export function syncedToPrune(list, remoteIds, now = Date.now(), days = KEEP_SYNCED_DAYS) {
   const inRepo = new Set(remoteIds);

@@ -9,7 +9,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
-import { loadSeries, loadNow } from '../js/stats.js';
+import { loadSeries, loadNow, buildRide } from '../js/stats.js';
 import { flatten, mainSet, totalDuration, track, trackDist, trackClimbed, ftpWatts, segTarget, climbsByDist } from '../js/engine/workout.js';
 import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '../js/engine/climb.js';
 import { fmtTime } from '../js/ridepage.js';
@@ -1486,7 +1486,11 @@ async function run(viewport, label) {
   // nothing leaves the machine: GitHub, WHOOP and fonts CDNs get an empty answer (rodillo-data's index: the history)
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
   const history = { rides: HISTORY };
-  await mockGitHub(ctx, { get 'index.json'() { return history; } });
+  // HISTORY[1]'s ride file, so its ride page loads (and can be deleted); HISTORY[2] has none ("details are in rodillo-data")
+  const del = HISTORY[1], delAt = Date.parse(del.start);
+  const delDoc = buildRide(Array.from({ length: 120 }, (_, t) => ({ t: delAt + t * 1000, wt: t, power: 200, target: 0, hr: 140, cadence: 90, speed: 8, distance: t * 8, grade: 0 })),
+    { name: del.name, ftp: 250, startMs: delAt });
+  await mockGitHub(ctx, { get 'index.json'() { return history; }, [`rides/${del.id.slice(0, 4)}/${del.id}.json`]: delDoc });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
@@ -1559,6 +1563,29 @@ async function run(viewport, label) {
   await page.click('#rd [data-rd="back"]');
   await page.waitForSelector('#home.active', { timeout: 3000 });
   if (await page.getAttribute('#home', 'data-tab') !== 'training') fail('Back from a ride page left the Training tab');
+  // Delete on a synced ride's page (Nov 25): asks (Cancel keeps it), then it leaves the list at once; the git data API
+  // isn't mocked, so rodillo-data's copy waits in pendingDeletes for the next sync
+  if (await page.locator('#ride-table [data-del]').count()) fail('the rides list still has its own Delete buttons');
+  await page.click(`#ride-table ${phone ? '.rl' : 'tr'}[data-ride="${del.id}"] ${phone ? '.rl-name' : 'td'}`);
+  const delBtn = '#rd [data-rd="delete"] >> visible=true'; // desktop: top right; phone: at the bottom
+  await page.waitForSelector(`#ridepage.active ${delBtn}`, { timeout: 5000 }).catch(() => fail('no Delete on a synced ride\'s page'));
+  const askDel = async () => {
+    await page.click(delBtn);
+    await page.waitForFunction(() => !document.querySelector('#modal').classList.contains('hidden'), null, { timeout: 3000 });
+    const t = await page.textContent('#modal');
+    if (!/Delete this ride\?/.test(t) || !/from your synced history in rodillo-data/.test(t)) fail(`delete question: ${t}`);
+  };
+  await askDel();
+  await page.click('#modal-cancel');
+  if (!(await page.isVisible('#ridepage.active')) || await lsGet(page, 'pendingDeletes')) fail('Cancel on the delete question still deleted the ride');
+  await askDel();
+  await page.click('#modal-ok');
+  await page.waitForSelector('#home.active', { timeout: 3000 });
+  if (await page.getAttribute('#home', 'data-tab') !== 'training') fail('Delete did not go back to the Training tab');
+  await page.waitForFunction((id) => !document.querySelector(`#ride-table [data-ride="${id}"]`), del.id, { timeout: 3000 }).catch(() => fail('the deleted ride is still in the list'));
+  if (await page.locator(`#ride-table ${phone ? '.rl' : 'tr'}[data-ride]`).count() !== HISTORY.length - 1) fail('Delete removed more than one ride from the list');
+  await page.waitForFunction((id) => (JSON.parse(localStorage.getItem('rodillo.pendingDeletes') || '[]')).includes(id), del.id, { timeout: 5000 })
+    .catch(() => fail('the failed rodillo-data delete was not queued'));
   history.rides = [];
   await page.evaluate(() => localStorage.removeItem('rodillo.remoteIndex'));
   await page.click('#tabs button[data-tab="today"]');
@@ -1566,7 +1593,7 @@ async function run(viewport, label) {
   await page.waitForFunction(() => /No rides yet/.test(document.querySelector('#ride-table').textContent), null, { timeout: 3000 });
   await page.click('#tabs button[data-tab="today"]');
   await page.evaluate(() => localStorage.removeItem('rodillo.sync')); // the rest of the run is signed out, as before
-  ok(`${label}: Training: locked signed out; signed in: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history`);
+  ok(`${label}: Training: locked signed out; signed in: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history; Delete on a ride page (Cancel keeps it, then gone from the list and queued for rodillo-data)`);
 
   await libraryStep(page, label);
 

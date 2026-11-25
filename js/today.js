@@ -526,10 +526,11 @@ export async function trainingRows() {
   const remote = ls.get('remoteIndex', []);
   let local = [];
   try { local = (await rides.list()).filter((r) => r.status === 'done' || r.status === 'inprogress'); } catch { /* no idb */ }
+  const gone = new Set(ls.get('pendingDeletes', [])); // deleted here, rodillo-data not told yet
   const rows = new Map();
-  for (const r of remote) rows.set(r.id, { summary: r, synced: true });
+  for (const r of remote) if (!gone.has(r.id)) rows.set(r.id, { summary: r, synced: true });
   for (const l of local) {
-    if (!l.summary?.id) continue; // rides from before history tracking
+    if (!l.summary?.id || gone.has(l.summary.id)) continue; // rides from before history tracking; deleted ones
     const row = rows.get(l.summary.id) || { summary: l.summary, synced: false };
     row.local = l;
     row.demo = l.demo;

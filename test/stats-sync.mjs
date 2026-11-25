@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, tssByZone, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
-import { GitHubSync, rideSources, syncedToPrune, KEEP_SYNCED_DAYS } from '../js/sync.js';
+import { GitHubSync, rideSources, syncedToPrune, deleteScope, KEEP_SYNCED_DAYS } from '../js/sync.js';
 import { flatten } from '../js/engine/workout.js';
 import fs from 'node:fs';
 
@@ -51,6 +51,18 @@ ok('tempo counts as work');
   assert.deepEqual(syncedToPrune(list, ['old'], now - KEEP_SYNCED_DAYS * day), []);
 }
 ok('synced rides read from the repo; local copies pruned after a few days');
+
+// ---- deleting a ride (Nov 25): here always, rodillo-data when signed in and the ride is or may be there
+{
+  const here = 'It will be deleted from this device.', both = 'It will be deleted here and from your synced history in rodillo-data.';
+  assert.deepEqual(deleteScope({ synced: true, signedIn: true }), { remote: true, text: both });
+  assert.deepEqual(deleteScope({ inIndex: true, signedIn: true }), { remote: true, text: both }); // only in the repo (pruned here)
+  assert.deepEqual(deleteScope({ pushing: true, signedIn: true }), { remote: true, text: both }); // done page, push in flight
+  assert.deepEqual(deleteScope({ synced: false, signedIn: true }), { remote: false, text: here }); // never reached the repo
+  assert.deepEqual(deleteScope({ synced: true, inIndex: true, signedIn: false }), { remote: false, text: here });
+  assert.deepEqual(deleteScope({ demo: true, synced: true, inIndex: true, pushing: true, signedIn: true }), { remote: false, text: here });
+}
+ok('delete scope: this device, plus rodillo-data when signed in and the ride is there');
 
 // ---- decoupling: steady power, HR drifting up 8% in second half
 const N = 3600;
