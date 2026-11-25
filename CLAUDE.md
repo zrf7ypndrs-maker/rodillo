@@ -20,6 +20,7 @@ Agustín's own Zwift replacement (vanilla JS web app on GitHub Pages). Private d
 
 ## Module rules
 - A screen module exports `initX(deps)`, called from js/app.js; its deps are only app state and app.js hooks, typed by a Deps type in js/types.js (a new dep goes in the Deps type first).
+- `npm run lint` enforces: no import of js/app.js, no `alert` / `confirm` / `prompt`, no local copy of a day-key helper, complexity 25 per function.
 - Never import js/app.js from a module. DOM helpers (`$`, `$$`, `esc`, `toast`, `fld`, ...) come from js/ui.js, which never reads `app`. Day keys (`dkey`, `dayDate`, `addDays`, `mondayOf`) come from js/dates.js: never keep a local copy.
 - Pure renderers (data in, markup out) are plain exports with unit tests, not deps. When they need theme colors or the phone layout they take a `look` argument; when they also need app state, one view argument `v` built at draw time. They never read app.js.
 - Settings never calls another screen's renderer: a change other screens show goes through `refreshAfterSettings()` in app.js.
