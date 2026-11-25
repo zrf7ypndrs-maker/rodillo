@@ -120,87 +120,121 @@ function modeOf(doc) {
   return erg && slope ? 'ERG + slope' : erg ? 'ERG' : 'Slope';
 }
 
+const HIDDEN_TAGS = new Set(['sim', 'free-slope', 'imported', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+const stat = (v, l, sub = '') => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+const statIf = (on, ...a) => (on ? stat(...a) : '');
+
+/** The header's numbers (at most 8): time, distance on slope rides, NP, TSS, IF, kJ, HR, cadence, interval scores. */
+function statsHtml(st, slope) {
+  const kmh = st.distKm && st.durSec ? Math.round((st.distKm / st.durSec) * 36000) / 10 : null;
+  return [
+    stat(fmtTime(st.durSec), 'Time', !slope && st.distKm ? `${st.distKm.toFixed(1)} km` : ''),
+    slope && st.distKm ? stat(`${st.distKm.toFixed(1)}<small>km</small>`, 'Distance', kmh ? `${kmh} km/h` : '') : '',
+    st.np != null ? stat(`${st.np}<small>W</small>`, 'NP', st.avgP != null ? `avg ${st.avgP} W` : '') : '',
+    st.tss != null ? stat(st.tss, 'TSS', st.tssFrom === 'hr' ? 'from heart rate' : '') : '',
+    statIf(st.if != null, Number(st.if).toFixed(2), 'IF'),
+    statIf(st.kj != null, st.kj, 'kJ'),
+    st.avgHr ? stat(st.avgHr, 'Avg HR', st.maxHr ? `max ${st.maxHr}` : '') : '',
+    statIf(st.avgCad, st.avgCad, 'Cadence'),
+    scoreStat(st.compliance),
+  ].filter(Boolean).slice(0, 8);
+}
+/** Intervals stat: average and lowest score over the reps, '' without scored reps. */
+const scoreStat = (c) => (c ? stat(`<span class="pct ${pctCls(c.min)}">${c.avg}%</span>`, 'Intervals', `min ${c.min}%, ${c.reps} ${c.reps === 1 ? 'rep' : 'reps'}`) : '');
+
+/** Intervals table cells: target (watts or grade), and the ERG table's score or the slope table's speed. */
+const intTarget = (s, x) => (s.kind === 'erg' ? (x.target ? `${x.target} W` : '') : `${+(x.grade ?? (s.grade || 0) * 100).toFixed(1)}%`);
+const intPct = (s, x) => (s.kind === 'erg' && s.work && x.pct ? `<span class="pct ${pctCls(x.pct)}">${x.pct}%</span>${x.effort ? `<span class="effn">${x.effort}% effort</span>` : ''}` : '');
+function intThird(doc, s, ergTable) {
+  if (ergTable) return `<td class="r">${intPct(s, s.res)}</td>`;
+  const ss = segStats(doc, s);
+  return `<td class="r num rd-wide">${ss.avgKmh != null ? `${ss.avgKmh} km/h` : ''}</td>`;
+}
+
+/** One row of the intervals table (recoveries muted). */
+function intRow(doc, s, opts, ergTable) {
+  const x = s.res;
+  const cad = `${x.avgCad ?? ''}${x.cadTarget ? `<span class="cadin">${x.cadInRange ?? '-'}% in ${esc(x.cadTarget)}</span>` : ''}`;
+  return `<tr data-i="${s.i}" class="${s.work ? '' : 'rec'} ${opts.sel === s.i ? 'sel' : ''}">
+      <td><span class="zdot" style="background:${segColor(s, opts.ftp, opts.zoneHex, opts.gradeHex)}"></span>${esc(s.label || 'Interval')}${x.rep ? ` ${esc(x.rep)}` : ''}</td>
+      <td class="r num rd-wide">${fmtTime(s.end - s.start)}</td><td class="r num">${intTarget(s, x)}</td><td class="r num">${x.avgP != null ? `${x.avgP} W` : ''}</td>${intThird(doc, s, ergTable)}
+      <td class="r num">${x.avgHr ?? ''}</td><td class="r num">${cad}</td></tr>`;
+}
+
+/** Time in zones card, '' without zone data. */
+function zonesHtml(st) {
+  if (!st.zones?.some(Boolean)) return '';
+  const total = st.zones.reduce((a, b) => a + (b || 0), 0), max = Math.max(...st.zones);
+  return `<section class="card"><h3>Time in zones<span class="muted">at FTP ${st.ftp} W</span></h3><div class="zbars">${ZONES.map((z, i) => {
+    const sec = st.zones[i] || 0;
+    return `<div class="zb-z">Z${z.z}</div><div class="zb-n">${z.name}<span>${zoneRange(i, st.ftp)}</span></div>
+        <div class="zb-bar"><i style="width:${(sec / max) * 100}%;background:var(--${z.color})"></i></div>
+        <div class="zb-t">${sec ? fmtLong(sec) : '-'}</div><div class="zb-p">${sec ? Math.round((sec / total) * 100) + '%' : ''}</div>`;
+  }).join('')}</div></section>`;
+}
+
+/** Best power card (5 s, 1, 5, 20 min, against the 90-day bests), '' without bests. */
+function bestHtml(st, season) {
+  const cells = [[5, '5 s'], [60, '1 min'], [300, '5 min'], [1200, '20 min']].filter(([dur]) => st.bests?.[dur]).map(([dur, l]) => {
+    const v = st.bests[dur], sb = season?.[dur];
+    const sub = sb && v >= sb ? '<span class="pr">Best in 90 days</span>' : sb ? `90-day best ${sb}` : '';
+    return `<div><div class="v">${v}<small> W</small></div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  }).join('');
+  return cells ? `<section class="card"><h3>Best power</h3><div class="rd-best">${cells}</div></section>` : '';
+}
+
+const whenText = (d) => `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} &middot; ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+const actsHtml = (opts) => `${opts.canFit ? '<button class="ghost small" data-rd="fit">Export .FIT</button>' : ''}${opts.canDelete ? '<button class="ghost small danger" data-rd="delete">Delete</button>' : ''}`;
+const BACK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+const topHtml = (opts, acts) => (opts.done
+  ? doneBarHtml(opts.done)
+  : `<div class="rd-nav"><button class="ghost small rd-back" data-rd="back">${BACK_ICON}${esc(opts.backLabel || 'Back')}</button><div class="rd-acts">${acts}</div></div>`);
+
+function chartsHtml(doc, opts, segs) {
+  if (!laneKeys(doc).length) return '<p class="muted">This ride has no recorded data to chart.</p>';
+  const ints = segs.length ? (opts.phone ? ' Tap an interval to select it.' : ' Click an interval to select it.') : '';
+  return `<section class="card rd-charts">
+      <div class="rd-chhead"><div class="rd-sel" id="rd-sel"></div><div class="rd-hint" id="rd-hint">${opts.phone ? 'Drag across the chart to read any second.' : 'Point at the chart to read any second.'}${ints}</div></div>
+      <div class="rd-wrap" id="rd-wrap"><svg id="rd-chart" class="rd-chart"></svg><div class="rd-tip" id="rd-tip" role="status"></div></div>
+    </section>`;
+}
+
+/** Intervals table and the side cards (zones, best power), '' when there are neither. */
+function gridHtml(rows, head, side) {
+  if (!rows && !side) return '';
+  return `<div class="rd-grid ${rows ? '' : 'noints'}">
+      ${rows ? `<section class="card rd-ints"><h3>Intervals</h3><table class="ints" id="rd-ints"><tr>${head}</tr>${rows}</table></section>` : ''}
+      ${side ? `<div class="rd-side">${side}</div>` : ''}
+    </div>`;
+}
+
 /**
  * The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel }
  * @param {RideDoc} doc
  */
 export function pageHtml(doc, opts) {
   const st = doc.summary;
-  const d = new Date(st.start || st.id);
-  const when = `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} &middot; ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  const when = whenText(new Date(st.start || st.id));
   const mode = modeOf(doc);
-  const hidden = new Set(['sim', 'free-slope', 'imported', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
-  const tags = (st.tags || []).filter((t) => !hidden.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
-  const kmh = st.distKm && st.durSec ? Math.round((st.distKm / st.durSec) * 36000) / 10 : null;
-  const slope = mode === 'Slope' || mode === 'ERG + slope';
-  const stat = (v, l, sub = '') => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  const stats = [
-    stat(fmtTime(st.durSec), 'Time', !slope && st.distKm ? `${st.distKm.toFixed(1)} km` : ''),
-    slope && st.distKm ? stat(`${st.distKm.toFixed(1)}<small>km</small>`, 'Distance', kmh ? `${kmh} km/h` : '') : '',
-    st.np != null ? stat(`${st.np}<small>W</small>`, 'NP', st.avgP != null ? `avg ${st.avgP} W` : '') : '',
-    st.tss != null ? stat(st.tss, 'TSS', st.tssFrom === 'hr' ? 'from heart rate' : '') : '',
-    st.if != null ? stat(Number(st.if).toFixed(2), 'IF') : '',
-    st.kj != null ? stat(st.kj, 'kJ') : '',
-    st.avgHr ? stat(st.avgHr, 'Avg HR', st.maxHr ? `max ${st.maxHr}` : '') : '',
-    st.avgCad ? stat(st.avgCad, 'Cadence') : '',
-    st.compliance ? stat(`<span class="pct ${pctCls(st.compliance.min)}">${st.compliance.avg}%</span>`, 'Intervals', `min ${st.compliance.min}%, ${st.compliance.reps} ${st.compliance.reps === 1 ? 'rep' : 'reps'}`) : '',
-  ].filter(Boolean).slice(0, 8);
+  const tags = (st.tags || []).filter((t) => !HIDDEN_TAGS.has(t)).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+  const stats = statsHtml(st, mode === 'Slope' || mode === 'ERG + slope');
 
-  // intervals table: every interval with data, recoveries muted
   const segs = opts.segs || [];
   const ergTable = segs.some((s) => s.kind === 'erg');
-  const rows = segs.filter((s) => s.res).map((s) => {
-    const x = s.res, ss = segStats(doc, s);
-    const tgt = s.kind === 'erg' ? (x.target ? `${x.target} W` : '') : `${+(x.grade ?? (s.grade || 0) * 100).toFixed(1)}%`;
-    const pct = s.kind === 'erg' && s.work && x.pct ? `<span class="pct ${pctCls(x.pct)}">${x.pct}%</span>${x.effort ? `<span class="effn">${x.effort}% effort</span>` : ''}` : '';
-    const third = ergTable ? `<td class="r">${pct}</td>` : `<td class="r num rd-wide">${ss.avgKmh != null ? `${ss.avgKmh} km/h` : ''}</td>`;
-    const cad = `${x.avgCad ?? ''}${x.cadTarget ? `<span class="cadin">${x.cadInRange ?? '-'}% in ${esc(x.cadTarget)}</span>` : ''}`;
-    return `<tr data-i="${s.i}" class="${s.work ? '' : 'rec'} ${opts.sel === s.i ? 'sel' : ''}">
-      <td><span class="zdot" style="background:${segColor(s, opts.ftp, opts.zoneHex, opts.gradeHex)}"></span>${esc(s.label || 'Interval')}${x.rep ? ` ${esc(x.rep)}` : ''}</td>
-      <td class="r num rd-wide">${fmtTime(s.end - s.start)}</td><td class="r num">${tgt}</td><td class="r num">${x.avgP != null ? `${x.avgP} W` : ''}</td>${third}
-      <td class="r num">${x.avgHr ?? ''}</td><td class="r num">${cad}</td></tr>`;
-  }).join('');
+  const rows = segs.filter((s) => s.res).map((s) => intRow(doc, s, opts, ergTable)).join('');
   const head = `<th>Interval</th><th class="r rd-wide">Time</th><th class="r">${ergTable ? 'Target' : 'Grade'}</th><th class="r">Avg</th>${ergTable ? '<th class="r">%</th>' : '<th class="r rd-wide">Speed</th>'}<th class="r">HR</th><th class="r">Cad</th>`;
-
-  const zones = st.zones?.some(Boolean) ? (() => {
-    const total = st.zones.reduce((a, b) => a + (b || 0), 0), max = Math.max(...st.zones);
-    return `<section class="card"><h3>Time in zones<span class="muted">at FTP ${st.ftp} W</span></h3><div class="zbars">${ZONES.map((z, i) => {
-      const sec = st.zones[i] || 0;
-      return `<div class="zb-z">Z${z.z}</div><div class="zb-n">${z.name}<span>${zoneRange(i, st.ftp)}</span></div>
-        <div class="zb-bar"><i style="width:${(sec / max) * 100}%;background:var(--${z.color})"></i></div>
-        <div class="zb-t">${sec ? fmtLong(sec) : '-'}</div><div class="zb-p">${sec ? Math.round((sec / total) * 100) + '%' : ''}</div>`;
-    }).join('')}</div></section>`;
-  })() : '';
-  const bestCells = [[5, '5 s'], [60, '1 min'], [300, '5 min'], [1200, '20 min']].filter(([dur]) => st.bests?.[dur]).map(([dur, l]) => {
-    const v = st.bests[dur], sb = opts.season?.[dur];
-    const sub = sb && v >= sb ? '<span class="pr">Best in 90 days</span>' : sb ? `90-day best ${sb}` : '';
-    return `<div><div class="v">${v}<small> W</small></div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  }).join('');
-  const best = bestCells ? `<section class="card"><h3>Best power</h3><div class="rd-best">${bestCells}</div></section>` : '';
-  const side = zones + best;
-  const acts = `${opts.canFit ? '<button class="ghost small" data-rd="fit">Export .FIT</button>' : ''}${opts.canDelete ? '<button class="ghost small danger" data-rd="delete">Delete</button>' : ''}`;
-  const back = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
-  const lanes = laneKeys(doc);
-
-  const top = opts.done
-    ? doneBarHtml(opts.done)
-    : `<div class="rd-nav"><button class="ghost small rd-back" data-rd="back">${back}${esc(opts.backLabel || 'Back')}</button><div class="rd-acts">${acts}</div></div>`;
+  const side = zonesHtml(st) + bestHtml(st, opts.season);
+  const acts = actsHtml(opts);
 
   return `
-    ${top}
+    ${topHtml(opts, acts)}
     <header class="rd-head ${opts.profile ? '' : 'noprof'}">
       <div><h2>${esc(st.name)}</h2><div class="rd-sub">${when} &middot; ${mode}${st.ftp ? ` &middot; FTP ${st.ftp} W` : ''}${tags ? ` ${tags}` : ''}</div></div>
       ${opts.profile ? `<div class="rd-thumb">${opts.profile}</div>` : ''}
     </header>
     <div class="rd-stats" style="--n:${stats.length}">${stats.join('')}</div>
-    ${lanes.length ? `<section class="card rd-charts">
-      <div class="rd-chhead"><div class="rd-sel" id="rd-sel"></div><div class="rd-hint" id="rd-hint">${opts.phone ? `Drag across the chart to read any second.${segs.length ? ' Tap an interval to select it.' : ''}` : `Point at the chart to read any second.${segs.length ? ' Click an interval to select it.' : ''}`}</div></div>
-      <div class="rd-wrap" id="rd-wrap"><svg id="rd-chart" class="rd-chart"></svg><div class="rd-tip" id="rd-tip" role="status"></div></div>
-    </section>` : '<p class="muted">This ride has no recorded data to chart.</p>'}
-    ${rows || side ? `<div class="rd-grid ${rows ? '' : 'noints'}">
-      ${rows ? `<section class="card rd-ints"><h3>Intervals</h3><table class="ints" id="rd-ints"><tr>${head}</tr>${rows}</table></section>` : ''}
-      ${side ? `<div class="rd-side">${side}</div>` : ''}
-    </div>` : ''}
+    ${chartsHtml(doc, opts, segs)}
+    ${gridHtml(rows, head, side)}
     ${acts && !opts.done ? `<div class="rd-foot">${acts}</div>` : ''}`;
 }
 
