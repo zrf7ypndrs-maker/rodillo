@@ -345,6 +345,110 @@ const LANES = {
   grade: { label: 'Grade', unit: '%', h: [54, 44] },
 };
 
+/** Each lane's value range. */
+function chartScale(S, o, pw, sp) {
+  const hrVals = (S.hr || []).filter(Boolean), cadVals = (S.cadence || []).filter(Boolean);
+  return {
+    power: [0, Math.max(o.ftp * 1.3, amax(pw)) * 1.06],
+    hr: hrVals.length ? [amin(hrVals) - 5, amax(hrVals) + 5] : [60, 190],
+    cadence: [Math.min(40, amin(cadVals, 60) - 5), Math.max(115, amax(cadVals) + 5)],
+    speed: [0, Math.max(10, amax(sp)) * 1.1],
+    grade: [Math.min(-1, amin(S.grade)), Math.max(9, amax(S.grade)) + 1],
+  };
+}
+
+/** Faint bands through every lane for the work intervals, and the interval strip on top. */
+function chartBands(c) {
+  const { o, X, nn, top, bodyH, STRIP, tok } = c;
+  let out = '';
+  for (const s of o.segs) if (s.work) out += `<rect x="${X(s.start)}" y="${top}" width="${nn(X(s.end) - X(s.start))}" height="${bodyH}" fill="${tok.band}"/>`;
+  if (STRIP) out += `<g class="rd-strip">${o.segs.map((s) => `<rect data-i="${s.i}" x="${(X(s.start) + 0.5).toFixed(1)}" y="0" width="${Math.max(1, X(s.end) - X(s.start) - 1).toFixed(1)}" height="${STRIP}" rx="2" fill="${segColor(s, o.ftp, o.zoneHex, o.gradeHex)}"/>`).join('')}</g>`;
+  return out;
+}
+
+/** Power lane: zone-colored area (height from the 3 s power, color from a 20 s average so zones read as blocks), FTP line, ERG target. */
+function powerLane(c, l) {
+  const { S, T, PW, o, tok, X, yOf, tick, perPx, scale } = c, pw = c.vals.power;
+  let out = '';
+  const zs = smoothC(S.power, 20), base = l.y + l.h;
+  let run = null;
+  const flush = () => { if (run) out += `<path d="M${run.x0},${base}${run.pts}L${run.x1},${base}Z" fill="${run.c}"/>`; };
+  for (let px = 0; px <= Math.ceil(PW); px++) {
+    const a = Math.min(T - 1, Math.floor((px / PW) * T)), b = Math.max(a + 1, Math.floor(((px + 1) / PW) * T));
+    const v = mean(pw.slice(a, b)), col = o.zoneHex(mean(zs.slice(a, b)) / o.ftp), yy = yOf(l, v).toFixed(1);
+    if (!run || run.c !== col) {
+      if (run) { run.pts += `L${px},${yy}`; run.x1 = px; }
+      flush(); run = { c: col, x0: px, pts: `L${px},${yy}`, x1: px };
+    } else { run.pts += `L${px},${yy}`; run.x1 = px; }
+  }
+  flush();
+  out += `<line x1="0" x2="${PW}" y1="${yOf(l, o.ftp)}" y2="${yOf(l, o.ftp)}" stroke="${tok.ftp}" stroke-dasharray="4 4"/>${tick(l, o.ftp, 'FTP')}`;
+  if (has(S.target)) {
+    let d = '', pen = false;
+    for (let t = 0; t < T; t += perPx) { const v = S.target[t]; if (!v) { pen = false; continue; } d += `${pen ? 'L' : 'M'}${X(t).toFixed(1)},${yOf(l, v).toFixed(1)}`; pen = true; }
+    out += `<path d="${d}" fill="none" stroke="${tok.ink}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+  for (const v of [100, 300, 500]) if (v < scale.power[1] * 0.95 && Math.abs(v - o.ftp) > o.ftp * 0.25) out += tick(l, v);
+  return out;
+}
+
+function hrLane(c, l) {
+  let out = `<path d="${c.path(l, c.vals.hr)}" fill="none" stroke="${c.tok.hr}" stroke-width="1.8" stroke-linejoin="round"/>`;
+  const [a, b] = c.scale.hr;
+  for (const v of [Math.ceil((a + 4) / 10) * 10, Math.floor((b - 4) / 10) * 10]) out += c.tick(l, v);
+  return out;
+}
+
+function cadenceLane(c, l) {
+  const { o, X, nn, yOf, tok, scale } = c;
+  let out = '';
+  for (const s of o.segs) {
+    if (!s.cad) continue;
+    const hi = Math.min(s.cad.hi ?? Infinity, scale.cadence[1]); // "95+" has no ceiling (Infinity, null once it went through JSON)
+    out += `<rect x="${X(s.start)}" y="${yOf(l, hi)}" width="${nn(X(s.end) - X(s.start))}" height="${nn(yOf(l, s.cad.lo) - yOf(l, hi))}" fill="${tok.infoLine}" opacity=".7"/>`;
+  }
+  return out + `<path d="${c.path(l, c.vals.cadence)}" fill="none" stroke="${tok.info}" stroke-width="1.6" stroke-linejoin="round"/>${c.tick(l, 60)}${c.tick(l, 90)}`;
+}
+
+function speedLane(c, l) {
+  let out = `<path d="${c.path(l, c.vals.speed)}" fill="none" stroke="${c.tok.ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  for (const v of [20, 40]) if (v < c.scale.speed[1]) out += c.tick(l, v);
+  return out;
+}
+
+function gradeLane(c, l) {
+  const { S, T, PW, o, yOf } = c, y0 = yOf(l, 0);
+  let out = '';
+  for (let px = 0; px < PW; px += 2) {
+    const g = S.grade[Math.min(T - 1, Math.floor((px / PW) * T))] || 0, y1 = yOf(l, g);
+    if (g) out += `<rect x="${px}" y="${Math.min(y0, y1).toFixed(1)}" width="2.1" height="${Math.abs(y1 - y0).toFixed(1)}" fill="${o.gradeHex(g / 100)}" opacity=".85"/>`;
+  }
+  return out + c.tick(l, 0) + c.tick(l, 8);
+}
+
+const LANE_SVG = { power: powerLane, hr: hrLane, cadence: cadenceLane, speed: speedLane, grade: gradeLane };
+
+/** Time labels along the bottom. */
+function chartAxis(T, X, H) {
+  const step = T > 5400 ? 1800 : T > 2400 ? 600 : T > 900 ? 300 : 60;
+  let out = '';
+  for (let t = 0; t <= T - step * 0.4; t += step) out += `<text class="rd-tick" x="${X(t)}" y="${H - 3}" text-anchor="${t ? 'middle' : 'start'}">${t ? (t >= 3600 && step >= 1800 ? fmtTime(t).replace(/:00$/, '') : `${Math.round(t / 60)} min`) : '0'}</text>`;
+  return out;
+}
+
+/** The selected interval: everything else dimmed, a frame around it. */
+function chartSel(c) {
+  const { o, X, nn, top, bodyH, PW, tok } = c;
+  if (o.sel == null) return '';
+  const s = o.segs.find((x) => x.i === o.sel);
+  if (!s) return '';
+  const a = X(s.start), b = X(s.end);
+  return `<rect x="0" y="${top}" width="${nn(a)}" height="${bodyH}" fill="${tok.dim}"/><rect x="${b}" y="${top}" width="${nn(PW - b)}" height="${bodyH}" fill="${tok.dim}"/>`
+    + `<rect x="${a}" y="${top}" width="${nn(b - a)}" height="${bodyH}" fill="none" stroke="${tok.ink}" stroke-width="1.5"/>`;
+}
+
+const xhFill = (k, tok) => (k === 'hr' ? tok.hr : k === 'cadence' ? tok.info : tok.ink);
+
 /**
  * The chart: interval strip, then one lane per stream on one time axis.
  * o: { width, phone, ftp, segs, sel, tok: { ink, rule, faint, ftp, hr, info, infoLine, band, dim, sheet }, zoneHex, gradeHex }
@@ -364,14 +468,7 @@ export function chartSvg(doc, o) {
   let y = STRIP ? STRIP + 8 : 4;
   lanes.forEach((l) => { l.y = y; y += l.h + GAP; });
   const H = y - GAP + AX, top = STRIP ? STRIP + 4 : 0, bodyH = H - AX - top;
-  const hrVals = (S.hr || []).filter(Boolean), cadVals = (S.cadence || []).filter(Boolean);
-  const scale = {
-    power: [0, Math.max(o.ftp * 1.3, amax(pw)) * 1.06],
-    hr: hrVals.length ? [amin(hrVals) - 5, amax(hrVals) + 5] : [60, 190],
-    cadence: [Math.min(40, amin(cadVals, 60) - 5), Math.max(115, amax(cadVals) + 5)],
-    speed: [0, Math.max(10, amax(sp)) * 1.1],
-    grade: [Math.min(-1, amin(S.grade)), Math.max(9, amax(S.grade)) + 1],
-  };
+  const scale = chartScale(S, o, pw, sp);
   const yOf = (l, v) => { const [a, b] = scale[l.k]; return l.y + l.h - ((v - a) / (b - a)) * l.h; };
   const perPx = Math.max(1, Math.round(T / PW));
   const path = (l, arr) => {
@@ -384,70 +481,17 @@ export function chartSvg(doc, o) {
     return d;
   };
   const tick = (l, v, txt = v) => `<text class="rd-tick" x="${PW + 5}" y="${(yOf(l, v) + 4).toFixed(1)}">${txt}</text>`;
-  const { tok } = o;
-  let out = '';
-  // work intervals: a faint band through every lane; the strip on top says which interval is which
-  for (const s of o.segs) if (s.work) out += `<rect x="${X(s.start)}" y="${top}" width="${nn(X(s.end) - X(s.start))}" height="${bodyH}" fill="${tok.band}"/>`;
-  if (STRIP) out += `<g class="rd-strip">${o.segs.map((s) => `<rect data-i="${s.i}" x="${(X(s.start) + 0.5).toFixed(1)}" y="0" width="${Math.max(1, X(s.end) - X(s.start) - 1).toFixed(1)}" height="${STRIP}" rx="2" fill="${segColor(s, o.ftp, o.zoneHex, o.gradeHex)}"/>`).join('')}</g>`;
+  const { tok } = o, vals = { power: pw, hr, cadence: cad, speed: sp };
+  const c = { S, T, PW, o, tok, X, nn, yOf, path, tick, perPx, scale, vals, top, bodyH, STRIP };
+  let out = chartBands(c);
   for (const l of lanes) {
     out += `<line x1="0" x2="${PW}" y1="${l.y + l.h}" y2="${l.y + l.h}" stroke="${tok.rule}"/>`;
     out += `<text class="rd-lane" x="4" y="${l.y + 12}">${l.label} <tspan>${l.unit}</tspan></text>`;
-    if (l.k === 'power') {
-      // zone-colored area: height from the 3 s power, color from a 20 s average so zones read as blocks
-      const zs = smoothC(S.power, 20), base = l.y + l.h;
-      let run = null;
-      const flush = () => { if (run) out += `<path d="M${run.x0},${base}${run.pts}L${run.x1},${base}Z" fill="${run.c}"/>`; };
-      for (let px = 0; px <= Math.ceil(PW); px++) {
-        const a = Math.min(T - 1, Math.floor((px / PW) * T)), b = Math.max(a + 1, Math.floor(((px + 1) / PW) * T));
-        const v = mean(pw.slice(a, b)), c = o.zoneHex(mean(zs.slice(a, b)) / o.ftp), yy = yOf(l, v).toFixed(1);
-        if (!run || run.c !== c) {
-          if (run) { run.pts += `L${px},${yy}`; run.x1 = px; }
-          flush(); run = { c, x0: px, pts: `L${px},${yy}`, x1: px };
-        } else { run.pts += `L${px},${yy}`; run.x1 = px; }
-      }
-      flush();
-      out += `<line x1="0" x2="${PW}" y1="${yOf(l, o.ftp)}" y2="${yOf(l, o.ftp)}" stroke="${tok.ftp}" stroke-dasharray="4 4"/>${tick(l, o.ftp, 'FTP')}`;
-      if (has(S.target)) {
-        let d = '', pen = false;
-        for (let t = 0; t < T; t += perPx) { const v = S.target[t]; if (!v) { pen = false; continue; } d += `${pen ? 'L' : 'M'}${X(t).toFixed(1)},${yOf(l, v).toFixed(1)}`; pen = true; }
-        out += `<path d="${d}" fill="none" stroke="${tok.ink}" stroke-width="1.6" stroke-linejoin="round"/>`;
-      }
-      for (const v of [100, 300, 500]) if (v < scale.power[1] * 0.95 && Math.abs(v - o.ftp) > o.ftp * 0.25) out += tick(l, v);
-    } else if (l.k === 'hr') {
-      out += `<path d="${path(l, hr)}" fill="none" stroke="${tok.hr}" stroke-width="1.8" stroke-linejoin="round"/>`;
-      const [a, b] = scale.hr;
-      for (const v of [Math.ceil((a + 4) / 10) * 10, Math.floor((b - 4) / 10) * 10]) out += tick(l, v);
-    } else if (l.k === 'cadence') {
-      for (const s of o.segs) {
-        if (!s.cad) continue;
-        const hi = Math.min(s.cad.hi ?? Infinity, scale.cadence[1]); // "95+" has no ceiling (Infinity, null once it went through JSON)
-        out += `<rect x="${X(s.start)}" y="${yOf(l, hi)}" width="${nn(X(s.end) - X(s.start))}" height="${nn(yOf(l, s.cad.lo) - yOf(l, hi))}" fill="${tok.infoLine}" opacity=".7"/>`;
-      }
-      out += `<path d="${path(l, cad)}" fill="none" stroke="${tok.info}" stroke-width="1.6" stroke-linejoin="round"/>${tick(l, 60)}${tick(l, 90)}`;
-    } else if (l.k === 'speed') {
-      out += `<path d="${path(l, sp)}" fill="none" stroke="${tok.ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
-      for (const v of [20, 40]) if (v < scale.speed[1]) out += tick(l, v);
-    } else if (l.k === 'grade') {
-      const y0 = yOf(l, 0);
-      for (let px = 0; px < PW; px += 2) {
-        const g = S.grade[Math.min(T - 1, Math.floor((px / PW) * T))] || 0, y1 = yOf(l, g);
-        if (g) out += `<rect x="${px}" y="${Math.min(y0, y1).toFixed(1)}" width="2.1" height="${Math.abs(y1 - y0).toFixed(1)}" fill="${o.gradeHex(g / 100)}" opacity=".85"/>`;
-      }
-      out += tick(l, 0) + tick(l, 8);
-    }
+    out += LANE_SVG[l.k](c, l);
   }
-  const step = T > 5400 ? 1800 : T > 2400 ? 600 : T > 900 ? 300 : 60;
-  for (let t = 0; t <= T - step * 0.4; t += step) out += `<text class="rd-tick" x="${X(t)}" y="${H - 3}" text-anchor="${t ? 'middle' : 'start'}">${t ? (t >= 3600 && step >= 1800 ? fmtTime(t).replace(/:00$/, '') : `${Math.round(t / 60)} min`) : '0'}</text>`;
-  if (o.sel != null) {
-    const s = o.segs.find((x) => x.i === o.sel);
-    if (s) {
-      const a = X(s.start), b = X(s.end);
-      out += `<rect x="0" y="${top}" width="${nn(a)}" height="${bodyH}" fill="${tok.dim}"/><rect x="${b}" y="${top}" width="${nn(PW - b)}" height="${bodyH}" fill="${tok.dim}"/>`;
-      out += `<rect x="${a}" y="${top}" width="${nn(b - a)}" height="${bodyH}" fill="none" stroke="${tok.ink}" stroke-width="1.5"/>`;
-    }
-  }
-  out += `<g class="rd-xh" style="display:none"><line y1="${top}" y2="${H - AX}" stroke="${tok.ink}" stroke-width="1"/>${lanes.filter((l) => l.k !== 'grade').map((l) => `<circle data-k="${l.k}" r="3.5" fill="${l.k === 'hr' ? tok.hr : l.k === 'cadence' ? tok.info : tok.ink}" stroke="${tok.sheet}" stroke-width="1.5"/>`).join('')}</g>`;
-  return { svg: out, width: W, height: H, geo: { T, PW, X, lanes, yOf, vals: { power: pw, hr, cadence: cad, speed: sp }, top } };
+  out += chartAxis(T, X, H) + chartSel(c);
+  out += `<g class="rd-xh" style="display:none"><line y1="${top}" y2="${H - AX}" stroke="${tok.ink}" stroke-width="1"/>${lanes.filter((l) => l.k !== 'grade').map((l) => `<circle data-k="${l.k}" r="3.5" fill="${xhFill(l.k, tok)}" stroke="${tok.sheet}" stroke-width="1.5"/>`).join('')}</g>`;
+  return { svg: out, width: W, height: H, geo: { T, PW, X, lanes, yOf, vals, top } };
 }
 
 /**
