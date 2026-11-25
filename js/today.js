@@ -54,6 +54,39 @@ function renderOverview() {
   bindRecoveryAdvice(el);
 }
 
+/** Phone recovery card: ring, % and the call from the hero line. */
+function recCardHtml(pct, z, hero, v) {
+  const C = 2 * Math.PI * 27;
+  const ring = `<svg class="rec-ring ${z}" viewBox="0 0 64 64" aria-hidden="true"><circle class="trk" cx="32" cy="32" r="27"/>${pct != null ? `<circle class="arc" cx="32" cy="32" r="27" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}"/>` : ''}</svg>`;
+  const call = hero.replace('class="hero-rec"', 'class="rc-call"');
+  return `<div class="rec-card">
+      <div class="rc-ring">${ring}<span class="rc-v">${pct != null ? `${pct}<small>%</small>` : `<span class="none">${v.whoop ? 'Not yet' : 'Off'}</span>`}</span></div>
+      <div class="rc-text"><div class="rc-l">Recovery</div>${call}${pct != null ? '' : `<div class="rc-sub">${v.whoop ? 'not scored yet' : 'no WHOOP'}</div>`}</div>
+    </div>`;
+}
+
+/**
+ * FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's
+ * setting. Returns the tile's step line and its sub line.
+ * @param {Date} now @param {TodayView} v
+ */
+function ftpTrend(real, now, v, est) {
+  const since = dkey(addDays(now, -90));
+  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [+dayDate(r.id.slice(0, 10)), r.ftp]);
+  fp.push([+now, v.settings.ftp]);
+  let ftpViz = '', ftpSub = '';
+  if (fp.length > 1) {
+    const t0 = fp[0][0], t1 = +now, vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
+    const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
+    let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
+    for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
+    ftpViz = `<div class="ov-ftp"><svg viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${d} V28 H0 Z"/><path d="${d}" vector-effect="non-scaling-stroke"/></svg><i style="top:${((Y(v.settings.ftp) / 28) * 100).toFixed(1)}%"></i></div>`;
+    const dW = v.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
+  } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
+  return { ftpViz, ftpSub };
+}
+
 /** The overview tiles at `now`; `ph` = the phone layout (three tiles and the recovery card). */
 /** @param {Date} now @param {boolean} ph Phone layout. @param {TodayView} v */
 export function overviewHtml(now, ph, v) {
@@ -72,13 +105,7 @@ export function overviewHtml(now, ph, v) {
   const w = whoopDay(dkey(now), v);
   const today = dayInfo(dkey(now), v);
   const pct = w?.recovery != null ? w.recovery : null, z = pct != null ? recZone(pct) : '';
-  const C = 2 * Math.PI * 27;
-  const ring = `<svg class="rec-ring ${z}" viewBox="0 0 64 64" aria-hidden="true"><circle class="trk" cx="32" cy="32" r="27"/>${pct != null ? `<circle class="arc" cx="32" cy="32" r="27" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}"/>` : ''}</svg>`;
-  const call = heroRecovery(today, v).replace('class="hero-rec"', 'class="rc-call"');
-  const recCard = `<div class="rec-card">
-      <div class="rc-ring">${ring}<span class="rc-v">${pct != null ? `${pct}<small>%</small>` : `<span class="none">${v.whoop ? 'Not yet' : 'Off'}</span>`}</span></div>
-      <div class="rc-text"><div class="rc-l">Recovery</div>${call}${pct != null ? '' : `<div class="rc-sub">${v.whoop ? 'not scored yet' : 'no WHOOP'}</div>`}</div>
-    </div>`;
+  const recCard = recCardHtml(pct, z, heroRecovery(today, v), v);
   const ld = loadNow(t);
   const est = ftpEstimate(real);
   // Premium look tiles (desktop Nov 13; phone too since Nov 13, 10:45 pm): label on top, number, then one small visual per
@@ -94,21 +121,8 @@ export function overviewHtml(now, ph, v) {
   // form on the same fixed -45..+25 scale as the Training strip; marker in whichever of fitness / fatigue is ahead
   const lo = -45, hi = 25, pos = (v) => ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * 100;
   const formViz = `<div class="ov-form"><span class="band" style="left:${pos(-10)}%;width:${pos(5) - pos(-10)}%"></span><span class="zero" style="left:${pos(0)}%"></span><span class="mk ${ld.form >= 0 ? 'fit' : 'fat'}" style="left:${pos(ld.form)}%"></span></div>`;
-  // FTP over the last 90 days (Agustín: "Feels left out"): every ride stores the FTP it was ridden at; the line ends at today's setting
   const wkg = (v.settings.ftp / (v.settings.riderKg || 77)).toFixed(1);
-  const since = dkey(addDays(now, -90));
-  const fp = real.filter((r) => r.ftp && r.id.slice(0, 10) >= since).sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => [+dayDate(r.id.slice(0, 10)), r.ftp]);
-  fp.push([+now, v.settings.ftp]);
-  let ftpViz = '', ftpSub = '';
-  if (fp.length > 1) {
-    const t0 = fp[0][0], t1 = +now, vs = fp.map((x) => x[1]), lo2 = Math.min(...vs) - 8, hi2 = Math.max(...vs) + 4;
-    const X = (t) => ((Math.max(t, t0) - t0) / Math.max(1, t1 - t0)) * 200, Y = (v) => 26 - ((v - lo2) / (hi2 - lo2)) * 22;
-    let d = `M${X(fp[0][0]).toFixed(1)},${Y(fp[0][1]).toFixed(1)}`;
-    for (let i = 1; i < fp.length; i++) d += ` H${X(fp[i][0]).toFixed(1)} V${Y(fp[i][1]).toFixed(1)}`;
-    ftpViz = `<div class="ov-ftp"><svg viewBox="0 0 200 28" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${d} V28 H0 Z"/><path d="${d}" vector-effect="non-scaling-stroke"/></svg><i style="top:${((Y(v.settings.ftp) / 28) * 100).toFixed(1)}%"></i></div>`;
-    const dW = v.settings.ftp - fp[0][1], from = new Date(fp[0][0]).toLocaleDateString([], { month: 'short', day: 'numeric' });
-    ftpSub = dW ? `<b class="${dW > 0 ? 'up' : ''}">${dW > 0 ? '+' : ''}${dW} W</b> since ${from}` : `same since ${from}`;
-  } else if (est.fromRamp) ftpSub = `ramp test ${est.fromRamp} W`;
+  const { ftpViz, ftpSub } = ftpTrend(real, now, v, est);
   const html =
     dTile('rec-tile', 'Recovery', pct != null ? `<span class="rz ${z}">${pct}%</span>` : `<span class="none">${v.whoop ? 'Not yet' : 'Off'}</span>`, recViz, pct != null ? '' : (v.whoop ? 'not scored yet' : 'no WHOOP'))
     + dTile('', 'This week', `${fmtHours(doneSec)}${planSec ? ` <span class="of">/ ${fmtHours(planSec)}</span>` : ''}`, `<div class="ov-week">${dayDots}</div>`, '')
