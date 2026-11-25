@@ -515,6 +515,22 @@ export function tipHtml(doc, segs, t) {
 }
 
 /**
+ * Which interval the D-pad / arrows pick: `ids` in table order, `sel` the selected one (null for none), `d` -1 or +1.
+ * Nothing selected: right picks the first, left the last. The ends stop: left on the first and right on the last
+ * keep it selected. null when there are no intervals.
+ * @param {number[]} ids
+ * @param {number | null} sel
+ * @param {number} d
+ * @returns {number | null}
+ */
+export function stepSeg(ids, sel, d) {
+  if (!ids.length) return null;
+  const k = ids.indexOf(sel);
+  if (k < 0) return d > 0 ? ids[0] : ids.at(-1);
+  return ids[Math.max(0, Math.min(ids.length - 1, k + d))];
+}
+
+/**
  * The line above the chart while an interval is selected.
  * @param {RideDoc} doc
  */

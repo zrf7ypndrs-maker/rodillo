@@ -965,7 +965,7 @@ async function controlsRun(viewport, label) {
   await page.waitForFunction(() => window.rodillo.session.mode === 'erg', null, { timeout: 2000 });
   ok(`${label}: ride, slope: shifters, paddles, left + right (front), arrows, [ ] and F shift; D-pad / arrows change the grade; E toggles ERG`);
 
-  // B held 5 s ends the ride; the done page: D-pad right picks an interval, B clears it, B again closes
+  // B held 5 s ends the ride; the done page: D-pad right picks an interval, the ends stop, B clears it, B again closes
   // first ride on until one step has a result for the done page (js/stats.js intervalResults: 10 s after a 5 s ramp-in)
   await page.waitForFunction(() => {
     const s = window.rodillo.session;
@@ -978,11 +978,20 @@ async function controlsRun(viewport, label) {
   await tap(['right']);
   const first = await sel();
   if (!first) fail('D-pad right on the done page picked no interval');
+  // the ends stop: left on the first stays on it, right on the last stays on it (no deselect, no wrap)
+  await tap(['left']);
+  if (await sel() !== first) fail(`D-pad left on the first interval: selected "${await sel()}", expected "${first}"`);
+  const rows = await page.$$eval('#rd-ints tr[data-i]', (t) => t.map((x) => x.dataset.i));
+  for (let k = 1; k < rows.length; k++) await tap(['right']);
+  const last = await sel();
+  if (last !== rows.at(-1)) fail(`D-pad right to the end: selected "${last}", expected the last row "${rows.at(-1)}"`);
+  await tap(['right']);
+  if (await sel() !== last) fail(`D-pad right on the last interval: selected "${await sel()}", expected "${last}"`);
   await tap(['b']);
   if (await sel() !== '' || (await st()).screen !== 'ridepage') fail('B on the done page with an interval picked should clear it and stay');
   await tap(['b']);
   await page.waitForSelector('#home.active', { timeout: 3000 });
-  ok(`${label}: B held 5 s ends the ride; done page: D-pad picks an interval, B clears it, B closes`);
+  ok(`${label}: B held 5 s ends the ride; done page: D-pad picks an interval and stops at the first and last, B clears it, B closes`);
   await ctx.close();
 }
 

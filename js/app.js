@@ -14,7 +14,7 @@ import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, synced
 import { reconcile, applyPending } from './settings-sync.js';
 import { ls, rides, docs } from './store.js';
 import { dkey, dayDate } from './dates.js';
-import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, stepSeg, samplesFromDoc, doneHeadline, lastSameWorkout, vsLastTime } from './ridepage.js';
 import { MINE_PATH, emptyMine, applyMinePending, mineView } from './mine.js';
 import { initBuilder, openBuilder, builderOpen } from './builder.js';
 import { initGarage, openGarage, openGearing, dtSpec, forgetBikePhotos } from './garage.js';
@@ -1027,12 +1027,9 @@ function bindRideChart() {
 
 /** Controller / keyboard on the ride page: what = back | select | prev | next | up | down (js/controls.js page*). */
 function rideAction(what) {
-  const segs = rd.segs.filter((s) => s.res);
   const step = (d) => {
-    if (!segs.length) return;
-    const k = segs.findIndex((s) => s.i === rd.sel);
-    const n = k < 0 ? (d > 0 ? 0 : segs.length - 1) : Math.max(0, Math.min(segs.length - 1, k + d));
-    selectRideSeg(segs[n].i, true);
+    const i = stepSeg(rd.segs.filter((s) => s.res).map((s) => s.i), rd.sel, d);
+    if (i != null && i !== rd.sel) selectRideSeg(i, true); // same one at an end: stay (selectRideSeg would toggle it off)
   };
   switch (what) {
     case 'back': if (rd.sel != null) selectRideSeg(null); else closeRide(); break;

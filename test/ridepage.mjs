@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
 import { flatten } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
-import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, samplesFromDoc, laneKeys, segName, doneHeadline, lastSameWorkout, vsLastTime, doneBarHtml } from '../js/ridepage.js';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, stepSeg, samplesFromDoc, laneKeys, segName, doneHeadline, lastSameWorkout, vsLastTime, doneBarHtml } from '../js/ridepage.js';
 
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
@@ -142,6 +142,21 @@ ok('.FIT from a synced ride document');
   assert.ok(!html.includes('—'));
   assert.ok(pageHtml(d, { segs: rideSegs(d, sg), ftp, zoneHex, gradeHex, done: { headline: doneHeadline(d), vs: null, sync: { state: 'off', text: 'x' }, ftp: null } }).includes('95% effort'));
   ok('end of ride: reps scored against the plan, effort noted, vs last time, done bar');
+}
+
+{
+  // D-pad / arrows on the ride page: the ends stop (no deselect, no wrap); nothing selected starts at an end
+  const ids = [1, 3, 4];
+  assert.equal(stepSeg(ids, 1, -1), 1); // left on the first stays on it
+  assert.equal(stepSeg(ids, 4, +1), 4); // right on the last stays on it
+  assert.equal(stepSeg(ids, 3, -1), 1);
+  assert.equal(stepSeg(ids, 3, +1), 4);
+  assert.equal(stepSeg(ids, null, +1), 1);
+  assert.equal(stepSeg(ids, null, -1), 4);
+  assert.equal(stepSeg([2], 2, -1), 2);
+  assert.equal(stepSeg([2], 2, +1), 2);
+  assert.equal(stepSeg([], null, +1), null);
+  ok('ride page D-pad: left on the first and right on the last stay put');
 }
 
 console.log(`ridepage: ${n} tests passed`);
