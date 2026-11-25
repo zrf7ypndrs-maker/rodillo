@@ -249,6 +249,28 @@ console.log('ok - trainer connect, control, coalescing');
   console.log('ok - trainer control point: re-requests control when refused, other refusals logged');
 }
 
+// ---- trainer: a target the trainer didn't take reaches it on the next tick (was lost until the target changed)
+{
+  const ticks = async (t, f) => { for (let i = 0; i < 6; i++) { f(t); await tick(10); } }; // engine at 4 Hz, sped up
+  // refused once with "control not permitted"
+  let refuse = 1;
+  const k = await fakeKickr({ answer: (op) => ((op === 0x05 || op === 0x11) && refuse-- > 0 ? 0x05 : 0x01) });
+  await ticks(k.trainer, (t) => t.setErg(220));
+  assert.deepEqual(k.cp.writes.slice(2), [[0x05, 220, 0], [0x00], [0x05, 220, 0]], JSON.stringify(k.cp.writes));
+  refuse = 1;
+  await ticks(k.trainer, (t) => t.setGrade(0.06));
+  assert.deepEqual(k.cp.writes.slice(5), [[0x11, 0, 0, 0x58, 0x02, 0, 0], [0x00], [0x11, 0, 0, 0x58, 0x02, 0, 0]]);
+  // the write itself fails once (GATT error): logged, and sent again
+  const w = await fakeKickr();
+  const real = w.cp.writeValueWithResponse.bind(w.cp);
+  let fail = 1;
+  w.cp.writeValueWithResponse = async (d) => { if (fail-- > 0) { w.cp.writes.push([...d]); throw new Error('GATT operation failed'); } return real(d); };
+  const lines = await trainerLog(() => ticks(w.trainer, (t) => t.setErg(240)));
+  assert.deepEqual(w.cp.writes.slice(2), [[0x05, 240, 0], [0x05, 240, 0]], JSON.stringify(w.cp.writes));
+  assert.ok(lines.some((l) => /write error: GATT operation failed/.test(l)), lines.join('\n'));
+  console.log('ok - trainer: refused or failed target resent on the next tick');
+}
+
 // ---- trainer: riding data from every Indoor Bike Data field, and cadence from Cycling Power when FTMS has none
 {
   const k = await fakeKickr({ cps: true, status: true });

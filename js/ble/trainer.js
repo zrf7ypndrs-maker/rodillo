@@ -162,9 +162,15 @@ export class Trainer extends BleDevice {
     const op = dv.getUint8(1), res = dv.getUint8(2);
     if (res !== 0x01) {
       logMsg('trainer', `control point op 0x${op.toString(16)} result ${res}`);
-      if (res === 0x05) this.write(this.cp, cmd.requestControl()); // control not permitted: re-request
+      if (res === 0x05) { // control not permitted: re-request, and send a refused target again on the next tick
+        this.write(this.cp, cmd.requestControl()).catch(() => {});
+        if (op === 0x05 || op === 0x11) this._forgetSent();
+      }
     }
   }
+
+  /** The trainer didn't take the last target: forget it so the next setErg / setGrade (every engine tick) resends it. */
+  _forgetSent() { this._lastErg = null; this._lastGrade = null; }
 
   /** Send a control command, coalescing so only the latest pending one is sent. */
   _send(bytes) {
@@ -172,7 +178,7 @@ export class Trainer extends BleDevice {
     if (!this.cp || this.state !== 'connected') return;
     if (this._busy) { this._pending = bytes; return; }
     this._busy = true;
-    this.write(this.cp, bytes).finally(() => {
+    this.write(this.cp, bytes).catch(() => this._forgetSent()).finally(() => { // write error already logged by write()
       this._busy = false;
       if (this._pending) { const p = this._pending; this._pending = null; this._send(p); }
     });
