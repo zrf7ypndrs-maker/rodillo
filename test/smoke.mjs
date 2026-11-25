@@ -285,34 +285,39 @@ async function builderFields(page, fail) {
     await page.fill(sel, v);
     if ((await page.$eval(sel, (el) => el.classList.contains('bad'))) !== bad) fail(`builder ${f} "${v}": ${bad ? 'not' : ''} red`);
   };
-  const want = async (what, got, exp) => { if ((await got) !== exp) fail(`builder ${what}: "${await got}", want "${exp}"`); };
-  await want('start', info(), `20:00 at 75% (${Math.round(0.75 * ftp)} W)`);
-  await put('pct', '90', false); await want('pct 90', readout(), `${Math.round(0.9 * ftp)} W`);
-  await put('pct', '400', true); await want('pct 400 ignored', info(), `20:00 at 90% (${Math.round(0.9 * ftp)} W)`);
-  await put('pct', '85,5', false); await want('pct 85,5', readout(), `${Math.round(0.855 * ftp)} W`);
+  // the builder redraws on input: read until it shows the value (up to 2 s; a slow CI runner read the old one, Nov 25)
+  const want = async (what, get, exp) => {
+    let got;
+    for (let t = 0; t < 20 && (got = await get()) !== exp; t++) await page.waitForTimeout(100);
+    if (got !== exp) fail(`builder ${what}: "${got}", want "${exp}"`);
+  };
+  await want('start', info, `20:00 at 75% (${Math.round(0.75 * ftp)} W)`);
+  await put('pct', '90', false); await want('pct 90', readout, `${Math.round(0.9 * ftp)} W`);
+  await put('pct', '400', true); await want('pct 400 ignored', info, `20:00 at 90% (${Math.round(0.9 * ftp)} W)`);
+  await put('pct', '85,5', false); await want('pct 85,5', readout, `${Math.round(0.855 * ftp)} W`);
   await put('len', '25:00', false); await put('len', '3s', true); await put('len', '7:00:00', true); await put('len', '1:75', true);
-  await want('len', info(), `25:00 at 86% (${Math.round(0.855 * ftp)} W)`);
+  await want('len', info, `25:00 at 86% (${Math.round(0.855 * ftp)} W)`);
   await put('cadence', '', false); await put('cadence', 'fast', true); await put('cadence', '80 - 90', false);
   await put('label', 'Tempo', false); await put('text', '  Smooth  ', false);
   await put('messages', '0:30 Settle in\nlast -0:20 Last one', false); await put('messages', '0:30', true);
   await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'ramp'); // redraws the block's fields from what was stored
   const val = (f) => page.inputValue(`#b-steps [data-f="${f}"][data-fp="1"]`);
-  await want('cadence stored', val('cadence'), '80-90');
-  await want('name stored', val('label'), 'Tempo');
-  await want('cue stored', val('text'), '  Smooth  ');
-  await want('messages stored', val('messages'), '0:30 Settle in\nlast -0:20 Last one');
+  await want('cadence stored', () => val('cadence'), '80-90');
+  await want('name stored', () => val('label'), 'Tempo');
+  await want('cue stored', () => val('text'), '  Smooth  ');
+  await want('messages stored', () => val('messages'), '0:30 Settle in\nlast -0:20 Last one');
   await put('from', '50', false); await put('to', '80', false); await put('to', '0', true);
-  await want('ramp', readout(), `${Math.round(0.5 * ftp)}-${Math.round(0.8 * ftp)} W`);
+  await want('ramp', readout, `${Math.round(0.5 * ftp)}-${Math.round(0.8 * ftp)} W`);
   await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'watts');
-  await put('watts', '251.4', false); await want('watts', readout(), `${Math.round((251 / ftp) * 100)}% FTP`); await put('watts', '5', true);
+  await put('watts', '251.4', false); await want('watts', readout, `${Math.round((251 / ftp) * 100)}% FTP`); await put('watts', '5', true);
   await page.selectOption('#b-steps [data-f="type"][data-fp="1"]', 'grade');
   await put('grade', '4.5', false); await put('grade', '30', true);
-  await want('grade', info(), '25:00 at 4.5%');
+  await want('grade', info, '25:00 at 4.5%');
   await page.focus('#builder [data-tile="intervals"]');
   await page.keyboard.press('Enter'); // keyboard add: after the selected block, selected
   await page.waitForSelector('#b-steps [data-f="repeat"][data-fp="2"]', { timeout: 3000 });
   await put('repeat', '2.5', true, '2'); await put('repeat', '6', false, '2');
-  await want('repeat', page.textContent('#b-steps [data-sum="2"]'), '= 48:00');
+  await want('repeat', () => page.textContent('#b-steps [data-sum="2"]'), '= 48:00');
   await page.fill('#b-name', 'Smoke fields');
   await page.fill('#b-desc', 'Typed in the smoke test');
 }
