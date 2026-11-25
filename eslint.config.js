@@ -15,4 +15,6 @@ export default [
       'no-unused-vars': ['error', { args: 'none', ignoreRestSiblings: true, caughtErrors: 'none' }],
     },
   },
+  // Every function in js/ stays at complexity 25 or less (Nov 25): over it, split into helpers in the same file.
+  { files: ['js/**/*.js'], rules: { complexity: ['error', 25] } },
 ];
