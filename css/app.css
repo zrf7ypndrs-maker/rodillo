@@ -1200,7 +1200,7 @@ a[data-open-settings] { color: var(--ink); font-weight: 650; text-decoration: un
 .seg-r .big { font-size: 18px; font-weight: 750; }
 .seg-r .muted { font-size: 12.5px; }
 .seg .check { color: var(--good); font-weight: 700; }
-.seg .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--c); }
+.seg .bar { position: absolute; left: 0; bottom: 0; width: 0; height: 4px; background: var(--c); transition: width .3s linear; } /* eases between the 4 Hz ticks (writeSegRows) */
 .seg-head { font-size: 14px; color: var(--muted); font-weight: 600; padding: 8px 8px 8px; display: flex; justify-content: space-between; }
 
 /* cadence target; a slope step's power aim looks the same on the power tile (Nov 20) */

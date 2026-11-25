@@ -93,8 +93,7 @@ function renderSegList(s) {
   if (!s.segs) return;
   const { rows, cur, doneN } = segRows(s);
   const box = $('#r-seg-rows');
-  const html = rows.join('');
-  if (box.innerHTML !== html) box.innerHTML = html;
+  writeSegRows(box, rows, cur, s);
   $('#r-segn').textContent = `${doneN}/${s.segs.length}`;
   $('#r-left').textContent = workoutLeft(s);
   if (app._segI !== cur) {
@@ -176,8 +175,9 @@ function slideNextIn(s) {
 // ---- segment rows (desktop sidebar, phone list view). Built on every tick: plain function calls, no arrays or
 // objects beyond the rows themselves.
 const CHECK = '<span class="check">&#10003;</span>';
-/** Progress bar under the current row. */
-const segBar = (s) => `<div class="bar" style="width:${Math.min(100, s.segProgress * 100).toFixed(1)}%"></div>`;
+/** Progress bar under the current row: empty in the markup, filled by writeSegRows(), so a row's markup only changes
+ *  (and the list is only rebuilt) when its text does. */
+const segBar = () => '<div class="bar"></div>';
 /** Target: watts (a range on ramps, with the effort setting) or the grade with the rider's offset. */
 function segTgt(g, s, ftp) {
   if (g.kind !== 'erg') return `${((g.grade + s.gradeOffset) * 100).toFixed(0)}%`;
@@ -190,7 +190,7 @@ const cadChips = (g, ftp) => (g.cad ? `<span class="cad-chip">${g.cad.label}</sp
 /** An ERG row: target and time (time left on the current one). */
 function ergRow(g, i, s, state, color, tgtW, cadChip) {
   const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
-  return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? CHECK : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${state === 'current' ? segBar(s) : ''}</div>`;
+  return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? CHECK : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${state === 'current' ? segBar() : ''}</div>`;
 }
 /** Right side of a slope or free row: the amount still to ride, or the average watts and HR so far. a = s.segAgg[i]. */
 function stepRight(g, s, state, a) {
@@ -204,7 +204,7 @@ function stepRight(g, s, state, a) {
 /** A slope or free row: name (and rep), target and amount, right side. */
 function stepRow(g, i, s, state, color, tgtW, cadChip) {
   const name = `${esc(g.label)}${g.rep ? ` <span class="muted">${g.rep.i}/${g.rep.of}</span>` : ''}`;
-  return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? CHECK : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${stepRight(g, s, state, s.segAgg[i])}</div>${state === 'current' ? segBar(s) : ''}</div>`;
+  return `<div class="seg ${state}" style="--c:${color}" data-i="${i}"><div><div class="seg-name">${state === 'done' ? CHECK : ''}${name}</div><div class="seg-tgt">${tgtW} &middot; ${segAmount(g)} ${cadChip}</div></div><div class="seg-r">${stepRight(g, s, state, s.segAgg[i])}</div>${state === 'current' ? segBar() : ''}</div>`;
 }
 /** Row i of the list; cur = index of the current step (segs.length once the workout is done). */
 function segRow(g, i, s, cur, ftp) {
@@ -222,6 +222,27 @@ export function segRows(s) {
   const doneN = Math.min(cur, s.segs.length);
   const rows = s.segs.map((g, i) => segRow(g, i, s, cur, ftp));
   return { rows, cur, doneN };
+}
+
+/**
+ * Write the rows into the list box (desktop sidebar or phone list) and fill the current row's bar. The bar eases
+ * between ticks (CSS transition on .seg .bar) instead of jumping 4 times a second. When the rows are rebuilt (their
+ * text changed, about once a second) the new bar starts where the old one was on screen and eases on from there.
+ * Returns whether the rows were rebuilt.
+ * @param {HTMLElement & { _html?: string, _bar?: HTMLElement | null, _barI?: number }} box
+ * @param {string[]} rows @param {number} cur @param {Session} s
+ */
+export function writeSegRows(box, rows, cur, s) {
+  const html = rows.join(''), pct = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
+  const rebuilt = box._html !== html;
+  if (rebuilt) {
+    const from = box._bar && box._barI === cur ? box._bar.getBoundingClientRect().width : null;
+    box.innerHTML = html; box._html = html;
+    box._bar = /** @type {HTMLElement | null} */ (box.querySelector('.seg.current .bar')); box._barI = cur;
+    if (box._bar && from !== null) { box._bar.style.width = `${from}px`; box._bar.getBoundingClientRect(); } // lay it out there first, so the move below eases
+  }
+  if (box._bar) box._bar.style.width = pct;
+  return rebuilt;
 }
 
 /** Gear tile's sub line: cogs (easiest first) and rings with the ones in use in ink, and the ratio. `look` = { INK, RULE }. */

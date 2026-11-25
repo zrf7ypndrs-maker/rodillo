@@ -10,7 +10,7 @@
 import { segTarget, isTrack } from './engine/workout.js';
 import { fmtTime } from './ridepage.js';
 import { action, holdStart, holdEnd } from './controls.js';
-import { renderRide, rideView, segRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
+import { renderRide, rideView, segRows, writeSegRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
 import { ls } from './store.js';
 import { $, esc } from './ui.js';
 
@@ -245,8 +245,8 @@ function renderPhoneView(s) {
   if (kEl.innerHTML !== k) kEl.innerHTML = k;
   if (!list) return;
   const { rows, cur } = segRows(s);
-  const el = /** @type {HTMLElement & { _html?: string }} */ ($('#rp-segs')), html = rows.join('');
-  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+  const el = $('#rp-segs');
+  writeSegRows(el, rows, cur, s);
   if (app._rpSegI !== cur) { // keep the current interval centred when it changes (or the list was just opened)
     const jump = app._rpSegI === undefined;
     app._rpSegI = cur;
