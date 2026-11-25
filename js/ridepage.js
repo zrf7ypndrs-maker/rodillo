@@ -49,6 +49,18 @@ function smoothC(a, n) {
 const repText = (rep) => (!rep ? '' : typeof rep === 'string' ? rep.replace('/', ' of ') : `${rep.i} of ${rep.of}`);
 export const segName = (s) => `${s.label || 'Interval'}${s.rep ? ` ${repText(s.rep)}` : ''}`;
 
+const metaRep = (w, r) => r?.rep ?? (w?.rep ? `${w.rep.i}/${w.rep.of}` : undefined);
+const metaWork = (w, r) => (r ? !!r.work : w?.kind === 'erg' ? (w.from + w.to) / 2 >= WORK_FTP : (w?.grade || 0) >= 0.04);
+const metaGrade = (w, r) => w?.grade ?? (r?.grade != null ? r.grade / 100 : undefined);
+/** One interval's details from its workout step w and its result r (either can be missing). */
+function segMeta(w, r) {
+  if (!w && !r) return null;
+  return {
+    label: r?.label ?? w?.label ?? '', rep: metaRep(w, r), kind: w?.kind ?? r?.kind ?? 'erg', work: metaWork(w, r),
+    cad: w?.cad || null, from: w?.from, to: w?.to, grade: metaGrade(w, r), res: r || null,
+  };
+}
+
 /**
  * The ride's intervals in ride seconds: [{ i, start, end, label, rep, kind, work, cad, from, to, grade, res }].
  * i is the workout segment index (the same one doc.intervals uses). Timing comes from the `seg`
@@ -60,15 +72,7 @@ export const segName = (s) => `${s.label || 'Interval'}${s.rep ? ` ${repText(s.r
 export function rideSegs(doc, wsegs = null) {
   const n = doc.streams?.power?.length || doc.streams?.hr?.length || doc.summary?.durSec || 0;
   const res = new Map((doc.intervals || []).map((x) => [x.i, x]));
-  const meta = (i) => {
-    const w = wsegs?.[i], r = res.get(i);
-    if (!w && !r) return null;
-    return {
-      label: r?.label ?? w?.label ?? '', rep: r?.rep ?? (w?.rep ? `${w.rep.i}/${w.rep.of}` : undefined),
-      kind: w?.kind ?? r?.kind ?? 'erg', work: r ? !!r.work : w?.kind === 'erg' ? (w.from + w.to) / 2 >= WORK_FTP : (w?.grade || 0) >= 0.04,
-      cad: w?.cad || null, from: w?.from, to: w?.to, grade: w?.grade ?? (r?.grade != null ? r.grade / 100 : undefined), res: r || null,
-    };
-  };
+  const meta = (i) => segMeta(wsegs?.[i], res.get(i));
   const seg = doc.streams?.seg;
   const out = [];
   if (Array.isArray(seg) && seg.some((v) => v >= 0)) {
