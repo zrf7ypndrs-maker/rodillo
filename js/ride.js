@@ -242,6 +242,21 @@ export const rideView = (s) => ({
   track: s.segs && isTrack(s.segs) ? rideTrack(s) : null, zoneHex, gradeHex, ...look(),
 });
 
+// rideTiles' pieces (plain values in, a string out: no extra per-tick work)
+/** Power tile color: ERG = on, under or over target; slope with a power aim = on or off it. */
+const powerCls = (target, r, as) => (target ? (r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok') : as === 'ok' ? 'aim-ok' : as ? 'aim-bad' : '');
+/** Power tile's small line: the ERG target, the aim's call or range, else W/kg. */
+function powerSub(target, as, aim, p, v) {
+  if (target) return `target <b style="color:var(--text)">${target}</b> W`;
+  if (as === 'low') return '<b>&#9650; Push harder</b>';
+  if (as === 'high') return '<b>&#9660; Ease off</b>';
+  if (aim) return `target <b style="color:var(--text)">${Math.round(aim.lo * v.ftp)}-${Math.round(aim.hi * v.ftp)}</b> W`;
+  return `${(p / v.riderKg).toFixed(1)} W/kg`;
+}
+const cadState = (cs) => (cs === 'ok' ? 'ok' : cs === 'low' || cs === 'high' ? 'bad' : '');
+/** Cadence tile's small line on a step with a cadence target. */
+const cadSub = (seg, cs) => (!seg?.cad ? '' : cs === 'low' ? '<b>&#9650; Pedal faster</b>' : cs === 'high' ? '<b>&#9660; Pedal slower</b>' : `target ${seg.cad.label}`);
+
 /** The tiles (power, HR, cadence, gear, Climbed / To the top, speed) and the clock: text or markup for each. */
 /** @param {Session} s @param {RideView} v */
 export function rideTiles(s, v) {
@@ -253,7 +268,6 @@ export function rideTiles(s, v) {
   const cs = s.cadStatus;
   // slope step with a power aim (Nov 20, Agustín): the power tile works like the cadence one, green on target, red + pulse off it
   const aim = s.mode !== 'erg' && s.seg?.kind === 'sim' ? s.seg.aim : null, as = aim ? s.aimStatus : null;
-  const aimW = (f) => Math.round(f * v.ftp);
   // Climbed / To the top (UX roadmap item 7): replaces the Grade tile, the grade is already the interval card's big number.
   // Real climbs say what's left, out of the workout's total climb (Nov 20, Agustín: the tile is about climbing only,
   // distance and speed have their own tile, so no "km to go" here). Only when the climbs are distance steps: a timed
@@ -267,17 +281,15 @@ export function rideTiles(s, v) {
   return {
     elapsed: fmtTime(s.elapsed),
     power: p,
-    powerCls: s.target ? (r < 0.95 ? 'low' : r > 1.05 ? 'high' : 'ok') : as === 'ok' ? 'aim-ok' : as ? 'aim-bad' : '',
-    target: s.target ? `target <b style="color:var(--text)">${s.target}</b> W`
-      : as === 'low' ? '<b>&#9650; Push harder</b>' : as === 'high' ? '<b>&#9660; Ease off</b>'
-        : aim ? `target <b style="color:var(--text)">${aimW(aim.lo)}-${aimW(aim.hi)}</b> W` : `${(p / v.riderKg).toFixed(1)} W/kg`,
+    powerCls: powerCls(s.target, r, as),
+    target: powerSub(s.target, as, aim, p, v),
     effortShown: !(s.mode !== 'erg' || Math.abs(s.intensity - 1) < 0.001),
     effort: `${Math.round(s.intensity * 100)}%`,
     hr: hr || '--',
     hrAvg: hrs.length ? `avg ${Math.round(hrs.reduce((a, x) => a + x.hr, 0) / hrs.length)} (10 min)` : '',
     cad: Math.round(td.cadence || 0),
-    cadState: cs === 'ok' ? 'ok' : cs === 'low' || cs === 'high' ? 'bad' : '',
-    cadTarget: !s.seg?.cad ? '' : cs === 'low' ? '<b>&#9650; Pedal faster</b>' : cs === 'high' ? '<b>&#9660; Pedal slower</b>' : `target ${s.seg.cad.label}`,
+    cadState: cadState(cs),
+    cadTarget: cadSub(s.seg, cs),
     gearDim: s.mode === 'erg',
     gear: s.gb.seq ? s.gb.label : s.gb.label.replace('x', '\u00d7'),
     gearCombo: !s.gb.seq,
