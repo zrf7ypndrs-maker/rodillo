@@ -15,6 +15,7 @@ import { gearList } from '../js/engine/drivetrain.js';
 import fs from 'node:fs';
 import { buildRide, loadSeries, loadNow, formLabel } from '../js/stats.js';
 import { cleanWorkout } from '../js/mine.js';
+import { setField } from '../js/builder.js';
 
 const require = createRequire(import.meta.url);
 const { Decoder, Stream } = require('@garmin/fitsdk');
@@ -230,6 +231,30 @@ test('ZWO import', () => {
   assert.deepEqual(segs[3].msgs, [{ t: 10, text: 'Rep 2 halfway' }]);
   assert.equal(segs[5].msgs.length, 0);
   assert.equal(totalDuration(w), 600 + 360 + 300 + 120 + 300);
+});
+
+test('builder fields: a good value is stored, a bad one leaves the step as it was', () => {
+  const s = { dur: 600, power: 0.75 };
+  assert.equal(setField(s, 'pct', '85,5'), true); assert.equal(s.power, 0.855);
+  assert.equal(setField(s, 'pct', '301'), false); assert.equal(s.power, 0.855);
+  assert.equal(setField(s, 'len', '1:00:00'), true); assert.equal(s.dur, 3600);
+  assert.equal(setField(s, 'len', '6:00:01'), false); assert.equal(s.dur, 3600);
+  assert.equal(setField(s, 'cadence', '80 - 90'), true); assert.equal(s.cadence, '80-90');
+  assert.equal(setField(s, 'cadence', '95'), true); assert.equal(s.cadence, 95);
+  assert.equal(setField(s, 'cadence', 'fast'), false); assert.equal(s.cadence, 95);
+  assert.equal(setField(s, 'cadence', ''), true); assert.equal('cadence' in s, false);
+  assert.equal(setField(s, 'label', '  Tempo '), true); assert.equal(s.label, '  Tempo ');
+  assert.equal(setField(s, 'label', '  '), true); assert.equal('label' in s, false);
+  assert.equal(setField(s, 'messages', '0:30 Go\n0:40'), false); assert.equal('messages' in s, false);
+  assert.equal(setField(s, 'messages', '0:30 Go'), true); assert.deepEqual(s.messages, [{ at: 30, text: 'Go' }]);
+  assert.equal(setField(s, 'watts', '251.4'), true); assert.equal(s.watts, 251);
+  const km = { dist: 1500, grade: 6 };
+  assert.equal(setField(km, 'len', '2,25'), true); assert.equal(km.dist, 2250);
+  assert.equal(setField(km, 'grade', '25.5'), false); assert.equal(km.grade, 6);
+  const r = { repeat: 3, steps: [] };
+  assert.equal(setField(r, 'repeat', '2.5'), false); assert.equal(setField(r, 'repeat', '6'), true); assert.equal(r.repeat, 6);
+  assert.equal(setField(r, 'constructor', 'x'), true); // unknown fields count as valid and change nothing
+  assert.deepEqual(r, { repeat: 6, steps: [] });
 });
 
 test('ZWO import: XML escapes in the name, description and messages are decoded', () => {

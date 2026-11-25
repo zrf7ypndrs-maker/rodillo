@@ -543,29 +543,71 @@ function addTile(key) {
 // ---------------------------------------------------------------- field edits
 function touched() { st.untouched = false; }
 
+/** "12,5" or "12.5" between lo and hi, else null. */
+const numIn = (x, lo, hi) => { const n = Number(String(x).replace(',', '.')); return x !== '' && Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+/** s[k] = f(n) when n is a number; false (the field turns red, s unchanged) when it isn't. */
+const setNum = (s, k, n, f = (x) => x) => { if (n == null) return false; s[k] = f(n); return true; };
+const pctOf = (n) => n / 100;
+
+function setLen(s, v) {
+  if (s.dist != null) return setNum(s, 'dist', numIn(v, 0.05, 100), (n) => Math.round(n * 1000));
+  const n = parseDur(v);
+  if (!(n >= 5 && n <= 6 * 3600)) return false;
+  s.dur = n;
+  return true;
+}
+function setRepeat(s, v) {
+  const n = numIn(v, 1, 50);
+  return setNum(s, 'repeat', n != null && Number.isInteger(n) ? n : null);
+}
+function setCadence(s, v) {
+  if (v !== '' && !/^\d{2,3}\s*(-\s*\d{2,3}|\+)?$/.test(v)) return false;
+  if (v === '') delete s.cadence;
+  else s.cadence = /^\d+$/.test(v) ? +v : v.replace(/\s+/g, '');
+  return true;
+}
+/** Name and cue keep what was typed (spaces included); blank removes them. */
+function setText(s, k, v, raw) {
+  if (v) s[k] = raw; else delete s[k];
+  return true;
+}
+function setMessages(s, raw) {
+  const r = parseMessageLines(raw);
+  if (r.bad.length) return false;
+  if (r.messages.length) s.messages = r.messages; else delete s.messages;
+  return true;
+}
+/** data-f -> (step, trimmed value, value as typed) => is it valid. */
+const FIELDS = new Map([
+  ['len', setLen],
+  ['pct', (s, v) => setNum(s, 'power', numIn(v, 1, 300), pctOf)],
+  ['from', (s, v) => setNum(s, 'from', numIn(v, 1, 300), pctOf)],
+  ['to', (s, v) => setNum(s, 'to', numIn(v, 1, 300), pctOf)],
+  ['watts', (s, v) => setNum(s, 'watts', numIn(v, 10, 2000), Math.round)],
+  ['grade', (s, v) => setNum(s, 'grade', numIn(v, -10, 25))],
+  ['repeat', setRepeat],
+  ['cadence', setCadence],
+  ['label', (s, v, raw) => setText(s, 'label', v, raw)],
+  ['text', (s, v, raw) => setText(s, 'text', v, raw)],
+  ['messages', (s, v, raw) => setMessages(s, raw)],
+]);
+
+/**
+ * One builder field typed into step s: stores the value when it's valid (true), leaves s as it was when it isn't (false).
+ * Fields the table doesn't know count as valid.
+ * @param {any} s @param {string} f data-f @param {string} value as typed
+ */
+export function setField(s, f, value) {
+  const set = FIELDS.get(f);
+  return set ? set(s, value.trim(), value) : true;
+}
+
 function onInput(e) {
   const el = e.target, f = el.dataset.f;
   if (!f || f === 'type') return;
   if (f === 'name') { st.w.name = el.value; touched(); return; }
   if (f === 'description') { st.w.description = el.value; touched(); return; }
-  const s = stepAt(el.dataset.fp), v = el.value.trim();
-  let ok = true;
-  const num = (x, lo, hi) => { const n = Number(String(x).replace(',', '.')); return x !== '' && Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
-  switch (f) {
-    case 'len': {
-      if (s.dist != null) { const n = num(v, 0.05, 100); ok = n != null; if (ok) s.dist = Math.round(n * 1000); }
-      else { const n = parseDur(v); ok = n >= 5 && n <= 6 * 3600; if (ok) s.dur = n; }
-      break;
-    }
-    case 'pct': { const n = num(v, 1, 300); ok = n != null; if (ok) s.power = n / 100; break; }
-    case 'from': case 'to': { const n = num(v, 1, 300); ok = n != null; if (ok) s[f] = n / 100; break; }
-    case 'watts': { const n = num(v, 10, 2000); ok = n != null; if (ok) s.watts = Math.round(n); break; }
-    case 'grade': { const n = num(v, -10, 25); ok = n != null; if (ok) s.grade = n; break; }
-    case 'repeat': { const n = num(v, 1, 50); ok = n != null && Number.isInteger(n); if (ok) s.repeat = n; break; }
-    case 'cadence': ok = v === '' || /^\d{2,3}\s*(-\s*\d{2,3}|\+)?$/.test(v); if (ok) { if (v === '') delete s.cadence; else s.cadence = /^\d+$/.test(v) ? +v : v.replace(/\s+/g, ''); } break;
-    case 'label': case 'text': if (v) s[f] = el.value; else delete s[f]; break;
-    case 'messages': { const r = parseMessageLines(el.value); ok = !r.bad.length; if (ok) { if (r.messages.length) s.messages = r.messages; else delete s.messages; } break; }
-  }
+  const ok = setField(stepAt(el.dataset.fp), f, el.value);
   el.classList.toggle('bad', !ok);
   touched();
   if (ok) { refreshReadouts(); renderTimeline(); }
