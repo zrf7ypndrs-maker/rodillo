@@ -225,23 +225,24 @@ export function segRows(s) {
 }
 
 /**
- * Write the rows into the list box (desktop sidebar or phone list) and fill the current row's bar. The bar eases
- * between ticks (CSS transition on .seg .bar) instead of jumping 4 times a second. When the rows are rebuilt (their
- * text changed, about once a second) the new bar starts where the old one was on screen and eases on from there.
- * Returns whether the rows were rebuilt.
+ * Write the rows into the list box (desktop sidebar or phone list) and fill the current row's bar. The bar is the
+ * row's full width, scaled from the left (transform, not width: iOS repaints a bar whose width animates in pieces,
+ * so its top and bottom halves showed different lengths), and eases between ticks (CSS transition on .seg .bar)
+ * instead of jumping 4 times a second. When the rows are rebuilt (their text changed, about once a second) the new
+ * bar starts where the old one was on screen and eases on from there. Returns whether the rows were rebuilt.
  * @param {HTMLElement & { _html?: string, _bar?: HTMLElement | null, _barI?: number }} box
  * @param {string[]} rows @param {number} cur @param {Session} s
  */
 export function writeSegRows(box, rows, cur, s) {
-  const html = rows.join(''), pct = `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`;
+  const html = rows.join(''), scale = `scaleX(${Math.min(1, Math.max(0, s.segProgress)).toFixed(4)})`;
   const rebuilt = box._html !== html;
   if (rebuilt) {
-    const from = box._bar && box._barI === cur ? box._bar.getBoundingClientRect().width : null;
+    const old = box._bar, from = old && box._barI === cur && old.offsetWidth ? old.getBoundingClientRect().width / old.offsetWidth : null;
     box.innerHTML = html; box._html = html;
     box._bar = /** @type {HTMLElement | null} */ (box.querySelector('.seg.current .bar')); box._barI = cur;
-    if (box._bar && from !== null) { box._bar.style.width = `${from}px`; box._bar.getBoundingClientRect(); } // lay it out there first, so the move below eases
+    if (box._bar && from !== null) { box._bar.style.transform = `scaleX(${from.toFixed(4)})`; box._bar.getBoundingClientRect(); } // drawn there first, so the move below eases
   }
-  if (box._bar) box._bar.style.width = pct;
+  if (box._bar) box._bar.style.transform = scale;
   return rebuilt;
 }
 

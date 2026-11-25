@@ -71,7 +71,7 @@ class El {
       if (i < 0) return null;
       const row = new El('.seg.current'); row.offsetTop = i * 40; return row;
     }
-    if (s === '.seg.current .bar') { // its bar: a new one per rebuild, 120 px wide on screen
+    if (s === '.seg.current .bar') { // its bar: a new one per rebuild, 300 px wide, drawn 120 px on screen
       if (!/ current"/.test(this.html)) return null;
       const bar = new El('bar'); bar.rect = { ...bar.rect, width: 120 }; bar.style.log = []; return bar;
     }
@@ -367,21 +367,21 @@ app.phoneView = 'chart';
   assert.match(rows[0], / current"$/);
   assert.deepEqual($('#rp-segs').scrolls, [{ top: 0, behavior: 'auto' }]); // just opened: no animation
   // the current row's bar: width set on every tick, not in the markup, so a tick that changes no text rebuilds nothing
-  const box = $('#rp-segs'), pct = () => `${(s.segProgress * 100).toFixed(2)}%`;
-  assert.ok(!/style="width/.test(box.innerHTML) && box._bar.style.width === pct());
+  const box = $('#rp-segs'), pct = () => `scaleX(${s.segProgress.toFixed(4)})`;
+  assert.ok(!/style="width/.test(box.innerHTML) && box._bar.style.transform === pct());
   const w0 = box.writes;
   for (let i = 0; i < 4; i++) { // one second of ticks: the bar moves on every one, the rows are rebuilt once at most
     const bar = box._bar, w1 = box.writes;
     s.trainer.step(); s.tick(0.25); renderPhone(s);
-    assert.ok(box._bar.style.width === pct() && (box.writes > w1 || box._bar === bar));
+    assert.ok(box._bar.style.transform === pct() && (box.writes > w1 || box._bar === bar));
   }
   assert.ok(box.writes - w0 <= 1);
   // a rebuild in the same interval: the new bar starts where the old one is on screen, then goes to the progress
   const sets = [];
   const real = box.querySelector.bind(box);
-  box.querySelector = (q) => { const el = real(q); if (q === '.seg.current .bar' && el) el.style = new Proxy(el.style, { set(o, k, v) { if (k === 'width') sets.push(v); o[k] = v; return true; } }); return el; };
+  box.querySelector = (q) => { const el = real(q); if (q === '.seg.current .bar' && el) el.style = new Proxy(el.style, { set(o, k, v) { if (k === 'transform') sets.push(v); o[k] = v; return true; } }); return el; };
   box._html = 'stale'; renderPhone(s);
-  assert.deepEqual(sets, ['120px', pct()]);
+  assert.deepEqual(sets, ['scaleX(0.4000)', pct()]); // 120 px drawn of 300
   box.querySelector = real;
   // same rows: not rebuilt, not scrolled again
   const w = $('#rp-segs').writes;
