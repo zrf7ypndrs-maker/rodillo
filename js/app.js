@@ -10,7 +10,7 @@ import { flatten, parseZwo } from './engine/workout.js';
 import { encodeActivity } from './fit.js';
 import { buildRide, powerCurve, ftpFromRide } from './stats.js';
 import { ZONES, zoneOf } from './zones.js';
-import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, syncedToPrune, deleteScope } from './sync.js';
+import { GitHubSync, DEFAULT_REPO, PLAN_PATH, WORKOUTS_PATH, rideSources, syncedToPrune, deleteScope, deletedElsewhere } from './sync.js';
 import { reconcile, applyPending } from './settings-sync.js';
 import { ls, rides, docs } from './store.js';
 import { dkey, dayDate } from './dates.js';
@@ -752,7 +752,7 @@ async function syncRide(ride) {
     say('busy', 'Syncing to rodillo-data');
     const doc = { ...rideDoc(ride), laps: ride.laps };
     const index = await gh.pushRide(doc);
-    ride.synced = true;
+    Object.assign(ride, { synced: true, syncedTo: gh.repo, syncedAt: Date.now() });
     if (!ride.discarded) await rides.put(ride);
     ls.set('remoteIndex', index.rides);
     say('ok', 'Synced. Your coach can see it.');
@@ -785,8 +785,12 @@ async function syncPending() {
 async function refreshRemoteIndex() {
   const gh = syncClient();
   if (!gh) return;
-  try { ls.set('remoteIndex', await gh.fetchIndex()); ls.set('remoteIndexAt', Date.now()); }
-  catch (e) { logMsg('sync', `index fetch failed: ${e.message}`); }
+  try {
+    const r = await gh.getJson('index.json');
+    const list = r?.json?.rides;
+    ls.set('remoteIndex', list || []); ls.set('remoteIndexAt', Date.now());
+    if (list?.length) await dropDeletedElsewhere(list.map((x) => x.id), gh.repo); // an empty or missing index proves nothing
+  } catch (e) { logMsg('sync', `index fetch failed: ${e.message}`); }
   if (app.tab === 'training') renderTraining();
   refreshPlanViews();
 }
@@ -857,6 +861,15 @@ async function loadRideDoc(id) {
     if (got) return got;
   }
   return null;
+}
+
+/** Drop this device's recordings of rides deleted on another device (`deletedElsewhere()`), given a fresh index. */
+async function dropDeletedElsewhere(remoteIds, repo) {
+  try {
+    const ids = deletedElsewhere(await rides.list(), remoteIds, repo);
+    for (const k of ids) await rides.del(k);
+    if (ids.length) logMsg('sync', `removed ${ids.length} ride${ids.length > 1 ? 's' : ''} deleted on another device`);
+  } catch (e) { logMsg('sync', `deleted elsewhere: ${e.message}`); }
 }
 
 /** Drop full recordings of rides rodillo-data has had for a few days (`syncedToPrune()`); the repo copy is the ride. */

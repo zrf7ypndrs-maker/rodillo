@@ -40,6 +40,21 @@ export function deleteScope({ demo, synced, inIndex, pushing, signedIn }) {
   return { remote, text: remote ? 'It will be deleted here and from your synced history in rodillo-data.' : 'It will be deleted from this device.' };
 }
 
+/**
+ * Local recordings of rides deleted on another device (Nov 25: deleted on the phone, still listed as "not synced" on the
+ * laptop). They were pushed to `repo` but its index, fetched just now, no longer has them. Recordings with no `syncedTo`
+ * (before Nov 25) count as DEFAULT_REPO's, so a device pointed at another repo never drops them. One pushed in the last
+ * `graceMin` minutes stays: GitHub can serve an index from just before the push.
+ * @param {import('./types.js').LocalRide[]} list
+ * @param {string[]} remoteIds
+ * @param {string} repo
+ */
+export function deletedElsewhere(list, remoteIds, repo, now = Date.now(), graceMin = 10) {
+  const inRepo = new Set(remoteIds);
+  return list.filter((r) => r.status === 'done' && r.synced && !r.demo && r.summary?.id && !inRepo.has(r.summary.id)
+    && (r.syncedTo || DEFAULT_REPO) === repo && now - (r.syncedAt || 0) > graceMin * 6e4).map((r) => r.id);
+}
+
 /** Local ride ids (keys) safe to drop: done, synced, in the repo's index and older than KEEP_SYNCED_DAYS. */
 export function syncedToPrune(list, remoteIds, now = Date.now(), days = KEEP_SYNCED_DAYS) {
   const inRepo = new Set(remoteIds);

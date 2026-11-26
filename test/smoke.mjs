@@ -1594,6 +1594,24 @@ async function run(viewport, label) {
   if (await page.locator(`#ride-table ${phone ? '.rl' : 'tr'}[data-ride]`).count() !== HISTORY.length - 1) fail('Delete removed more than one ride from the list');
   await page.waitForFunction((id) => (JSON.parse(localStorage.getItem('rodillo.pendingDeletes') || '[]')).includes(id), del.id, { timeout: 5000 })
     .catch(() => fail('the failed rodillo-data delete was not queued'));
+  // deleted on another device (Nov 25): this device's synced recording leaves once a fresh index lacks it (here, on
+  // opening Training); one pushed a minute ago and one never synced stay
+  const day = new Date(); day.setHours(6, 0, 0, 0);
+  const local = ['gone', 'justPushed', 'notSynced'].map((k, i) => {
+    const d = new Date(day.getTime() + i * 36e5);
+    return { id: d.getTime(), name: k, status: 'done', demo: false, synced: k !== 'notSynced', ...(k === 'justPushed' ? { syncedTo: DEFAULT_REPO, syncedAt: Date.now() - 6e4 } : {}),
+      summary: { ...HISTORY[0], id: `${d.toLocaleDateString('en-CA')}T0${6 + i}00`, start: d.toISOString(), name: `Local ${k}` } };
+  });
+  const idb = (fn, arg) => page.evaluate(([f, a]) => new Promise((res, rej) => { const o = indexedDB.open('rodillo', 2); o.onsuccess = () => { const t = o.result.transaction('rides', 'readwrite'), st = t.objectStore('rides'); const out = new Function('st', 'a', f)(st, a); t.oncomplete = () => res(out?.result); t.onerror = rej; }; o.onerror = rej; }), [fn, arg]);
+  await idb('a.forEach((r) => st.put(r));', local);
+  await page.click('#tabs button[data-tab="today"]');
+  await page.click('#tabs button[data-tab="training"]');
+  await page.waitForFunction((id) => !document.querySelector(`#ride-table [data-ride="${id}"]`), local[0].summary.id, { timeout: 5000 })
+    .catch(() => fail('a ride deleted on another device still shows'));
+  for (const r of local.slice(1)) if (!(await page.locator(`#ride-table [data-ride="${r.summary.id}"]`).count())) fail(`${r.name} (local ride) left the list`);
+  const keys = await page.evaluate(() => new Promise((res) => { const o = indexedDB.open('rodillo', 2); o.onsuccess = () => { const q = o.result.transaction('rides').objectStore('rides').getAllKeys(); q.onsuccess = () => res(q.result); }; }));
+  if (keys.includes(local[0].id) || !keys.includes(local[1].id) || !keys.includes(local[2].id)) fail(`recordings left on this device: ${keys}`);
+  await idb('a.forEach((k) => st.delete(k));', local.map((r) => r.id));
   history.rides = [];
   await page.evaluate(() => localStorage.removeItem('rodillo.remoteIndex'));
   await page.click('#tabs button[data-tab="today"]');
@@ -1601,7 +1619,7 @@ async function run(viewport, label) {
   await page.waitForFunction(() => /No rides yet/.test(document.querySelector('#ride-table').textContent), null, { timeout: 3000 });
   await page.click('#tabs button[data-tab="today"]');
   await page.evaluate(() => localStorage.removeItem('rodillo.sync')); // the rest of the run is signed out, as before
-  ok(`${label}: Training: locked signed out; signed in: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history; Delete on a ride page (Cancel keeps it, then gone from the list and queued for rodillo-data)`);
+  ok(`${label}: Training: locked signed out; signed in: stats card, fitness chart, weekly bars, power curve, zones and rides from synced history; Delete on a ride page (Cancel keeps it, then gone from the list and queued for rodillo-data); a ride deleted on another device leaves this one`);
 
   await libraryStep(page, label);
 

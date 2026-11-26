@@ -290,6 +290,8 @@
  * @property {string} status 'done' | 'interrupted' | ...
  * @property {boolean} demo
  * @property {boolean} synced
+ * @property {string} [syncedTo] The data repo it was pushed to (since Nov 25).
+ * @property {number} [syncedAt] When it was pushed, epoch ms (since Nov 25).
  * @property {Sample[]} [samples]
  * @property {any[]} [laps]
  * @property {import('./stats.js').RideMeta} [meta]

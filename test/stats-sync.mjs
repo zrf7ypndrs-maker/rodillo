@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { bests, normalizedPower, decoupling, buildRide, loadSeries, weekly, tssByZone, powerCurve, ftpEstimate, ftpFromRide, rideIdFor } from '../js/stats.js';
-import { GitHubSync, rideSources, syncedToPrune, deleteScope, KEEP_SYNCED_DAYS } from '../js/sync.js';
+import { GitHubSync, rideSources, syncedToPrune, deleteScope, deletedElsewhere, DEFAULT_REPO, KEEP_SYNCED_DAYS } from '../js/sync.js';
 import { flatten } from '../js/engine/workout.js';
 import fs from 'node:fs';
 
@@ -63,6 +63,29 @@ ok('synced rides read from the repo; local copies pruned after a few days');
   assert.deepEqual(deleteScope({ demo: true, synced: true, inIndex: true, pushing: true, signedIn: true }), { remote: false, text: here });
 }
 ok('delete scope: this device, plus rodillo-data when signed in and the ride is there');
+
+// ---- rides deleted on another device (Nov 25): this device's synced copy goes once the fresh index lacks it
+{
+  const now = Date.parse('2026-11-25T20:00:00Z'), min = 6e4;
+  let key = Date.parse('2026-11-25T15:22:00Z');
+  const mk = (id, extra = {}) => ({ id: key++, status: 'done', synced: true, demo: false, name: id, summary: { id }, ...extra });
+  const list = [
+    mk('gone'), // synced before Nov 25 (no syncedTo / syncedAt), not in the index: goes
+    mk('goneNew', { syncedTo: DEFAULT_REPO, syncedAt: now - 11 * min }), // pushed 11 min ago, not in the index: goes
+    mk('kept'), // still in the index
+    mk('justPushed', { syncedTo: DEFAULT_REPO, syncedAt: now - 2 * min }), // the index may predate the push
+    mk('unsynced', { synced: false }), // never reached the repo: its own sync will push it
+    mk('demo', { demo: true }),
+    mk('open', { status: 'inprogress' }),
+    mk('friendRepo', { syncedTo: 'friend/rodillo-data', syncedAt: 0 }), // pushed to another repo
+    { id: 9, status: 'done', synced: true, demo: false, name: 'x' }, // no summary
+  ];
+  const ids = (xs) => xs.map((k) => list.find((r) => r.id === k).name);
+  assert.deepEqual(ids(deletedElsewhere(list, ['kept'], DEFAULT_REPO, now)), ['gone', 'goneNew']);
+  assert.deepEqual(ids(deletedElsewhere(list, ['kept'], 'friend/rodillo-data', now)), ['friendRepo']); // old ones count as DEFAULT_REPO's
+  assert.deepEqual(deletedElsewhere(list, list.map((r) => r.summary?.id).filter(Boolean), DEFAULT_REPO, now), []);
+}
+ok('rides deleted on another device leave this one once the fresh index lacks them');
 
 // ---- decoupling: steady power, HR drifting up 8% in second half
 const N = 3600;
