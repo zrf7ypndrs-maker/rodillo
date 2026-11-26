@@ -144,7 +144,8 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   assert.ok(s.started && s.samples.length > 10);
   assert.equal($('#r-int-label').innerHTML, 'Warm-up');
   assert.match(strip($('#r-int-big').innerHTML), /^Ramp to140Win9:\d\d$/);
-  assert.equal(strip($('#r-next').innerHTML), 'Next12:00@180W90 rpm');
+  assert.equal(strip($('#r-next').innerHTML), 'Next12:00@180W90 rpmRep 1/3');
+  assert.equal($('#r-rep').innerHTML, '');
   assert.equal($('#r-next').style.props['--nc'], '#z90');
   assert.ok(!$('#r-int-bar').cls.has('hidden') && /^\d+\.\d\d%$/.test($('#r-int-bar').firstElementChild.style.width));
   assert.equal($('#r-segn').textContent, '0/8');
@@ -186,7 +187,7 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   renderRide();
   assert.ok(!$('#r-pct').cls.has('hidden'));
   assert.equal($('#r-pct').innerHTML, '103%');
-  assert.equal(strip($('#r-next').innerHTML), 'Next12:00@185W90 rpm');
+  assert.equal(strip($('#r-next').innerHTML), 'Next12:00@185W90 rpmRep 1/3');
   s.intensity = 1;
   // a skip: the Next card grows over the card (copies on #ride), the card pulses when it lands, a new Next card slides in
   const card = $('#r-interval');
@@ -207,7 +208,8 @@ const strip = (h) => h.replace(/<[^>]+>/g, '');
   advance(200); await flush();
   assert.equal(host.children.length, 0);
   assert.equal(slide.busy, false);
-  assert.equal($('#r-int-label').innerHTML, 'Sweet spot 1/3');
+  assert.equal($('#r-int-label').innerHTML, 'Sweet spot');
+  assert.equal(strip($('#r-rep').innerHTML), 'Rep1/3');
   assert.equal($('#r-segn').textContent, '1/8');
   assert.deepEqual($('#r-seg-rows').scrolls.map((x) => x.behavior), ['auto', 'smooth']);
   // reduced motion: no slide, the card pulses at once

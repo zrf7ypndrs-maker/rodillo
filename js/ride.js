@@ -13,6 +13,7 @@ import { stepCue, resultCue, bestAvg } from './testcoach.js';
 import { fmtTime, fmtDist } from './ridepage.js';
 import { ELEV_MIN, rampStops } from './profile.js';
 import { action } from './controls.js';
+import { WORK_FTP } from './zones.js';
 import { $, esc, reducedMotion } from './ui.js';
 
 /** @typedef {import('./types.js').RideDeps} Deps */
@@ -371,14 +372,52 @@ export function intervalCard(s, v) {
     const off = seg.kind !== 'erg' && s.gradeOffset ? `profile ${s.gradeOffset > 0 ? '+' : ''}${(s.gradeOffset * 100).toFixed(0)}% &middot; ` : '';
     return {
       zc,
-      label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`,
+      label: `${esc(seg.label)}${s.ergOff && seg.kind === 'erg' ? ' (ERG off)' : ''}`,
+      rep: repBadge(s.segs, s.segIndex),
       text: off + (seg.text ? `${esc(seg.kind === 'sim' ? ftpWatts(seg.text, v.ftp) : seg.text)}${cad}` : sub),
       big,
       bar: `${Math.min(100, Math.max(0, s.segProgress * 100)).toFixed(2)}%`,
     };
   }
-  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', text: 'keep riding or hold B to finish', big: '<span class="msg">Done. Nice work.</span>', bar: null };
-  return { zc: v.gradeHex(s.grade), label: 'Free ride', text: 'up/down changes the grade by 1%, shift to hold your cadence', big: `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`, bar: null };
+  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', text: 'keep riding or hold B to finish', big: '<span class="msg">Done. Nice work.</span>', bar: null, rep: '' };
+  return { zc: v.gradeHex(s.grade), label: 'Free ride', text: 'up/down changes the grade by 1%, shift to hold your cadence', big: `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`, bar: null, rep: '' };
+}
+
+/**
+ * Rep counter on the interval card and the phone hero (Agustín, Nov 25): "REP 3/5" (or "REST 3/5" on the easier step
+ * of a repeat) with one dash per rep, done ones solid. '' outside a repeat. Nested repeats count the inner rep.
+ */
+/** @param {Segment[] | null} segs @param {number} i */
+export function repBadge(segs, i) {
+  const seg = segs?.[i], r = seg?.rep;
+  if (!r) return '';
+  let pips = '';
+  for (let k = 1; k <= r.of; k++) pips += k <= r.i ? '<b class="on"></b>' : '<b></b>';
+  return `<span class="rk">${repWord(segs, i)}</span><span class="rn">${r.i}<i>/${r.of}</i></span><span class="pips">${pips}</span>`;
+}
+/**
+ * 'Rest' for an easy step (under Tempo, under 4% grade) when its repeat block's harder steps add up to at least
+ * its length (VO2 4:00 / 4:00, sweet spot 12:00 / 5:00), else 'Rep' (the 20-min Zone 2 block before a 5-min tempo pickup is the work).
+ */
+/** @param {Segment[]} segs @param {number} i */
+export function repWord(segs, i) {
+  const same = (x) => !!x?.rep; // the repeat block: the run of steps inside a repeat (nested ones included)
+  const effort = (x) => (x.kind === 'erg' ? (x.from + x.to) / 2 : x.grade);
+  if (effort(segs[i]) >= (segs[i].kind === 'erg' ? WORK_FTP : 0.04)) return 'Rep';
+  let a = i, b = i;
+  while (a > 0 && same(segs[a - 1])) a--;
+  while (b < segs.length - 1 && same(segs[b + 1])) b++;
+  const len = (x) => x.dur ?? (x.dist || 0) / 5; // a distance step: about 18 km/h
+  let harder = 0;
+  for (let k = a; k <= b; k++) if (effort(segs[k]) > effort(segs[i])) harder += len(segs[k]);
+  return harder && harder >= len(segs[i]) ? 'Rest' : 'Rep';
+}
+/** "Rep 4/5" when the next step starts a new rep (Next card, phone Next line); '' otherwise. */
+/** @param {Segment[] | null} segs @param {number} i the current step */
+export function nextRep(segs, i) {
+  const cur = segs?.[i], next = segs?.[i + 1];
+  if (!next?.rep || (cur?.rep && cur.rep.i === next.rep.i && cur.rep.of === next.rep.of)) return '';
+  return repWord(segs, i + 1) === 'Rep' ? `Rep ${next.rep.i}/${next.rep.of}` : '';
 }
 
 /** Next card: "4:00 @ 216 W" (+ cadence target; a slope step's aim, "60-65 rpm · ~216 W"); "Finish" on the last interval; `none` when there is no next step. */
@@ -393,7 +432,7 @@ export function nextCard(s, next, v) {
   return {
     none: false, finish: false,
     nc: next.kind === 'erg' ? v.zoneHex(next.from) : v.gradeHex(next.grade), // a ramp: the zone it starts in, so the hand-off doesn't change color
-    html: `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${[next.cad?.label, next.kind === 'sim' && next.aim ? `~${Math.round(next.aim.mid * v.ftp)} W` : ''].filter(Boolean).join(' &middot; ')}</div>`,
+    html: `<div class="rt-k">Next</div><div class="amt"><span class="num">${segAmount(next)}</span><span class="at">@</span>${tgt}</div><div class="cad">${[next.cad?.label, next.kind === 'sim' && next.aim ? `~${Math.round(next.aim.mid * v.ftp)} W` : ''].filter(Boolean).join(' &middot; ')}</div>${nextRep(s.segs, s.segIndex) ? `<div class="nrep">${nextRep(s.segs, s.segIndex)}</div>` : ''}`,
   };
 }
 
@@ -477,6 +516,7 @@ export function renderRide() {
   setHTML($('#r-int-label'), c.label);
   setHTML($('#r-int-text'), c.text);
   setHTML($('#r-int-big'), c.big);
+  setHTML($('#r-rep'), c.rep);
   bar.classList.toggle('hidden', c.bar === null);
   if (c.bar !== null) /** @type {HTMLElement} */ (bar.firstElementChild).style.width = c.bar;
   renderNextCard(s, s.seg ? s.segs[s.segIndex + 1] : undefined, setHTML, v);

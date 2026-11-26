@@ -670,6 +670,16 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .int-head b { font-weight: 800; font-size: 18px; }
 .int-head span:not(:empty)::before { content: " \00b7  "; opacity: .6; }
 .int-head span { opacity: .82; }
+.rep-badge { position: absolute; left: 22px; top: 16px; text-align: left; line-height: 1; pointer-events: none; }
+.rep-badge:empty { display: none; }
+.rep-badge .rk { font-size: 13px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; opacity: .72; margin-right: 6px; vertical-align: 4px; }
+.rep-badge .rn { font-family: var(--num); font-stretch: 68%; font-weight: 850; font-size: 34px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.rep-badge .rn i { font-style: normal; font-size: .52em; opacity: .62; margin-left: .04em; }
+.rep-badge .pips { display: flex; gap: 4px; margin-top: 6px; }
+.rep-badge .pips b { width: 13px; height: 6px; border-radius: 3px; background: currentColor; opacity: .22; }
+.rep-badge .pips b.on { opacity: 1; }
+.interval:has(#r-rep:not(:empty)) .int-head { padding: 0 120px; } /* the label stays centred and clear of the counter */
+.rt-next .nrep { font-size: 15px; font-weight: 650; color: var(--muted); margin-top: 2px; }
 .int-big { font-size: min(96px, 14cqi); line-height: 1; font-weight: 850; margin-top: 6px; white-space: nowrap; letter-spacing: -0.01em; }
 .int-big .num { font-family: var(--num); font-stretch: 68%; font-variant-numeric: tabular-nums; }
 .int-big .w { font-size: .46em; font-weight: 650; letter-spacing: 0; margin: 0 .28em; opacity: .78; }
@@ -1745,6 +1755,13 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   /* the interval is a block of its zone's color */
   .rp-hero { background: var(--zc); color: var(--on-zone); border-radius: 8px; padding: 8px 14px 12px; text-align: center; transition: background .4s; }
   .rp-int-label { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rp-hero { position: relative; }
+  .rp-hero .rep-badge { left: 14px; top: 10px; }
+  .rp-hero .rep-badge .rk { display: none; }
+  .rp-hero .rep-badge .rn { font-size: 26px; }
+  .rp-hero .rep-badge .pips { gap: 3px; margin-top: 5px; }
+  .rp-hero .rep-badge .pips b { width: 9px; height: 4px; border-radius: 2px; }
+  .rp-hero:has(#rp-rep:not(:empty)) .rp-int-label { padding: 0 64px; }
   .rp-count { font-size: clamp(64px, 22vw, 116px); font-weight: 900; line-height: .9; margin: 2px 0 8px; }
   .rp-target-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
   .rp-target { background: var(--on-zone); color: var(--on-zone-inv); font-weight: 800; font-size: 26px; padding: 2px 14px; border-radius: 6px; line-height: 1.25; }
@@ -1819,6 +1836,9 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rp-top > div > span:last-child { font-size: 20px; }
   .rp-hero { grid-area: hero; padding: 4px 12px 7px; }
   .rp-int-label { font-size: 13px; }
+  .rp-hero .rep-badge { top: 6px; left: 10px; }
+  .rp-hero .rep-badge .rn { font-size: 18px; }
+  .rp-hero .rep-badge .pips { margin-top: 3px; }
   .rp-count { font-size: clamp(34px, 10vh, 58px); margin: 0 0 3px; }
   .rp-target { font-size: 17px; padding: 0 9px; }
   .rp-target-sub { font-size: 14px; }

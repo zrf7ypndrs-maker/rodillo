@@ -10,7 +10,7 @@
 import { segTarget, isTrack } from './engine/workout.js';
 import { fmtTime } from './ridepage.js';
 import { action, holdStart, holdEnd } from './controls.js';
-import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
+import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH, repBadge, nextRep } from './ride.js';
 import { ls } from './store.js';
 import { $, esc } from './ui.js';
 
@@ -92,14 +92,15 @@ export function phoneHero(s, v) {
     const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
     return {
       zc: seg.kind === 'erg' ? v.zoneHex(tgt) : v.gradeHex(seg.grade + s.gradeOffset),
-      label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`,
+      label: `${esc(seg.label)}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`,
+      rep: repBadge(s.segs, s.segIndex),
       count: rem.sec !== undefined ? fmtTime(secsLeft(s, rem.sec)) : fmtDist(rem.m),
       target: seg.kind === 'erg' ? `${s.target || Math.round(tgt * v.ftp * s.intensity)} W` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`,
       targetSub: seg.kind === 'erg' ? `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}` : `${seg.aim ? `grade, aim ${Math.round(seg.aim.mid * v.ftp)} W` : 'grade, use your gears'}${cad}`,
     };
   }
-  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', count: 'Done', target: '', targetSub: 'Keep riding. End ride is in the menu.' };
-  return { zc: v.gradeHex(s.grade), label: 'Free ride', count: `${(s.grade * 100).toFixed(1)}%`, target: '', targetSub: 'D-pad &#9650;&#9660; changes the grade' };
+  if (s.segs) return { zc: 'var(--ok-bg)', label: 'Workout complete', count: 'Done', target: '', targetSub: 'Keep riding. End ride is in the menu.', rep: '' };
+  return { zc: v.gradeHex(s.grade), label: 'Free ride', count: `${(s.grade * 100).toFixed(1)}%`, target: '', targetSub: 'D-pad &#9650;&#9660; changes the grade', rep: '' };
 }
 
 /**
@@ -151,7 +152,7 @@ export function phoneNext(s, v) {
   const target = next.kind === 'erg'
     ? (next.from === next.to ? `${Math.round(next.from * v.ftp * s.intensity)} W` : `${Math.round(next.from * v.ftp * s.intensity)}-${Math.round(next.to * v.ftp * s.intensity)} W`)
     : `${((next.grade + s.gradeOffset) * 100).toFixed(0)}%`;
-  return `Next <span class="sw" style="background:${color}"></span><b>${segAmount(next)} @ ${target}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}`;
+  return `Next <span class="sw" style="background:${color}"></span><b>${segAmount(next)} @ ${target}</b>${next.cad ? ` &middot; ${next.cad.label}` : ''}${nextRep(s.segs, s.segIndex) ? ` &middot; ${nextRep(s.segs, s.segIndex).toLowerCase()}` : ''}`;
 }
 
 /** The buttons' labels and which sheet buttons show (`hidden`: grade row, skip, lap, erg). */
@@ -190,6 +191,7 @@ export function renderPhone(s) {
 
   const h = phoneHero(s, v);
   set('rp-int-label', h.label);
+  set('rp-rep', h.rep);
   set('rp-count', h.count);
   set('rp-target', h.target);
   set('rp-target-sub', h.targetSub);

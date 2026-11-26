@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { phoneTop, phoneHero, phoneBoxes, phoneNext, phoneButtons, phoneViewK, phoneFreeScale, phoneScale, phoneSlices } from '../js/ridephone.js';
+import { repBadge } from '../js/ride.js';
 import { flatten, track, trackDist, trackClimbed } from '../js/engine/workout.js';
 import { Gearbox } from '../js/engine/drivetrain.js';
 
@@ -49,7 +50,7 @@ function ses(x = {}) {
 // ---- hero card
 {
   let h = phoneHero(ses({ target: 180 }), v);
-  assert.deepEqual(h, { zc: 'zone(0.90)', label: 'Sweet spot 1/3', count: '9:00', target: '180 W', targetSub: '90% FTP &middot; 90 rpm' });
+  assert.deepEqual(h, { zc: 'zone(0.90)', label: 'Sweet spot', rep: repBadge(ss, 1), count: '9:00', target: '180 W', targetSub: '90% FTP &middot; 90 rpm' });
   // no target yet: the plan's watts at the effort; 105% says so in the % line
   h = phoneHero(ses({ intensity: 1.05 }), v);
   assert.equal(h.target, '189 W');
@@ -58,22 +59,22 @@ function ses(x = {}) {
   assert.equal(phoneHero(ses({ target: 108 }), v).target, '108 W');
   // a ramp: the live target and its zone; no cadence
   h = phoneHero(ses({ segIndex: 0, segProgress: 0.5, segRemaining: { sec: 300 } }), v);
-  assert.deepEqual(h, { zc: 'zone(0.57)', label: 'Warm-up', count: '5:00', target: '115 W', targetSub: '57% FTP' }); // 0.575 x 100 is 57.4999... in doubles
+  assert.deepEqual(h, { zc: 'zone(0.57)', label: 'Warm-up', rep: '', count: '5:00', target: '115 W', targetSub: '57% FTP' }); // 0.575 x 100 is 57.4999... in doubles
   // ERG off on an ERG step; the label is escaped
-  assert.equal(text(phoneHero(ses({ ergOff: true }), v).label), 'Sweet spot 1/3 · ERG off');
+  assert.equal(text(phoneHero(ses({ ergOff: true }), v).label), 'Sweet spot · ERG off');
   assert.equal(phoneHero(ses({ segs: [{ ...ss[1], label: 'A<b>', rep: null }], segIndex: 0 }), v).label, 'A&lt;b&gt;');
   // slope: grade with the profile offset, its color, the aim in watts, cadence
   h = phoneHero(ses({ segs: cr, segIndex: 1, mode: 'sim', gradeOffset: 0.01 }), v);
-  assert.deepEqual(h, { zc: 'grade(0.070)', label: 'Climb 1/4', count: '4:30', target: '7%', targetSub: 'grade, aim 200 W &middot; 85 rpm' });
+  assert.deepEqual(h, { zc: 'grade(0.070)', label: 'Climb', rep: repBadge(cr, 1), count: '4:30', target: '7%', targetSub: 'grade, aim 200 W &middot; 85 rpm' });
   h = phoneHero(ses({ segs: cr, segIndex: 0, mode: 'sim', gradeOffset: -0.02 }), v);
-  assert.deepEqual(h, { zc: 'grade(-0.010)', label: 'Warm-up roll', count: '7:30', target: '-1%', targetSub: 'grade, use your gears' });
+  assert.deepEqual(h, { zc: 'grade(-0.010)', label: 'Warm-up roll', rep: '', count: '7:30', target: '-1%', targetSub: 'grade, use your gears' });
   // a distance step counts metres, then km
   const road = flatten({ steps: [{ dist: 400, grade: 5 }, { dist: 2000, grade: 3 }] });
   assert.equal(phoneHero(ses({ segs: road, segIndex: 0, mode: 'sim' }), v).count, '300 m');
   assert.equal(phoneHero(ses({ segs: road, segIndex: 1, mode: 'sim' }), v).count, '1.50 km');
   // workout complete, free ride
-  assert.deepEqual(phoneHero(ses({ segIndex: -1, seg: null }), v), { zc: 'var(--ok-bg)', label: 'Workout complete', count: 'Done', target: '', targetSub: 'Keep riding. End ride is in the menu.' });
-  assert.deepEqual(phoneHero(ses({ segs: null, segIndex: -1, grade: 0.035 }), v), { zc: 'grade(0.035)', label: 'Free ride', count: '3.5%', target: '', targetSub: 'D-pad &#9650;&#9660; changes the grade' });
+  assert.deepEqual(phoneHero(ses({ segIndex: -1, seg: null }), v), { zc: 'var(--ok-bg)', label: 'Workout complete', count: 'Done', target: '', targetSub: 'Keep riding. End ride is in the menu.', rep: '' });
+  assert.deepEqual(phoneHero(ses({ segs: null, segIndex: -1, grade: 0.035 }), v), { zc: 'grade(0.035)', label: 'Free ride', count: '3.5%', target: '', targetSub: 'D-pad &#9650;&#9660; changes the grade', rep: '' });
   ok('hero card: hold, effort, eased target, ramp, ERG off, escaping, slope grade with offset and aim, metres, complete, free ride');
 }
 
@@ -144,15 +145,15 @@ function ses(x = {}) {
 {
   assert.equal(text(phoneNext(ses(), v)), 'Next 4:00 @ 100 W');
   assert.match(phoneNext(ses(), v), /background:zone\(0\.50\)/);
-  assert.equal(text(phoneNext(ses({ segIndex: 0 }), v)), 'Next 12:00 @ 180 W · 90 rpm');
-  assert.equal(text(phoneNext(ses({ segIndex: 0, intensity: 1.01 }), v)), 'Next 12:00 @ 182 W · 90 rpm');
+  assert.equal(text(phoneNext(ses({ segIndex: 0 }), v)), 'Next 12:00 @ 180 W · 90 rpm · rep 1/3');
+  assert.equal(text(phoneNext(ses({ segIndex: 0, intensity: 1.01 }), v)), 'Next 12:00 @ 182 W · 90 rpm · rep 1/3');
   // a ramp next: its range, and the zone it starts in
   const ramp = flatten({ steps: [{ dur: 60, power: 0.5 }, { dur: 300, from: 0.6, to: 0.9 }] });
   assert.equal(text(phoneNext(ses({ segs: ramp, segIndex: 0 }), v)), 'Next 5:00 @ 120-180 W');
   assert.match(phoneNext(ses({ segs: ramp, segIndex: 0 }), v), /background:zone\(0\.60\)/);
   // slope: the grade with the profile offset, its color too
   const sim = phoneNext(ses({ segs: cr, segIndex: 0, mode: 'sim', gradeOffset: 0.01 }), v);
-  assert.equal(text(sim), 'Next 6:00 @ 7% · 85 rpm');
+  assert.equal(text(sim), 'Next 6:00 @ 7% · 85 rpm · rep 1/4');
   assert.match(sim, /background:grade\(0\.070\)/);
   // a distance step
   const road = flatten({ steps: [{ dur: 60, grade: 0 }, { dist: 1500, grade: 4 }] });

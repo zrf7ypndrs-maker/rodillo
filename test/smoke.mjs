@@ -1042,6 +1042,7 @@ async function rideRun() {
     const q = (sel) => document.querySelector(sel), tx = (sel) => q(sel)?.textContent ?? '', s = window.rodillo.session;
     return {
       label: tx('#r-int-label'), text: tx('#r-int-text'), big: tx('#r-int-big'), bar: !q('#r-int-bar').classList.contains('hidden'),
+      rep: tx('#r-rep'), nrep: tx('#r-next .nrep'),
       next: { none: q('#r-next').classList.contains('none'), amt: tx('#r-next .amt'), cad: tx('#r-next .cad') },
       pct: q('#r-pct').classList.contains('hidden') ? null : tx('#r-pct'), target: tx('#r-target'),
       aimCls: ['aim-ok', 'aim-bad'].find((c) => q('.tile.power').classList.contains(c)) || '',
@@ -1102,16 +1103,20 @@ async function rideRun() {
   if (v.s.intensity !== 1.01 || v.pct !== '101%') fail(`effort up: ${v.s.intensity}, tile "${v.pct}"`);
   expect('ERG card at 101%', v.big, `Ramp to${Math.round(ss[0].to * FTP * 1.01)}Win${left(v.s.rem, v.s.elapsed)}`);
   expect('Next card at 101%', v.next.amt, `${fmtTime(ss[1].dur)}@${Math.round(ss[1].from * FTP * 1.01)}W`);
+  expect('rep counter in the warm-up', v.rep, '');
+  expect('Next card rep line before rep 1', v.nrep, 'Rep 1/3');
   await hold('s', 3500); // skip: interval 1 of 3
   await run(3000);
   v = await screen();
   if (v.s.seg !== 1) fail(`hold S: segment ${v.s.seg}`);
-  expect('ERG card label after the skip', v.label, `${ss[1].label} 1/3`);
+  expect('ERG card label after the skip', v.label, ss[1].label);
+  expect('rep counter on rep 1', v.rep, 'Rep1/3');
+  expect('Next card rep line before the recovery', v.nrep, '');
   expect('ERG card, hold', v.big, `Hold${Math.round(ss[1].from * FTP * 1.01)}Wfor${left(v.s.rem, v.s.elapsed)}`);
   expect('ERG card sub line', v.text, `${Math.round(ss[1].from * 100 * 1.01)}% FTP · ${ss[1].cad.label}`);
   expect('Next card after the skip', v.next.amt, `${fmtTime(ss[2].dur)}@${Math.round(ss[2].from * FTP * 1.01)}W`);
   expect('interval count', v.segn, `1/${ss.length}`);
-  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), Next card, effort 101%, hold S skips, tiles');
+  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), rep counter, Next card and its rep line, effort 101%, hold S skips, tiles');
   await ctx.close();
 
   // slope workout (timed climbs: Climbed, real metres), a shift, the profile moved up 1%
@@ -1252,7 +1257,7 @@ async function phoneRideRun() {
     return {
       phone: vis('#rp') && !vis('.tiles'),
       elapsed: tx('#rp-elapsed'), name: tx('#rp-name'), leftK: tx('#rp-left-k'), left: tx('#rp-left'),
-      label: tx('#rp-int-label'), count: tx('#rp-count'), target: tx('#rp-target'), targetSub: tx('#rp-target-sub'),
+      label: tx('#rp-int-label'), rep: tx('#rp-rep'), count: tx('#rp-count'), target: tx('#rp-target'), targetSub: tx('#rp-target-sub'),
       zc: q('#rp').style.getPropertyValue('--zc'), fresh: has('#rp-hero', 'int-fresh'), ending: has('#rp-hero', 'int-ending'),
       power: tx('#rp-power'), gaugeOff: has('#rp-gauge', 'off'), gaugeAt: q('#rp-gauge b').style.left,
       powerCls: ['ok', 'bad'].filter((c) => has('#rp-power-box', c)).join(), powerSub: tx('#rp-power-sub'),
@@ -1318,7 +1323,8 @@ async function phoneRideRun() {
   gauge(v, v.s.target, 'ERG');
   if (v.powerCls || v.powerSub) fail(`ERG power box marked "${v.powerCls}" "${v.powerSub}" (only slope aims mark it)`);
   expect('ERG third box', [v.m3k, v.m3, v.m3sub, v.m3cls].join('|'), 'Effort|100%|as planned|');
-  expect('ERG Next line', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP)} W${cadOf(ss[1])}`);
+  expect('ERG Next line', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP)} W${cadOf(ss[1])} · rep 1/3`);
+  expect('no rep counter in the warm-up', v.rep, '');
   if (!v.nextSw) fail('ERG Next line has no zone swatch');
   expect('ERG buttons', [v.minus, v.plus, v.pause].join('|'), '−1%|+1%|Pause');
   if (v.gradeRow || !v.skip || v.lap || !v.erg || v.ergText !== 'ERG off') fail(`ERG sheet buttons: grade ${v.gradeRow}, skip ${v.skip}, lap ${v.lap}, erg ${v.erg} "${v.ergText}"`);
@@ -1331,7 +1337,7 @@ async function phoneRideRun() {
   if (v.s.intensity !== 1.01) fail(`plus button in ERG: effort ${v.s.intensity}`);
   expect('effort box at 101%', [v.m3, v.m3sub, v.m3cls].join('|'), '101%|harder than plan|up');
   expect('ERG hero sub line at 101%', v.targetSub, `${pct(segTarget(ss[0], v.s.progress) * 1.01)}% FTP${cadOf(ss[0])}`);
-  expect('ERG Next line at 101%', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP * 1.01)} W${cadOf(ss[1])}`);
+  expect('ERG Next line at 101%', v.next, `Next ${fmtTime(ss[1].dur)} @ ${Math.round(ss[1].from * FTP * 1.01)} W${cadOf(ss[1])} · rep 1/3`);
   gauge(v, v.s.target, 'ERG at 101%');
   // pause / resume from the middle button
   await tapBtn('rp-pause');
@@ -1356,7 +1362,8 @@ async function phoneRideRun() {
   if (v.s.seg !== 1 || v.toast !== 'Skipped' || v.sheet) fail(`sheet Skip held 1.2 s: segment ${v.s.seg}, toast "${v.toast}", sheet ${v.sheet}`);
   await run(3000);
   v = await screen();
-  expect('ERG hero label after the skip', v.label, `${ss[1].label} 1/3`);
+  expect('ERG hero label after the skip', v.label, ss[1].label);
+  expect('rep counter on rep 1', v.rep, 'Rep1/3');
   expect('ERG hero countdown after the skip', v.count, count(v.s.rem, v.s.elapsed));
   expect('ERG hero target, hold', v.target, `${Math.round(ss[1].from * FTP * 1.01)} W`);
   expect('ERG hero sub line, hold', v.targetSub, `${pct(ss[1].from * 1.01)}% FTP${cadOf(ss[1])}`);
@@ -1398,7 +1405,7 @@ async function phoneRideRun() {
   expect('slope hero sub line', v.targetSub, `grade, use your gears${cadOf(cr[0])}`);
   if (!v.gaugeOff || v.powerCls || v.powerSub) fail(`warm-up has no aim: gauge off ${v.gaugeOff}, box "${v.powerCls}" "${v.powerSub}"`);
   gearBox(v, 'slope');
-  expect('slope Next line', v.next, `Next ${fmtTime(cr[1].dur)} @ ${(cr[1].grade * 100).toFixed(0)}%${cadOf(cr[1])}`);
+  expect('slope Next line', v.next, `Next ${fmtTime(cr[1].dur)} @ ${(cr[1].grade * 100).toFixed(0)}%${cadOf(cr[1])} · rep 1/4`);
   if (!v.gradeRow || !v.skip || v.lap || v.erg) fail(`slope sheet buttons: grade ${v.gradeRow}, skip ${v.skip}, lap ${v.lap}, erg ${v.erg}`);
   expect('slope view label (road)', v.viewK, roadK(v));
   if (v.drawn < 1000) fail(`slope road chart drew ${v.drawn} pixels`);
@@ -1414,7 +1421,7 @@ async function phoneRideRun() {
   v = await screen();
   if (Math.abs(v.s.offset - 0.01) > 1e-9 || !v.sheet) fail(`Grade +1%: offset ${v.s.offset}, sheet ${v.sheet}`);
   expect('slope hero target, profile +1%', v.target, `${((cr[0].grade + 0.01) * 100).toFixed(0)}%`);
-  expect('slope Next line, profile +1%', v.next, `Next ${fmtTime(cr[1].dur)} @ ${((cr[1].grade + 0.01) * 100).toFixed(0)}%${cadOf(cr[1])}`);
+  expect('slope Next line, profile +1%', v.next, `Next ${fmtTime(cr[1].dur)} @ ${((cr[1].grade + 0.01) * 100).toFixed(0)}%${cadOf(cr[1])} · rep 1/4`);
   await tapBtn('rp-gdown');
   if (Math.abs((await screen()).s.offset) > 1e-9) fail('Grade −1% did not put the profile back');
   await sheetHold('rp-skip', 1200);

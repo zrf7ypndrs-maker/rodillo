@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   rideTiles, intervalCard, nextCard, gearViz, powerScale, workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep,
-  trackProgress, workoutLeft, secsLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount,
+  trackProgress, workoutLeft, secsLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount, repBadge, repWord, nextRep,
 } from '../js/ride.js';
 import { flatten, track, trackDist, trackClimbed, climbsByDist } from '../js/engine/workout.js';
 import { Gearbox } from '../js/engine/drivetrain.js';
@@ -38,7 +38,7 @@ function ses(x = {}) {
 // ---- interval card
 {
   let c = intervalCard(ses({ target: 180 }), v);
-  assert.equal(c.label, 'Sweet spot 1/3');
+  assert.equal(c.label, 'Sweet spot');
   assert.equal(text(c.big), 'Hold180Wfor9:00');
   assert.equal(text(c.text), '90% FTP · 90 rpm');
   assert.equal(c.zc, 'zone(0.90)');
@@ -58,7 +58,7 @@ function ses(x = {}) {
   assert.equal(c.zc, 'zone(0.57)'); // 45% -> 70%, halfway (0.575)
   // ERG off on an ERG step; a step's own text wins over the % line, escaped, cadence kept
   c = intervalCard(ses({ ergOff: true }), v);
-  assert.equal(c.label, 'Sweet spot 1/3 (ERG off)');
+  assert.equal(c.label, 'Sweet spot (ERG off)');
   const custom = { ...ss[1], text: 'Stay <seated> & smooth' };
   c = intervalCard(ses({ segs: [ss[0], custom], seg: custom }), v);
   assert.equal(c.text, 'Stay &lt;seated&gt; &amp; smooth &middot; 90 rpm');
@@ -69,7 +69,7 @@ function ses(x = {}) {
 }
 {
   let c = intervalCard(ses({ segs: cr, segIndex: 1, mode: 'sim' }), v);
-  assert.equal(c.label, 'Climb 1/4');
+  assert.equal(c.label, 'Climb');
   assert.equal(text(c.big), '6%grade for4:30');
   assert.equal(text(c.text), 'Hold ~200 W · 85 rpm'); // "% FTP" in a slope step's text reads in watts
   assert.equal(c.zc, 'grade(0.060)');
@@ -101,20 +101,49 @@ function ses(x = {}) {
   ok('interval card: workout complete, free ride');
 }
 
+// ---- rep counter (interval card, phone hero) and the Next card's rep line
+{
+  const vo = flatten(W('vo2-5x4-110')); // 0 warm-up, 1 opener, 2 easy, 3 rep 1 (110%), 4 recovery 1/5 (50%), ..., 11 rep 5, 12 recovery 5/5, 13 cool-down
+  const pips = (html) => (html.match(/<b class="on">/g) || []).length + '/' + (html.match(/<b/g) || []).length;
+  assert.equal(repBadge(vo, 2), '');
+  assert.equal(repBadge(null, 0), '');
+  assert.equal(text(repBadge(vo, 7)), 'Rep3/5');
+  assert.equal(pips(repBadge(vo, 7)), '3/5');
+  assert.equal(text(repBadge(vo, 8)), 'Rest3/5');
+  assert.equal(pips(repBadge(vo, 12)), '5/5');
+  assert.equal(intervalCard(ses({ segs: vo, segIndex: 7 }), v).rep, repBadge(vo, 7));
+  assert.equal(intervalCard(ses({ segs: vo, segIndex: 2 }), v).rep, '');
+  assert.equal(intervalCard(ses({ segIndex: -1 }), v).rep, '');
+  // over-unders: the under (95%) is work too, so both steps say Rep; the set recovery between sets says Rest
+  const ou = flatten(W('mtb-overunders-3x9'));
+  ou.forEach((g, i) => { if (g.rep) assert.equal(repWord(ou, i), g.label === 'Under' || g.label === 'Over' ? 'Rep' : (g.from + g.to) / 2 < 0.76 ? 'Rest' : 'Rep', `${i} ${g.label}`); });
+  // slope repeats: the 0% roll after a 6% climb is Rest
+  assert.deepEqual([repWord(cr, 1), repWord(cr, 2)], ['Rep', 'Rest']);
+  // a repeat of easy steps only stays Rep; so does a long Zone 2 block before a short tempo pickup
+  const easy = [{ kind: 'erg', from: 0.6, to: 0.6, dur: 60, rep: { i: 1, of: 2 } }, { kind: 'erg', from: 0.6, to: 0.6, dur: 60, rep: { i: 2, of: 2 } }];
+  assert.equal(repWord(easy, 1), 'Rep');
+  const z2 = flatten(W('z2-90')); // 1 Zone 2 20:00 (1/3), 2 Tempo pickup 5:00
+  assert.deepEqual([repWord(z2, 1), repWord(z2, 2)], ['Rep', 'Rep']);
+  // Next rep line: only when the next step starts a new work rep
+  assert.deepEqual([2, 3, 6, 7, 12].map((i) => nextRep(vo, i)), ['Rep 1/5', '', 'Rep 3/5', '', '']);
+  assert.equal(nextRep(null, 0), '');
+  ok('rep counter: Rep / Rest, dashes, none outside a repeat; Next rep line only before a new work rep');
+}
+
 // ---- Next card
 {
   const nx = (s, i) => nextCard(s, s.segs[i], v);
   let c = nx(ses({ segIndex: 0 }), 1);
-  assert.equal(text(c.html), 'Next12:00@180W90 rpm');
+  assert.equal(text(c.html), 'Next12:00@180W90 rpmRep 1/3');
   assert.equal(c.nc, 'zone(0.90)');
   assert.deepEqual([c.none, c.finish], [false, false]);
   c = nx(ses({ segIndex: 0, intensity: 1.1 }), 1);
-  assert.equal(text(c.html), 'Next12:00@198W90 rpm');
+  assert.equal(text(c.html), 'Next12:00@198W90 rpmRep 1/3');
   c = nx(ses({ segIndex: 6 }), 7); // the cool-down ramp: both ends, colored by where it starts
   assert.equal(text(c.html), 'Next5:00@120-80W');
   assert.equal(c.nc, 'zone(0.60)');
   c = nx(ses({ segs: cr, segIndex: 0, mode: 'sim', gradeOffset: 0.01 }), 1);
-  assert.equal(text(c.html), 'Next6:00@7%85 rpm · ~200 W');
+  assert.equal(text(c.html), 'Next6:00@7%85 rpm · ~200 WRep 1/4');
   assert.equal(c.nc, 'grade(0.060)'); // the step's own grade, like the workout's colors
   const climb = flatten(W('climb-el-durazno')), d = climb.findIndex((g) => g.dist);
   c = nx(ses({ segs: climb, segIndex: d - 1, mode: 'sim' }), d);
