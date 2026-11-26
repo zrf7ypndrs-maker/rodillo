@@ -285,7 +285,7 @@ async function builderFields(page, fail) {
     await page.fill(sel, v);
     if ((await page.$eval(sel, (el) => el.classList.contains('bad'))) !== bad) fail(`builder ${f} "${v}": ${bad ? 'not' : ''} red`);
   };
-  // the builder redraws on input: read until it shows the value (up to 2 s; a slow CI runner read the old one, Nov 25)
+  // the builder redraws on input: read until it shows the value (up to 2 s)
   const want = async (what, get, exp) => {
     let got;
     for (let t = 0; t < 20 && (got = await get()) !== exp; t++) await page.waitForTimeout(100);
@@ -375,6 +375,9 @@ async function mineRun() {
   // on a bad one, leaving the block as it was
   await page.click('#btn-new-wo');
   await page.waitForSelector('#builder:not(.hidden)', { timeout: 3000 });
+  // a new workout focuses its name field 60 ms after opening: typed before that, a field's text could land in the name
+  // (the Nov 25 "builder pct 90: 150 W" failures, about 1 run in 10)
+  await page.waitForFunction(() => document.activeElement?.id === 'b-name', null, { timeout: 3000 });
   await builderFields(page, fail);
   await page.click('#b-close');
   await page.waitForTimeout(300);
