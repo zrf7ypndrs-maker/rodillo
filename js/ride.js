@@ -8,6 +8,7 @@
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding, secsLeft.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { paintPain, painLevel } from './pain.js';
+import { countdownGo, beatPhase } from './countdown.js';
 import { POWER_SHOW_S } from './engine/session.js';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
 import { stepCue, resultCue, bestAvg } from './testcoach.js';
@@ -21,7 +22,8 @@ import { $, esc, reducedMotion } from './ui.js';
 /** @typedef {import('./types.js').RideSession} Session */
 /** @typedef {import('./types.js').RideView} RideView */
 /** @typedef {import('./types.js').Segment} Segment */
-/** @typedef {HTMLElement & { _ses?: object, _seg?: number }} RideCard The interval card / phone hero, with the session and step it last showed. */
+/** @typedef {HTMLElement & { _ses?: object, _seg?: number, _beatAt?: number }} RideCard The interval card / phone hero, with the session and
+ * step it last showed, and when (performance.now()) its countdown beat had phase 0. */
 /** @type {Deps['app']} */ let app;
 /** @type {Deps['isPhone']} */ let isPhone;
 /** @type {Deps['renderPhone']} */ let renderPhone;
@@ -43,7 +45,10 @@ export function initRide(deps) {
   new ResizeObserver(() => { if (app.screen === 'ride') { sizeChart(); drawChart(); } }).observe(canvas);
   for (const id of ['r-interval', 'rp-hero']) {
     document.getElementById(id).addEventListener('animationend', (e) => {
-      if (e.animationName === 'int-fresh') /** @type {HTMLElement} */ (e.currentTarget).classList.remove('int-fresh');
+      if (e.animationName !== 'int-fresh') return;
+      const card = /** @type {RideCard} */ (e.currentTarget);
+      card.classList.remove('int-fresh');
+      if (card.classList.contains('int-ending')) beatDelay(card); // the beat starts over: keep it on the seconds
     });
   }
   $('#r-erg').onclick = (e) => { /** @type {HTMLElement} */ (e.currentTarget).blur(); action('ergToggle'); };
@@ -163,6 +168,7 @@ function slideNextIn(s) {
   };
   slide.busy = true;
   card._seg = i; // pulseCard must not pulse now; it happens on landing
+  countdownGo(s, i, true); // its lead-in plays during the slide, the hit lands with the card
   copy(card, 'rt-ghost', b);
   const mover = copy(next, 'rt-mover', a);
   next.style.visibility = 'hidden';
@@ -175,7 +181,7 @@ function slideNextIn(s) {
     slide.parts.filter((x) => x !== mover).forEach((x) => x.remove());
     slide.parts = [mover];
     mover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' });
-    card.classList.remove('int-fresh'); void card.offsetWidth; card.classList.add('int-fresh');
+    freshPulse(card);
     next.style.visibility = '';
     if (!next.classList.contains('none')) {
       const n = next.getBoundingClientRect();
@@ -463,12 +469,29 @@ function pulseCard(s, card) {
   if (card._ses !== s) { card._ses = s; card._seg = -1; card.classList.remove('int-fresh', 'int-ending'); }
   const i = s.started ? s.segIndex : -1;
   if (i >= 0 && i !== card._seg) {
-    card.classList.remove('int-fresh');
-    void card.offsetWidth; // restart the one-shot animation
-    card.classList.add('int-fresh');
+    if (card._seg >= 0) countdownGo(s, i, false); // not on the ride's first step
+    freshPulse(card);
   }
   card._seg = i;
-  card.classList.toggle('int-ending', intervalEnding(s));
+  const ending = intervalEnding(s);
+  if (ending && !card.classList.contains('int-ending')) {
+    card._beatAt = performance.now() - beatPhase(s.elapsed) * 1000; // beats land when the number changes
+    if (!card.classList.contains('int-fresh')) beatDelay(card);
+  }
+  card.classList.toggle('int-ending', ending);
+}
+/** (Re)starts the one-shot pulse of a new step, from its start. @param {RideCard} card */
+function freshPulse(card) {
+  card.classList.remove('int-fresh');
+  card.style.animationDelay = '';
+  void card.offsetWidth; // restart the one-shot animation
+  card.classList.add('int-fresh');
+}
+/** Puts the 1 s countdown beat on the seconds (with the ticks in js/countdown.js): a negative delay starts it at the
+ * phase it should be at now. @param {RideCard} card */
+function beatDelay(card) {
+  const p = (((performance.now() - (card._beatAt ?? 0)) / 1000) % 1 + 1) % 1;
+  card.style.animationDelay = `${-p.toFixed(3)}s`;
 }
 
 export function renderRide() {

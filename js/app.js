@@ -29,6 +29,7 @@ import { initControls, onButton, onRelease, focusables, applyFocus } from './con
 import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js';
 import { initMusic, syncMusic } from './music.js';
+import { initCountdown, countdownTick, countdownDone, countdownStop, syncCountdown } from './countdown.js';
 /** @typedef {import('./types.js').Settings} Settings */
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 /** @typedef {import('./types.js').FieldEvent} FieldEvent */
@@ -320,6 +321,7 @@ function reconcileSettings(source = 'settings') {
   ls.set('settingsPending', r.pending);
   if (r.adopted.length) logMsg('coach', `settings from the plan: ${r.adopted.map((k) => `${k} ${JSON.stringify(app.settings[k])}`).join(', ')}`);
   syncMusic(); // Title music set here or on another device
+  syncCountdown(); // Countdown sounds, the same
   return r;
 }
 
@@ -658,7 +660,8 @@ function beginSession(opts) {
   s.on('autostart', () => toast('Go!'));
   s.on('autopause', () => toast('Auto-paused'));
   s.on('autoresume', () => toast('Resumed'));
-  s.on('workoutDone', () => toast('Workout complete. Free ride, or hold B to finish'));
+  s.on('workoutDone', () => { toast('Workout complete. Free ride, or hold B to finish'); countdownDone(s); });
+  s.on('tick', () => countdownTick(s)); // the last 3 s of a step: one soft pulse per second (js/countdown.js)
   s.on('testEnd', (e) => testEnded(s, e));
   rideMsgReset();
   s.on('message', (t) => rideMsg(t));
@@ -684,6 +687,7 @@ async function endSession() {
   const s = app.session;
   if (!s) return;
   s.finish();
+  countdownStop();
   rideMsgReset();
   wakeLock?.release?.().catch(() => {});
   if (s.samples.length < MIN_SAMPLES) { app.session = null; show('home'); return; }
@@ -1302,6 +1306,7 @@ async function forgetHere() {
 }
 initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData });
 initMusic({ app, makeAudio: () => new AudioContext() });
+initCountdown({ app, makeAudio: () => new AudioContext() });
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {

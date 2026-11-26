@@ -71,6 +71,7 @@
  * @property {string} bike
  * @property {Record<string, number>} climbDetail
  * @property {string} [titleMusic] 'normal' | 'soft' | 'off' (js/music.js).
+ * @property {string} [countdownSound] 'on' | 'soft' | 'off' (js/countdown.js).
  */
 
 // ------------------------------------------------------------------ workouts (js/engine/workout.js)
@@ -540,6 +541,12 @@
  * @typedef {object} MusicDeps initMusic() in js/music.js.
  * @property {AppState} app
  * @property {() => AudioContext} makeAudio Called on the first tap or key with music wanted.
+ */
+
+/**
+ * @typedef {object} CountdownDeps initCountdown() in js/countdown.js.
+ * @property {AppState} app
+ * @property {() => AudioContext} makeAudio Called on the first tap or key with countdown sounds on.
  */
 
 /**

@@ -15,6 +15,7 @@ import { withDetail, defaultDetail, detailLabel, DETAIL_MIN, DETAIL_MAX } from '
 import { fmtTime } from '../js/ridepage.js';
 import { DEFAULT_SETTINGS } from '../js/engine/session.js';
 import { DEFAULT_REPO } from '../js/sync.js';
+import { stepKind } from '../js/countdown.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.webp': 'image/webp' };
@@ -71,6 +72,8 @@ const listOf = (page, sel) => page.$$eval(`${sel} .wo-sec`, (secs) => secs.map((
   g: s.querySelector('.wo-gh').textContent,
   rows: [...s.querySelectorAll('.wo')].map((r) => ({ i: +r.dataset.i, name: r.querySelector('.wo-name').childNodes[0].textContent.trim(), meta: r.querySelector('.wo-meta').textContent })),
 })));
+// countdown sounds (js/countdown.js): what the app's own module decided (ticks and step-start sounds), newest last
+const cues = (page) => page.evaluate(() => import('./js/countdown.js').then((m) => m.countdownLog.slice()));
 // title music (js/music.js): its state, from the app's own module instance
 const musicIs = (page, state, what, timeout = 25000) => page.waitForFunction((s) => import('./js/music.js').then((m) => m.musicNow().state === s), state, { timeout, polling: 250 })
   .catch(async () => { throw new Error(`music: ${what}: ${JSON.stringify(await page.evaluate(() => import('./js/music.js').then((m) => m.musicNow())))}, expected ${state}`); });
@@ -1119,7 +1122,9 @@ async function rideRun() {
   expect('ERG card sub line', v.text, `${Math.round(ss[1].from * 100 * 1.01)}% FTP · ${ss[1].cad.label}`);
   expect('Next card after the skip', v.next.amt, `${fmtTime(ss[2].dur)}@${Math.round(ss[2].from * FTP * 1.01)}W`);
   expect('interval count', v.segn, `1/${ss.length}`);
-  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), rep counter, Next card and its rep line, effort 101%, hold S skips, tiles');
+  const go1 = (await cues(page)).filter((c) => c.cue !== 'tick');
+  if (JSON.stringify(go1) !== JSON.stringify([{ cue: stepKind(ss[1]), seg: 1, slide: true }])) fail(`countdown sounds on the skip: ${JSON.stringify(go1)}, expected the ${stepKind(ss[1])} sound once, with the slide`);
+  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), rep counter, Next card and its rep line, effort 101%, hold S skips, tiles, the step-start sound with the slide');
   await ctx.close();
 
   // slope workout (timed climbs: Climbed, real metres), a shift, the profile moved up 1%
@@ -1227,6 +1232,17 @@ async function rideRun() {
   if (!v.takeover || v.takeover.line !== 'Here we go.' || v.takeover.big !== `${Math.round(rt[step1].from * FTP)} W` || !/^\+20 W every minute/.test(v.takeover.sub)) fail(`ramp test takeover ${JSON.stringify(v.takeover)}`);
   await page.waitForFunction(() => document.querySelector('#takeover').classList.contains('hidden'), null, { timeout: 6000 });
   ok('desktop: ride, ramp test: workout messages over the chart, "Here we go" takeover on step 1, then back');
+  // countdown sounds: 3, 2, 1 on step 1's last seconds, each on a number change, then the next step's sound with the slide
+  const e0 = (await screen()).s.elapsed;
+  for (let i = 0; i < 300 && (await screen()).s.seg === step1; i++) await run(250);
+  const fromStep1 = (await cues(page)).filter((c) => c.seg >= step1);
+  const ticks = fromStep1.filter((c) => c.cue === 'tick'), go2 = fromStep1.filter((c) => c.cue !== 'tick' && c.seg > step1); // the skip onto step 1 had its own
+  if (ticks.map((c) => `${c.seg}:${c.n}`).join() !== [3, 2, 1].map((k) => `${step1}:${k}`).join()) fail(`ramp test: countdown ticks ${JSON.stringify(ticks)} (from elapsed ${e0})`);
+  if (!ticks.every((c) => c.in > 0 && c.in <= 0.6)) fail(`ramp test: ticks put on the clock too early or late ${JSON.stringify(ticks)}`);
+  if (JSON.stringify(go2) !== JSON.stringify([{ cue: stepKind((await screen()).s.segs[step1 + 1]), seg: step1 + 1, slide: true }])) fail(`ramp test: next step's sound ${JSON.stringify(go2)}`);
+  const beat = await page.evaluate(() => { const c = document.querySelector('#r-interval'); return { ending: c.classList.contains('int-ending'), delay: c.style.animationDelay }; });
+  if (beat.delay && !/^-?0(\.\d+)?s$/.test(beat.delay)) fail(`interval card beat delay "${beat.delay}"`);
+  ok('desktop: ride, countdown sounds: 3, 2, 1 on the last seconds of a step, then the next step\'s sound with the slide');
   await ctx.close();
 }
 
@@ -1386,6 +1402,8 @@ async function phoneRideRun() {
   await sheetHold('rp-skip', 1200);
   v = await screen();
   if (v.s.seg !== 1 || v.toast !== 'Skipped' || v.sheet) fail(`sheet Skip held 1.2 s: segment ${v.s.seg}, toast "${v.toast}", sheet ${v.sheet}`);
+  const goPhone = (await cues(page)).filter((c) => c.cue !== 'tick');
+  if (JSON.stringify(goPhone) !== JSON.stringify([{ cue: stepKind(ss[1]), seg: 1, slide: false }])) fail(`phone: step-start sound on the skip ${JSON.stringify(goPhone)}, expected the ${stepKind(ss[1])} sound once, no slide`);
   await run(3000);
   v = await screen();
   expect('ERG hero label after the skip', v.label, ss[1].label);
@@ -1736,6 +1754,7 @@ async function run(viewport, label) {
       ['ride', '#set-guard', 'ergCadenceGuard', orig.ergCadenceGuard ? '0' : '1', !orig.ergCadenceGuard, orig.ergCadenceGuard ? '1' : '0'],
       ['ride', '#set-pain', 'painVision', 'subtle', 'subtle', orig.painVision || 'full'],
       ['ride', '#set-music', 'titleMusic', 'off', 'off', orig.titleMusic || 'normal'],
+      ['ride', '#set-countdown', 'countdownSound', 'soft', 'soft', orig.countdownSound || 'on'],
       ['road', '#set-gradeScale', 'gradeScale', '75', 0.75, num('gradeScale', 100)],
       ['trainer', '#set-gmax', 'maxSendGrade', '12', 0.12, num('maxSendGrade', 100)],
       ['trainer', '#set-shift', 'trainerShifting', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'app' : 'auto'],
