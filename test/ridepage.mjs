@@ -56,6 +56,10 @@ assert.match(html, /Best in 90 days/);
 assert.match(html, /data-rd="fit"/);
 assert.doesNotMatch(html, /data-rd="delete"/);
 assert.match(html, /&middot; ERG &middot;/);
+{ // zones and best power sit right under the stats, above the chart; intervals below the chart
+  const at = (re) => html.search(re);
+  assert.ok(at(/class="rd-stats"/) < at(/Time in zones/) && at(/Time in zones/) < at(/Best power/) && at(/Best power/) < at(/rd-charts/) && at(/rd-charts/) < at(/id="rd-ints"/), 'page order');
+}
 const ch = chartSvg(doc, { width: 1000, phone: false, ftp, segs: rs, sel: rep2.i, tok, zoneHex, gradeHex });
 assert.deepEqual(ch.geo.lanes.map((l) => l.k), ['power', 'hr', 'cadence']);
 assert.match(ch.svg, /class="rd-strip"/);

@@ -203,14 +203,13 @@ function chartsHtml(doc, opts, segs) {
     </section>`;
 }
 
-/** Intervals table and the side cards (zones, best power), '' when there are neither. */
-function gridHtml(rows, head, side) {
-  if (!rows && !side) return '';
-  return `<div class="rd-grid ${rows ? '' : 'noints'}">
-      ${rows ? `<section class="card rd-ints"><h3>Intervals</h3><table class="ints" id="rd-ints"><tr>${head}</tr>${rows}</table></section>` : ''}
-      ${side ? `<div class="rd-side">${side}</div>` : ''}
-    </div>`;
-}
+/** Time in zones and best power side by side, right under the stats, '' without either. */
+const sumHtml = (cards) => (cards ? `<div class="rd-grid rd-sum">${cards}</div>` : '');
+
+/** Intervals table below the chart, '' without intervals. */
+const intsHtml = (rows, head) => (rows
+  ? `<div class="rd-grid"><section class="card rd-ints"><h3>Intervals</h3><table class="ints" id="rd-ints"><tr>${head}</tr>${rows}</table></section></div>`
+  : '');
 
 /**
  * The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel }
@@ -227,7 +226,7 @@ export function pageHtml(doc, opts) {
   const ergTable = segs.some((s) => s.kind === 'erg');
   const rows = segs.filter((s) => s.res).map((s) => intRow(doc, s, opts, ergTable)).join('');
   const head = `<th>Interval</th><th class="r rd-wide">Time</th><th class="r">${ergTable ? 'Target' : 'Grade'}</th><th class="r">Avg</th>${ergTable ? '<th class="r">%</th>' : '<th class="r rd-wide">Speed</th>'}<th class="r">HR</th><th class="r">Cad</th>`;
-  const side = zonesHtml(st) + bestHtml(st, opts.season);
+  const cards = zonesHtml(st) + bestHtml(st, opts.season);
   const acts = actsHtml(opts);
 
   return `
@@ -237,8 +236,9 @@ export function pageHtml(doc, opts) {
       ${opts.profile ? `<div class="rd-thumb">${opts.profile}</div>` : ''}
     </header>
     <div class="rd-stats" style="--n:${stats.length}">${stats.join('')}</div>
+    ${sumHtml(cards)}
     ${chartsHtml(doc, opts, segs)}
-    ${gridHtml(rows, head, side)}
+    ${intsHtml(rows, head)}
     ${acts && !opts.done ? `<div class="rd-foot">${acts}</div>` : ''}`;
 }
 

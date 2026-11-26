@@ -840,10 +840,9 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .rd-tip.on { opacity: 1; }
 .rd-tip .pt-row { font-variant-numeric: tabular-nums; font-weight: 650; }
 .rd-tip .pt-row span { color: var(--inv-muted); font-weight: 500; }
-.rd-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
-.rd-grid.noints { grid-template-columns: 1fr; }
-.rd-grid.noints .rd-side { grid-template-columns: 1fr 1fr; }
-.rd-side { display: grid; gap: 14px; align-items: start; }
+.rd-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+.rd-grid:has(> :only-child) { grid-template-columns: 1fr; }
+.rd-sum { margin: 0 0 14px; }
 .rd-grid .card { padding: 16px 18px; }
 .rd-grid .card h3 .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
 .rd-grid .zbars { margin-bottom: 0; }
@@ -1411,7 +1410,7 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rd-charts { padding: 10px 12px 6px; margin: 0 -14px; border-radius: 0; }
   .rd-hint { font-size: 12px; }
   .rd-sel { font-size: 13px; }
-  .rd-grid, .rd-grid.noints .rd-side { grid-template-columns: 1fr; }
+  .rd-grid { grid-template-columns: 1fr; }
   .rd-grid .card { padding: 14px; }
   #rd-ints { font-size: 13.5px; }
   #rd-ints td, #rd-ints th { padding: 7px 4px; }
