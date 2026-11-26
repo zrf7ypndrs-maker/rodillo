@@ -1186,6 +1186,29 @@ async function rideRun() {
   ok('desktop: ride, free ride: grade card, no Next card or list, Climbed, a shift');
   await ctx.close();
 
+  // pain vision: clear for the first two thirds of a VO2 rep, edges blur in the last third (card and tiles above it),
+  // gone in the recovery after it
+  const VO = LIB.find((w) => w.id === 'vo2-5x4-110'), vo = flatten(VO), rep1 = vo.findIndex((g) => g.kind === 'erg' && g.from >= 1.05);
+  await ride('pain vision', fromLibrary(VO.name, 'erg'));
+  for (let i = 0; i < rep1; i++) await hold('s', 3500);
+  if ((await screen()).s.seg !== rep1) fail(`pain vision: segment ${(await screen()).s.seg}, expected the first VO2 rep (${rep1})`);
+  const pain = () => page.evaluate(() => {
+    const r = document.querySelector('#ride'), cs = (sel) => getComputedStyle(document.querySelector(sel));
+    return { on: r.classList.contains('pain-on'), v: +r.style.getPropertyValue('--pain'), shown: cs('.pain').visibility, card: cs('#r-interval').zIndex, layer: cs('.pain').zIndex };
+  });
+  await run(100 * 1000);
+  let pv = await pain();
+  if (pv.on || pv.v !== 0) fail(`pain vision: on ${pv.on} (${pv.v}) 100 s into a 4 min rep`);
+  await run(120 * 1000);
+  pv = await pain();
+  if (!pv.on || !(pv.v > 0.3) || pv.shown !== 'visible') fail(`pain vision: 20 s from the end of the rep ${JSON.stringify(pv)}`);
+  if (!(+pv.card > +pv.layer)) fail(`pain vision: interval card (z ${pv.card}) not above the layer (z ${pv.layer})`);
+  await run(30 * 1000);
+  pv = await pain();
+  if (pv.on || pv.v !== 0) fail(`pain vision: still on in the recovery ${JSON.stringify(pv)}`);
+  ok('desktop: ride, pain vision: clear early in a VO2 rep, edges blur near its end, gone in the recovery');
+  await ctx.close();
+
   // ramp test: the workout's messages over the chart, then the "Here we go" takeover on step 1
   const RT = LIB.find((w) => w.id === 'ramp-test'), rt = flatten(RT), msgs = RT.steps[0].messages;
   await ride('ramp test', fromLibrary(RT.name, 'erg'));
@@ -1704,6 +1727,7 @@ async function run(viewport, label) {
       ['rider', '#set-ftp', 'ftp', String(orig.ftp + 7), orig.ftp + 7, num('ftp')],
       ['ride', '#set-autoPauseSec', 'autoPauseSec', String(orig.autoPauseSec + 2), orig.autoPauseSec + 2, num('autoPauseSec')],
       ['ride', '#set-guard', 'ergCadenceGuard', orig.ergCadenceGuard ? '0' : '1', !orig.ergCadenceGuard, orig.ergCadenceGuard ? '1' : '0'],
+      ['ride', '#set-pain', 'painVision', 'subtle', 'subtle', orig.painVision || 'full'],
       ['road', '#set-gradeScale', 'gradeScale', '75', 0.75, num('gradeScale', 100)],
       ['trainer', '#set-gmax', 'maxSendGrade', '12', 0.12, num('maxSendGrade', 100)],
       ['trainer', '#set-shift', 'trainerShifting', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'app' : 'auto'],

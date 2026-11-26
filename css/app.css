@@ -1746,7 +1746,9 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
 
   /* ---------- ride: hide the desktop layout, show .rp ---------- */
   #ride { padding: 0; height: 100dvh; }
-  #ride > :not(.rp):not(.toast):not(.paused-overlay):not(.hold) { display: none !important; }
+  #ride > :not(.rp):not(.toast):not(.paused-overlay):not(.hold):not(.pain) { display: none !important; }
+  #ride :is(.rp-top, #rp-hero, #rp-power-box, .rp-metrics, .rp-btns) { position: relative; z-index: 5; } /* above .pain: only the chart and Next blur */
+  #ride.pain-on #rp-chart { filter: drop-shadow(calc(var(--pain) * 3.5px) 0 0 rgb(255 0 70 / .5)) drop-shadow(calc(var(--pain) * -3.5px) 0 0 rgb(0 190 255 / .5)); }
   /* hold ring above the ··· sheet, which covers the lower half */
   .hold { justify-content: flex-start; padding-top: calc(36px + env(safe-area-inset-top)); gap: 10px; }
   .hold-ring { width: 170px; height: 170px; }
@@ -1878,3 +1880,28 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rp-btns button { padding: 9px 8px; }
   .rp-m.bad { animation: none; }
 }
+
+/* Pain vision (Nov 25): js/pain.js sets --pain 0..1 and --beat on #ride. Edges blur, grey and darken; the interval
+   card and tiles sit above it. Heart-rate throb, a clear flash when a hard rep ends. */
+@property --pain { syntax: '<number>'; inherits: true; initial-value: 0; }
+#ride { transition: --pain .45s linear; --vig: #07080a; }
+.pain { position: absolute; inset: 0; z-index: 4; pointer-events: none; visibility: hidden; transition: visibility 0s .5s; }
+#ride.pain-on .pain, #ride.pain-release .pain { visibility: visible; transition-delay: 0s; }
+.pain > i { position: absolute; inset: 0; }
+.pain-blur {
+  backdrop-filter: blur(7px) saturate(.25); -webkit-backdrop-filter: blur(7px) saturate(.25); opacity: min(1, calc(var(--pain) * 1.3));
+  -webkit-mask-image: radial-gradient(ellipse 70% 64% at 50% 50%, transparent calc(74% - var(--pain) * 50%), #000 calc(108% - var(--pain) * 38%));
+  mask-image: radial-gradient(ellipse 70% 64% at 50% 50%, transparent calc(74% - var(--pain) * 50%), #000 calc(108% - var(--pain) * 38%));
+}
+.pain-vig { background: radial-gradient(ellipse 80% 74% at 50% 50%, transparent calc(64% - var(--pain) * 30%), color-mix(in srgb, var(--vig) 90%, transparent) 100%); opacity: min(1, calc(var(--pain) * 1.15)); }
+.pain-throb { opacity: var(--pain); }
+.pain-throb::after { content: ""; position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse 80% 74% at 50% 50%, transparent calc(50% - var(--pain) * 22%), color-mix(in srgb, var(--vig) 80%, transparent) 100%); }
+#ride.pain-on:not(.pain-nohr) .pain-throb::after { animation: pain-beat var(--beat, .8s) linear infinite; } /* runs only while it shows, and only with an HR strap */
+@keyframes pain-beat { 0% { opacity: 1; } 14% { opacity: .15; } 24% { opacity: .7; } 42% { opacity: 0; } 100% { opacity: 0; } }
+.pain-flash { background: var(--paper); opacity: 0; }
+#ride.pain-release .pain-flash { animation: pain-clear .7s ease-out; }
+@keyframes pain-clear { 0% { opacity: .7; } 100% { opacity: 0; } }
+#ride.pain-on #r-chart { filter: drop-shadow(calc(var(--pain) * 3.5px) 0 0 rgb(255 0 70 / .5)) drop-shadow(calc(var(--pain) * -3.5px) 0 0 rgb(0 190 255 / .5)); }
+#ride :is(#r-interval, .tiles, .rt-elapsed, .rt-next):not(.rt-mover, .rt-ghost) { position: relative; z-index: 5; } /* above .pain; not the slide's copies, which stay absolute */
+@media (prefers-reduced-motion: reduce) { .pain-throb::after, #ride.pain-release .pain-flash { animation: none; } }
+:root[data-theme="dark"] .pain-blur { backdrop-filter: blur(9px) saturate(.2) brightness(.55); -webkit-backdrop-filter: blur(9px) saturate(.2) brightness(.55); } /* a dark vignette barely shows on a dark screen: dim instead */

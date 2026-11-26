@@ -33,6 +33,7 @@ export const DEFAULT_SETTINGS = {
   gearings: null,         // the rider's own gearings (engine/garage.js); built-ins aren't stored
   ergCadenceGuard: true,
   autoPauseSec: 5,       // pause after this long with no pedalling (ERG) or no speed (slope); 0 = off
+  painVision: 'full',    // 'off' | 'subtle' | 'full': edges blur near the end of hard reps (js/pain.js)
   riderName: '',         // the coach uses it in messages ({name})
   trainerShifting: 'auto', // 'auto' = in the trainer when it speaks the Zwift protocol, else in Rodillo; 'app' = always Rodillo
   garage: null,          // saved bikes (engine/garage.js); null = the built-in garage, not edited yet

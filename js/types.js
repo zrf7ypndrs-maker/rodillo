@@ -64,6 +64,7 @@
  * @property {Gearing[] | null} gearings
  * @property {boolean} ergCadenceGuard
  * @property {number} autoPauseSec
+ * @property {string} painVision 'off' | 'subtle' | 'full' (js/pain.js).
  * @property {string} riderName
  * @property {string} trainerShifting 'auto' | 'app'.
  * @property {GarageBike[] | null} garage

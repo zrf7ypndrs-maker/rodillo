@@ -7,6 +7,7 @@
 // Pure parts (unit tests: test/ride.mjs): rideTiles, intervalCard, nextCard, gearViz, the chart geometry (powerScale,
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding, secsLeft.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
+import { paintPain, painLevel } from './pain.js';
 import { POWER_SHOW_S } from './engine/session.js';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
 import { stepCue, resultCue, bestAvg } from './testcoach.js';
@@ -473,6 +474,7 @@ function pulseCard(s, card) {
 export function renderRide() {
   const s = app.session;
   if (!s || app.screen !== 'ride') return;
+  paintPain(s, $('#ride'), painLevel(app.settings.painVision));
   if (!isPhone()) slideNextIn(s); // before pulseCard: a slide pulses the card when it lands, not now
   pulseCard(s, isPhone() ? $('#rp-hero') : $('#r-interval'));
   if (isPhone()) { renderPhone(s); renderPaused(s); return; }
