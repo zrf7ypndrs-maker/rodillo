@@ -1699,6 +1699,7 @@ async function run(viewport, label) {
     ok(`${label}: title music plays on home after the first click`);
 
     // tap sounds: a tab is navigate, opening a panel click, Esc (closePanels) back, arrow keys move the focus ring
+    await page.waitForTimeout(80); // past the one-sound-per-action window of the last click (the music can already be playing)
     await soundLog(page);
     await page.click('#tabs button[data-tab="calendar"]');
     await played(page, ['navigate'], 'a tab');
