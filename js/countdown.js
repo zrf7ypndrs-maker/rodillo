@@ -1,7 +1,8 @@
 // @ts-check
 // Interval countdown sounds (Nov 26). In the last 3 s of a timed step, one soft pulse per second, each landing on
 // the interval card's beat as the countdown number changes (3, 2, 1). When the next step starts, a sound that lands
-// with the card change: rising bells for a work step, a reward chime for a rest step (and when the workout ends).
+// with the card change: a swish into a ping and a soft boom for a work step, a softer swish and boom for a rest step
+// (and when the workout ends).
 // On the desktop the change is the Next card sliding onto the interval card (380 ms, slideNextIn in js/ride.js): the
 // GO's lead-in plays during the slide and its hit lands with the card. On the phone (no slide) the file starts at the
 // hit. The sounds are files in sounds/, rendered by tools/countdown-sounds.py. Settings > Ride > Countdown sounds;

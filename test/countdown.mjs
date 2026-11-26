@@ -169,7 +169,7 @@ assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset:
 countdownDone(/** @type {any} */ (s));
 assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset: FLY });
 assert.deepEqual(countdownLog.at(-1), { cue: 'rest', seg: 4, slide: false });
-ok('new step: work bells for 92% FTP, the rest chime for 50% and at the end; the lead-in only with the slide');
+ok('new step: the work sound for 92% FTP, the rest sound for 50% and at the end; the lead-in only with the slide');
 
 // a skip during the countdown: ticks still to come are dropped
 starts.length = 0; stops.length = 0;
