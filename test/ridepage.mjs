@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { buildRide } from '../js/stats.js';
 import { flatten } from '../js/engine/workout.js';
 import { encodeActivity } from '../js/fit.js';
-import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, stepSeg, samplesFromDoc, laneKeys, segName, doneHeadline, lastSameWorkout, vsLastTime, doneBarHtml } from '../js/ridepage.js';
+import { rideSegs, pageHtml, chartSvg, tipHtml, selHtml, stepSeg, samplesFromDoc, laneKeys, segName, doneHeadline, lastSameWorkout, vsLastTime, doneBarHtml, curveSvg } from '../js/ridepage.js';
 
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
@@ -56,6 +56,18 @@ assert.match(html, /Best in 90 days/);
 assert.match(html, /data-rd="fit"/);
 assert.doesNotMatch(html, /data-rd="delete"/);
 assert.match(html, /&middot; ERG &middot;/);
+{ // power curve on the Best power card: this ride, 90 days, all time
+  const c = curveSvg({ 5: 900, 60: 400, 300: 300, 1200: 250 }, { 5: 950, 60: 420, 300: 300 }, { 5: 1100, 60: 500, 300: 330, 1200: 280, 3600: 220 });
+  assert.match(c, /class="c-ride"/); assert.match(c, /class="c-90"/); assert.match(c, /class="c-all"/);
+  assert.match(c, /This ride.*Last 90 days.*All time/s);
+  assert.equal((c.match(/class="c-dot"/g) || []).length, 4, 'a dot per ride duration');
+  assert.ok(!/NaN|undefined/.test(c));
+  const only = curveSvg({ 5: 900, 60: 400 });
+  assert.match(only, /c-ride/); assert.doesNotMatch(only, /c-90|c-all|Last 90 days/);
+  assert.equal(curveSvg({ 5: 900 }), '', 'one point is not a curve');
+  assert.equal(curveSvg({}), '');
+}
+assert.match(html, /class="rd-curve"/, 'curve on the Best power card');
 { // zones and best power sit right under the stats, above the chart; intervals below the chart
   const at = (re) => html.search(re);
   assert.ok(at(/class="rd-stats"/) < at(/Time in zones/) && at(/Time in zones/) < at(/Best power/) && at(/Best power/) < at(/rd-charts/) && at(/rd-charts/) < at(/id="rd-ints"/), 'page order');
@@ -77,7 +89,7 @@ delete imp.streams.power; delete imp.streams.grade; delete imp.streams.target; d
 imp.intervals = [];
 assert.deepEqual(laneKeys(imp), ['hr', 'cadence', 'speed']);
 const ih = pageHtml(imp, { segs: [], ftp, zoneHex, gradeHex, canFit: true });
-assert.doesNotMatch(ih, /NP<\/div>|rd-ints|Best power|Time in zones/);
+assert.doesNotMatch(ih, /NP<\/div>|rd-ints|Best power|Time in zones|rd-curve/);
 assert.match(ih, /from heart rate/);
 assert.match(ih, /Imported/);
 const ic = chartSvg(imp, { width: 390, phone: true, ftp, segs: [], tok, zoneHex, gradeHex });

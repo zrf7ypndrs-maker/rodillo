@@ -863,6 +863,25 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .rd-best .l { font-size: 13px; color: var(--muted); }
 .rd-best .sub { font-size: 12px; color: var(--muted); }
 .rd-best .pr { color: var(--good); font-weight: 700; }
+.rd-curve { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.rd-ckey { display: flex; justify-content: flex-end; gap: 14px; font-size: 12px; color: var(--muted); }
+.rd-ckey span { display: inline-flex; align-items: center; gap: 6px; }
+.rd-ckey i { display: inline-block; width: 14px; }
+.rd-ckey .k-ride { height: 2.5px; border-radius: 2px; background: var(--z5); }
+.rd-ckey .k-90 { height: 1.5px; background: color-mix(in srgb, var(--ink) 50%, var(--sheet)); }
+.rd-ckey .k-all { border-top: 1.5px dashed var(--muted); }
+.rd-curve svg { display: block; width: 100%; height: auto; overflow: visible; }
+.rd-curve polyline { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.rd-curve .c-ride { stroke: var(--z5); stroke-width: 2.5; }
+.rd-curve .c-90 { stroke: color-mix(in srgb, var(--ink) 50%, var(--sheet)); stroke-width: 1.5; }
+.rd-curve .c-all { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.rd-curve .c-fill { fill: url(#rd-pc-fill); }
+.rd-curve .c-f0 { stop-color: var(--z5); stop-opacity: .22; }
+.rd-curve .c-f1 { stop-color: var(--z5); stop-opacity: 0; }
+.rd-curve .c-base { stroke: var(--rule); }
+.rd-curve .c-dot { fill: var(--z5); stroke: var(--sheet); stroke-width: 1.5; }
+.rd-curve .c-val { font-family: var(--num); font-stretch: 80%; font-size: 12px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
+.rd-curve .c-x { font-size: 11px; fill: var(--muted); text-anchor: middle; }
 .rd-foot { display: none; }
 /* end of ride: done bar on top of the ride page (green = done, like the workout complete card) */
 .rd-done { background: var(--ok-bg); border-radius: var(--r); padding: 18px 20px; margin-bottom: 22px; }
@@ -1419,6 +1438,7 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rd-grid .zb-n { display: none; }
   .rd-best .v { font-size: 24px; }
   .rd-best > div { padding: 2px 8px; }
+  .rd-curve { display: none; }
   .rd-foot { display: flex; gap: 10px; margin-top: 16px; }
   .rd-done { padding: 14px; margin: 0 0 16px; }
   .dn-main { grid-template-columns: auto 1fr; gap: 10px 12px; }

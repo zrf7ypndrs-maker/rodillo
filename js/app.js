@@ -969,9 +969,10 @@ function renderRidePage() {
   const w = st.workoutId ? app.library.find((x) => x.id === st.workoutId) : null;
   // the steps as ridden (stored with this device's recording), else the workout as it is in the library now
   rd.segs = rideSegs(doc, rd.local?.meta?.segs || doc.segs || (w ? flatten(w, rideFtp()) : null));
-  const season = powerCurve((app.rows || []).filter((r) => !r.demo).map((r) => r.summary), 90);
+  const sums = (app.rows || []).filter((r) => !r.demo).map((r) => r.summary);
+  const season = powerCurve(sums, 90), allTime = powerCurve(sums);
   $('#rd').innerHTML = pageHtml(doc, {
-    segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, sel: rd.sel, phone: isPhone(),
+    segs: rd.segs, ftp: rideFtp(), zoneHex, gradeHex, season, allTime, sel: rd.sel, phone: isPhone(),
     profile: w ? profileSvg(w, profileLook(), 1000, 100) : '', backLabel: RD_BACK[rd.from] || 'Home',
     canFit: !!(rd.local?.samples?.length || doc.streams?.power || doc.streams?.hr), canDelete: !!(rd.local || syncClient()),
     done: rd.done,

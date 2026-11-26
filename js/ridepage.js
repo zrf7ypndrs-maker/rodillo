@@ -8,6 +8,7 @@
 // grade (%), target, gear, seg }, laps }. Imported rides can miss power, grade and target.
 
 import { ZONES, zoneRange, WORK_FTP } from './zones.js';
+import { CURVE_DURS } from './stats.js';
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -177,14 +178,44 @@ function zonesHtml(st) {
   }).join('')}</div></section>`;
 }
 
-/** Best power card (5 s, 1, 5, 20 min, against the 90-day bests), '' without bests. */
-function bestHtml(st, season) {
+/**
+ * Power curve for the Best power card (desktop only, hidden on the phone in css): this ride against the
+ * 90-day and all-time curves, '' when the ride has fewer than two durations. Colors come from css (.rd-curve).
+ * @param {Record<string, number>} ride @param {Record<string, number>} [c90] @param {Record<string, number>} [cAll]
+ */
+export function curveSvg(ride, c90 = {}, cAll = {}) {
+  const has = (c) => CURVE_DURS.filter((d) => c?.[d]).length;
+  if (has(ride) < 2) return '';
+  const W = 440, H = 172, top = 24, base = 142, n = CURVE_DURS.length;
+  const labels = ['5s', '15s', '30s', '1m', '3m', '5m', '10m', '20m', '60m'];
+  const max = Math.max(100, ...[ride, c90, cAll].flatMap((c) => CURVE_DURS.map((d) => c?.[d] || 0))) * 1.08;
+  const X = (i) => 18 + (i / (n - 1)) * (W - 36);
+  const Y = (w) => base - (w / max) * (base - top);
+  const P = (c) => CURVE_DURS.map((d, i) => (c?.[d] ? [X(i), Y(c[d])] : null)).filter(Boolean);
+  const pts = (p) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const line = (c, cls) => (has(c) > 1 ? `<polyline class="${cls}" points="${pts(P(c))}"/>` : '');
+  const pr = P(ride);
+  const dots = CURVE_DURS.map((d, i) => (ride[d] ? `<circle class="c-dot" cx="${X(i).toFixed(1)}" cy="${Y(ride[d]).toFixed(1)}" r="3.5"/><text class="c-val" x="${X(i).toFixed(1)}" y="${(Y(ride[d]) - 9).toFixed(1)}">${ride[d]}</text>` : '')).join('');
+  const key = (cls, l, c) => (has(c) > 1 ? `<span><i class="${cls}"></i>${l}</span>` : '');
+  return `<div class="rd-curve">
+      <div class="rd-ckey">${key('k-ride', 'This ride', ride)}${key('k-90', 'Last 90 days', c90)}${key('k-all', 'All time', cAll)}</div>
+      <svg viewBox="0 0 ${W} ${H}" class="svgchart">
+        <defs><linearGradient id="rd-pc-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="c-f0"/><stop offset="1" class="c-f1"/></linearGradient></defs>
+        <line class="c-base" x1="${X(0)}" x2="${X(n - 1)}" y1="${base}" y2="${base}"/>
+        <polygon class="c-fill" points="${pts(pr)} ${pr.at(-1)[0].toFixed(1)},${base} ${pr[0][0].toFixed(1)},${base}"/>
+        ${line(cAll, 'c-all')}${line(c90, 'c-90')}<polyline class="c-ride" points="${pts(pr)}"/>${dots}
+        ${labels.map((l, i) => `<text class="c-x" x="${X(i).toFixed(1)}" y="${H - 6}">${l}</text>`).join('')}
+      </svg></div>`;
+}
+
+/** Best power card (5 s, 1, 5, 20 min, against the 90-day bests, plus the power curve), '' without bests. */
+function bestHtml(st, season, allTime) {
   const cells = [[5, '5 s'], [60, '1 min'], [300, '5 min'], [1200, '20 min']].filter(([dur]) => st.bests?.[dur]).map(([dur, l]) => {
     const v = st.bests[dur], sb = season?.[dur];
     const sub = sb && v >= sb ? '<span class="pr">Best in 90 days</span>' : sb ? `90-day best ${sb}` : '';
     return `<div><div class="v">${v}<small> W</small></div><div class="l">${l}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   }).join('');
-  return cells ? `<section class="card"><h3>Best power</h3><div class="rd-best">${cells}</div></section>` : '';
+  return cells ? `<section class="card"><h3>Best power</h3><div class="rd-best">${cells}</div>${curveSvg(st.bests, season, allTime)}</section>` : '';
 }
 
 const whenText = (d) => `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} &middot; ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
@@ -212,7 +243,7 @@ const intsHtml = (rows, head) => (rows
   : '');
 
 /**
- * The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, canFit, canDelete, sel }
+ * The page above and below the chart. opts: { segs, ftp, zoneHex, gradeHex, profile, season, allTime, canFit, canDelete, sel }
  * @param {RideDoc} doc
  */
 export function pageHtml(doc, opts) {
@@ -226,7 +257,7 @@ export function pageHtml(doc, opts) {
   const ergTable = segs.some((s) => s.kind === 'erg');
   const rows = segs.filter((s) => s.res).map((s) => intRow(doc, s, opts, ergTable)).join('');
   const head = `<th>Interval</th><th class="r rd-wide">Time</th><th class="r">${ergTable ? 'Target' : 'Grade'}</th><th class="r">Avg</th>${ergTable ? '<th class="r">%</th>' : '<th class="r rd-wide">Speed</th>'}<th class="r">HR</th><th class="r">Cad</th>`;
-  const cards = zonesHtml(st) + bestHtml(st, opts.season);
+  const cards = zonesHtml(st) + bestHtml(st, opts.season, opts.allTime);
   const acts = actsHtml(opts);
 
   return `
