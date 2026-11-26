@@ -1133,7 +1133,20 @@ async function rideRun() {
   expect('interval count', v.segn, `1/${ss.length}`);
   const go1 = (await cues(page)).filter((c) => c.cue !== 'tick');
   if (JSON.stringify(go1) !== JSON.stringify([{ cue: stepKind(ss[1]), seg: 1, slide: true }])) fail(`countdown sounds on the skip: ${JSON.stringify(go1)}, expected the ${stepKind(ss[1])} sound once, with the slide`);
-  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), rep counter, Next card and its rep line, effort 101%, hold S skips, tiles, the step-start sound with the slide');
+  // the countdown's mute button: silences the next skip's sound, saved on this device
+  const muteBtn = () => page.evaluate(() => { const b = document.querySelector('#r-mute'); return { shown: !!b.offsetWidth, text: b.textContent, pressed: b.ariaPressed, saved: localStorage.getItem('rodillo.rideMute') }; });
+  let mb = await muteBtn();
+  if (!mb.shown || mb.text !== 'Mute' || mb.pressed !== 'false') fail(`mute button before: ${JSON.stringify(mb)}`);
+  await page.click('#r-mute'); await run(300);
+  mb = await muteBtn();
+  if (mb.text !== 'Unmute' || mb.pressed !== 'true' || mb.saved !== 'true') fail(`mute button after a click: ${JSON.stringify(mb)}`);
+  const nCues = (await cues(page)).length;
+  await hold('s', 3500); await run(1000);
+  if ((await screen()).s.seg !== 2 || (await cues(page)).length !== nCues) fail('muted: a skip still decided a countdown sound');
+  await page.click('#r-mute'); await run(300);
+  mb = await muteBtn();
+  if (mb.text !== 'Mute' || mb.saved !== 'false') fail(`mute button after a second click: ${JSON.stringify(mb)}`);
+  ok('desktop: ride, ERG workout: interval card (ramp, hold, cadence), rep counter, Next card and its rep line, effort 101%, hold S skips, tiles, the step-start sound with the slide, the mute button');
   await ctx.close();
 
   // slope workout (timed climbs: Climbed, real metres), a shift, the profile moved up 1%
@@ -1416,6 +1429,14 @@ async function phoneRideRun() {
   if (v.s.seg !== 1 || v.toast !== 'Skipped' || v.sheet) fail(`sheet Skip held 1.2 s: segment ${v.s.seg}, toast "${v.toast}", sheet ${v.sheet}`);
   const goPhone = (await cues(page)).filter((c) => c.cue !== 'tick');
   if (JSON.stringify(goPhone) !== JSON.stringify([{ cue: stepKind(ss[1]), seg: 1, slide: false }])) fail(`phone: step-start sound on the skip ${JSON.stringify(goPhone)}, expected the ${stepKind(ss[1])} sound once, no slide`);
+  const rpMute = () => page.evaluate(() => { const b = document.querySelector('#rp-mute'), r = b.getBoundingClientRect(); return { w: r.width, h: r.height, bottom: r.bottom, vh: innerHeight, pressed: b.ariaPressed, label: b.ariaLabel }; });
+  let pm = await rpMute();
+  if (!(pm.w >= 40 && pm.h >= 40) || pm.bottom > pm.vh || pm.pressed !== 'false') fail(`phone mute button ${JSON.stringify(pm)}`);
+  await tapBtn('rp-mute');
+  pm = await rpMute();
+  if (pm.pressed !== 'true' || pm.label !== 'Countdown sounds muted: turn them back on') fail(`phone mute button after a tap ${JSON.stringify(pm)}`);
+  await tapBtn('rp-mute');
+  if ((await rpMute()).pressed !== 'false') fail('phone mute button: a second tap did not unmute');
   await run(3000);
   v = await screen();
   expect('ERG hero label after the skip', v.label, ss[1].label);

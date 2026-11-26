@@ -750,6 +750,9 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .hints { font-size: 13px; color: var(--muted); }
 .hints b { color: var(--ink); font-weight: 650; }
 .ride-btns { display: flex; gap: 8px; }
+.mute-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.mute-btn.hidden { display: none; }
+.mute-ico { width: 18px; height: 18px; flex: none; }
 
 .toast { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); background: var(--ink); color: var(--sheet); border-radius: 10px; padding: 16px 30px; font-size: 32px; font-weight: 800; font-stretch: 75%; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
 .toast.show { opacity: 1; }
@@ -1842,12 +1845,14 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rp-next b { color: var(--ink); font-family: var(--num); font-stretch: 75%; font-size: 18px; }
   .rp-next .sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin: 0 6px 0 2px; vertical-align: -1px; }
 
-  .rp-btns { display: grid; grid-template-columns: 1fr 1.6fr 1fr auto; gap: 8px; }
+  .rp-btns { display: grid; grid-template-columns: 1fr 1.6fr 1fr; grid-auto-columns: auto; grid-auto-flow: column; gap: 8px; }
   .rp-btns button { background: var(--sheet); border: none; border-radius: 999px; padding: 15px 8px; font-size: 19px; font-weight: 800; font-stretch: 80%; touch-action: manipulation; }
   .rp-btns button:active { background: var(--hi); }
   .rp-btns .rp-main { background: var(--ink); color: var(--sheet); }
   .rp-btns .rp-main:active { background: var(--press); }
   #rp-more { padding: 15px 16px; letter-spacing: 1px; }
+  #rp-mute { padding: 15px 14px; }
+  #rp-mute .mute-ico { width: 23px; height: 23px; }
   .rp-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--sheet); border-radius: 14px 14px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 -18px 40px var(--shadow); }
   .rp-sheet button { padding: 15px; font-size: 16px; font-weight: 650; border-radius: 999px; background: var(--paper); border: none; }
   .rp-sheet button.danger { color: var(--sheet); background: var(--bad); }

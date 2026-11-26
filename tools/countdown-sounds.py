@@ -7,7 +7,7 @@ What each one is (picked with Agustin, Nov 26; project doc claude/rodillo-countd
                         it, swelling in ~15 ms and fading over ~0.6 s like the card's ripple. Each one a bit fuller.
   countdown-work        a work step starts: a light rising swish + A major swell for the first 0.38 s (the desktop
                         slide of the Next card onto the interval card), then on landing a bell roll UP the chord
-                        (A4, C#5, E5) with a mallet strike, a low A and a soft boom.
+                        (A4, C#5, E5) with a mallet strike, a low A and a soft boom, short: gone ~0.5 s after.
   countdown-rest        a rest step starts (or the workout ends): a soft falling swish for 0.38 s, then a reward
                         chime rolling DOWN the chord (E5, C#5, A4) with a faint A5 sparkle.
 The GO files keep the 0.38 s lead-in at the front; the player starts them 0.38 s in when there is no slide (phone,
@@ -73,16 +73,19 @@ def bellhit(f, s, amp, dk):
 
 def boom(s, amp):
     t = T(s); f = 55 * (1 + 0.8 * np.exp(-t / 0.03))
-    return amp * np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.25) * np.minimum(t / 0.003, 1)
+    y = amp * np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.1) * np.minimum(t / 0.003, 1)
+    y[-200:] *= np.linspace(1, 0, 200)
+    return y
 
 
 def work_hit():
-    x = np.zeros(int(SR * 1.3))
-    at(x, 0, boom(0.9, 0.35))
-    at(x, 0, bellhit(A4, 1.25, 0.30, 0.30))
-    at(x, 0.055, bellhit(CS5, 1.2, 0.30, 0.32))
-    at(x, 0.11, bellhit(E5, 1.15, 0.36, 0.40))
-    at(x, 0.11, bellhit(A3, 1.15, 0.18, 0.35))
+    """Short on purpose (Agustin, Nov 26: "lingers too long"): the bells stop ringing ~0.5 s after the hit."""
+    x = np.zeros(int(SR * 0.7))
+    at(x, 0, boom(0.4, 0.35))
+    at(x, 0, bellhit(A4, 0.6, 0.30, 0.11))
+    at(x, 0.055, bellhit(CS5, 0.55, 0.30, 0.12))
+    at(x, 0.11, bellhit(E5, 0.5, 0.36, 0.15))
+    at(x, 0.11, bellhit(A3, 0.5, 0.18, 0.12))
     return x
 
 

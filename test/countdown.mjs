@@ -13,6 +13,8 @@ Object.defineProperty(globalThis.navigator, 'audioSession', { value: session, co
 let fetchOk = false;
 const fetched = [];
 globalThis.fetch = /** @type {any} */ (async (url) => { fetched.push(url); return { ok: fetchOk, status: fetchOk ? 200 : 404, arrayBuffer: async () => ({ url }) }; });
+const store = {};
+globalThis.localStorage = /** @type {any} */ ({ getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } });
 const warn = console.warn;
 console.warn = () => {};
 
@@ -20,7 +22,7 @@ const starts = [], stops = [];
 class FakeCtx {
   constructor() { this.state = 'suspended'; this.currentTime = 0; this.destination = {}; this.gainNode = null; }
   resume() { this.state = 'running'; return Promise.resolve(); }
-  createGain() { this.gainNode = { gain: { value: 1, setValueAtTime(v) { this.value = v; } }, connect() {} }; return this.gainNode; }
+  createGain() { this.gainNode = { gain: { value: 1, setValueAtTime(v) { this.value = v; }, setTargetAtTime(v) { this.value = v; } }, connect() {} }; return this.gainNode; }
   decodeAudioData(b) { return Promise.resolve({ name: b.url.match(/countdown-(.+)\.wav$/)[1] }); }
   createBufferSource() {
     const src = { buffer: null, connect() {}, start: (when, offset) => starts.push({ name: src.buffer.name, when, offset }), stop: () => stops.push(src.buffer.name) };
@@ -33,8 +35,9 @@ let audio;
 const app = { settings: /** @type {Record<string, any>} */ ({}) };
 
 const m = await import('../js/countdown.js');
-const { FLY, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, stepKind, shownLeft, shownElapsed, beatPhase, nextTick,
-  countdownLog, countdownTick, countdownGo, countdownDone, countdownStop, syncCountdown, initCountdown } = m;
+const { FLY, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, muteLook, stepKind, shownLeft, shownElapsed, beatPhase, nextTick,
+  countdownLog, countdownTick, countdownGo, countdownDone, countdownStop, syncCountdown, initCountdown,
+  countdownMuted, muteNow, toggleRideMute, onCountdownChange } = m;
 
 let n = 0;
 const ok = (name) => { n++; console.log('ok -', name); };
@@ -52,7 +55,10 @@ assert.equal(countdownChoice('loud'), 'on');
 assert.equal(countdownLevel('on'), 0.9);
 assert.equal(countdownLevel('soft'), 0.45);
 assert.equal(countdownLevel('off'), 0);
-ok('lead-in 0.38 s (the desktop slide), work from 76% FTP, steps under 5 s get no ticks; On by default, Soft, Off');
+assert.deepEqual(muteLook(false, 'on'), { hidden: false, muted: false, text: 'Mute', label: 'Mute countdown sounds' });
+assert.deepEqual(muteLook(true, 'soft'), { hidden: false, muted: true, text: 'Unmute', label: 'Countdown sounds muted: turn them back on' });
+assert.equal(muteLook(false, 'off').hidden, true);
+ok('lead-in 0.38 s (the desktop slide), work from 76% FTP, steps under 5 s get no ticks; On by default, Soft, Off; the mute button\'s look');
 
 // ---- work or rest
 const erg = (from, to = from) => ({ kind: 'erg', from, to });
@@ -174,6 +180,37 @@ countdownGo(/** @type {any} */ (s), 3, true);
 assert.deepEqual(stops, ['tick-1']);
 ok('a skip: the old step\'s tick still to come is dropped');
 
+// the ride screen's mute: silent at once, remembered on this device, buttons told
+let painted = 0;
+onCountdownChange(() => painted++);
+starts.length = 0; stops.length = 0;
+countdownStop();
+await ride(96, 96.25); // tick 3 on the clock
+assert.equal(countdownMuted(), false);
+toggleRideMute();
+assert.equal(countdownMuted(), true);
+assert.equal(store['rodillo.rideMute'], 'true');
+assert.deepEqual(stops, ['tick-3']);
+assert.equal(audio.gainNode.gain.value, 0);
+assert.equal(painted, 1);
+assert.equal(muteNow().text, 'Unmute');
+const before = countdownLog.length;
+await ride(96.5, 99.75);
+countdownGo(/** @type {any} */ (s), 3, true);
+countdownDone(/** @type {any} */ (s));
+assert.equal(countdownLog.length, before);
+assert.deepEqual(starts.map((x) => x.name), ['tick-3']);
+toggleRideMute();
+assert.equal(store['rodillo.rideMute'], 'false');
+assert.equal(audio.gainNode.gain.value, 0.9);
+assert.equal(painted, 2);
+store['rodillo.rideMute'] = 'true';
+initCountdown({ app: /** @type {any} */ (app), makeAudio: () => /** @type {any} */ (audio) });
+assert.equal(countdownMuted(), true); // read back on load
+assert.equal(painted, 3);
+toggleRideMute();
+ok('mute: the tick on the clock comes off, level 0, nothing decided while muted; back to 90%; saved and read back');
+
 // setting: Soft, then Off
 app.settings.countdownSound = 'soft';
 syncCountdown();
@@ -181,6 +218,7 @@ assert.equal(audio.gainNode.gain.value, 0.45);
 app.settings.countdownSound = 'off';
 syncCountdown();
 assert.equal(audio.gainNode.gain.value, 0);
+assert.equal(muteNow().hidden, true);
 const logged = countdownLog.length;
 starts.length = 0;
 countdownStop();

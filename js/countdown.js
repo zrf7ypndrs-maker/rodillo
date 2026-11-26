@@ -4,8 +4,11 @@
 // with the card change: rising bells for a work step, a reward chime for a rest step (and when the workout ends).
 // On the desktop the change is the Next card sliding onto the interval card (380 ms, slideNextIn in js/ride.js): the
 // GO's lead-in plays during the slide and its hit lands with the card. On the phone (no slide) the file starts at the
-// hit. The sounds are files in sounds/, rendered by tools/countdown-sounds.py. Settings > Ride > Countdown sounds.
+// hit. The sounds are files in sounds/, rendered by tools/countdown-sounds.py. Settings > Ride > Countdown sounds;
+// a mute button on the ride screen (desktop and phone) silences them on this device until it's pressed again.
 // Project doc: claude/rodillo-countdown-sound.md.
+
+import { ls } from './store.js';
 
 /** @typedef {import('./types.js').CountdownDeps} CountdownDeps */
 /** @typedef {import('./types.js').Segment} Segment */
@@ -21,6 +24,14 @@ const AHEAD = 0.6;             // s: ticks are put on the audio clock this far a
 export const countdownChoice = (v) => (v === 'off' || v === 'soft' ? v : 'on');
 /** Output level for a choice. */
 export const countdownLevel = (c) => (c === 'off' ? 0 : c === 'soft' ? 0.45 : 0.9);
+/** The ride screen's mute button: hidden when the setting is Off; otherwise what pressing it does.
+ * @param {boolean} muted @param {string} choice countdownChoice()
+ * @returns {{ hidden: boolean, muted: boolean, text: string, label: string }} */
+export const muteLook = (muted, choice) => ({
+  hidden: choice === 'off', muted,
+  text: muted ? 'Unmute' : 'Mute',
+  label: muted ? 'Countdown sounds muted: turn them back on' : 'Mute countdown sounds',
+});
 
 /** Work or rest: what a step asks for. ERG by its higher end, slope by its power aim, or its grade (4% and up).
  * @param {Segment | null | undefined} g @returns {'work' | 'rest'} */
@@ -78,11 +89,16 @@ let pending = [];
 const done = new Set();
 /** @type {RideSession | null} */
 let ses = null;
+let muted = false;
+/** @type {(() => void)[]} */
+const watchers = [];
 /** What was decided, newest last (the smoke test reads it): tick n, or the GO kind and whether it had the lead-in. */
 export const countdownLog = /** @type {{ cue: string, n?: number, seg: number, in?: number, slide?: boolean }[]} */ ([]);
 const log = (x) => { countdownLog.push(x); if (countdownLog.length > 40) countdownLog.shift(); };
 
 const choice = () => countdownChoice(app?.settings.countdownSound);
+const wanted = () => !muted && choice() !== 'off';
+const level = () => (muted ? 0 : countdownLevel(choice()));
 
 /** Fetches and decodes the five files, once. */
 function load() {
@@ -100,7 +116,7 @@ function unlock() {
   if (!ctx) {
     ctx = makeAudio();
     out = ctx.createGain();
-    out.gain.value = countdownLevel(choice());
+    out.gain.value = level();
     out.connect(ctx.destination);
   }
   if (ctx.state !== 'running') ctx.resume().catch(() => {}); // inside the tap: iOS only resumes from one
@@ -131,7 +147,7 @@ function cancel() {
  * @param {RideSession} s */
 export function countdownTick(s) {
   if (s !== ses) { cancel(); done.clear(); ses = s; }
-  if (choice() === 'off' || !s.started || s.paused || s.finished) { cancel(); return; }
+  if (!wanted() || !s.started || s.paused || s.finished) { cancel(); return; }
   const t = nextTick(s.elapsed, s.seg, s.segRemaining, s.segT0);
   if (!t || t.in > AHEAD) return;
   const key = `${s.segIndex}:${t.n}`;
@@ -146,7 +162,7 @@ export function countdownTick(s) {
  * lead-in plays first and the hit lands with the card; without it the file starts at the hit.
  * @param {RideSession} s @param {number} i The new step @param {boolean} slide */
 export function countdownGo(s, i, slide) {
-  if (choice() === 'off') return;
+  if (!wanted()) return;
   cancel(); // a skip: the old step's ticks are moot
   const cue = stepKind(s.segs?.[i]);
   log({ cue, seg: i, slide });
@@ -155,7 +171,7 @@ export function countdownGo(s, i, slide) {
 
 /** The workout's last step is done: the rest chime, once. @param {RideSession} s */
 export function countdownDone(s) {
-  if (choice() === 'off') return;
+  if (!wanted()) return;
   cancel();
   log({ cue: 'rest', seg: s.segs?.length ?? -1, slide: false });
   play('rest', ctx ? ctx.currentTime : 0, FLY);
@@ -168,15 +184,38 @@ export function countdownStop() {
   ses = null;
 }
 
-/** The setting changed (here or on another device): the new level, and the files if it was just turned on. */
+/** The setting changed (here or on another device): the new level, the files if it was just turned on, and the mute
+ * buttons (hidden when it's Off). */
 export function syncCountdown() {
-  if (!app || !ctx) return;
-  out.gain.setValueAtTime(countdownLevel(choice()), ctx.currentTime);
+  if (!app) return;
+  watchers.forEach((f) => f());
+  if (!ctx) return;
+  out.gain.setValueAtTime(level(), ctx.currentTime);
   if (choice() !== 'off') load();
 }
+
+/** Is the ride screen's mute on (this device)? */
+export const countdownMuted = () => muted;
+/** What the mute button shows now. */
+export const muteNow = () => muteLook(muted, choice());
+
+/** The mute button: silences the countdown at once (a sound playing fades out in ~50 ms, ticks on the clock come off)
+ * and remembers it on this device. */
+export function toggleRideMute() {
+  muted = !muted;
+  ls.set('rideMute', muted);
+  if (muted) cancel();
+  if (ctx) out.gain.setTargetAtTime(level(), ctx.currentTime, 0.015);
+  watchers.forEach((f) => f());
+}
+
+/** Called after the mute or the setting changes (the ride screens repaint their mute buttons). @param {() => void} f */
+export function onCountdownChange(f) { watchers.push(f); }
 
 /** @param {CountdownDeps} deps */
 export function initCountdown(deps) {
   ({ app, makeAudio } = deps);
+  muted = ls.get('rideMute', false) === true;
   for (const ev of ['pointerdown', 'keydown', 'touchend']) document.addEventListener(ev, unlock, { capture: true, passive: true });
+  watchers.forEach((f) => f()); // buttons painted before the saved mute was read
 }

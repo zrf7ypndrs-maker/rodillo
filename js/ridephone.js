@@ -12,6 +12,7 @@ import { fmtTime } from './ridepage.js';
 import { action, holdStart, holdEnd } from './controls.js';
 import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, rideElapsed, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH, repBadge, nextRep } from './ride.js';
 import { ls } from './store.js';
+import { toggleRideMute } from './countdown.js';
 import { $, esc } from './ui.js';
 
 /** @typedef {import('./types.js').RidePhoneDeps} Deps */
@@ -60,6 +61,7 @@ export function initRidePhone(deps) {
   rpTap('rp-lap', () => { action('lap'); $('#rp-sheet').classList.add('hidden'); });
   rpTap('rp-erg', () => { action('ergToggle'); $('#rp-sheet').classList.add('hidden'); });
   rpTap('rp-theme', () => { setTheme(app.theme === 'dark' ? 'light' : 'dark'); $('#rp-sheet').classList.add('hidden'); });
+  rpTap('rp-mute', toggleRideMute); // the countdown's sounds, this device (js/countdown.js)
   bindHold('rp-skip', 'skip');
   bindHold('rp-end', 'end');
 }

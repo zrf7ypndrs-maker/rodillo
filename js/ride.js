@@ -8,7 +8,7 @@
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding, secsLeft.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { paintPain, painLevel } from './pain.js';
-import { countdownGo, beatPhase, shownLeft, shownElapsed } from './countdown.js';
+import { countdownGo, beatPhase, shownLeft, shownElapsed, toggleRideMute, muteNow, onCountdownChange } from './countdown.js';
 import { POWER_SHOW_S } from './engine/session.js';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
 import { stepCue, resultCue, bestAvg } from './testcoach.js';
@@ -52,6 +52,28 @@ export function initRide(deps) {
     });
   }
   $('#r-erg').onclick = (e) => { /** @type {HTMLElement} */ (e.currentTarget).blur(); action('ergToggle'); };
+  $('#r-mute').onclick = (e) => { /** @type {HTMLElement} */ (e.currentTarget).blur(); toggleRideMute(); };
+  onCountdownChange(paintMute);
+  paintMute();
+}
+
+// the countdown's mute button: desktop bottom bar (icon + word) and phone button row (icon), the same state
+const SPEAKER = '<path d="M3.5 9.2h3.8L12 5.3v13.4l-4.7-3.9H3.5z" fill="currentColor"/>';
+const MUTE_ICO = {
+  on: `<svg class="mute-ico" viewBox="0 0 24 24" aria-hidden="true">${SPEAKER}<path d="M15.6 9a4.4 4.4 0 0 1 0 6M18.2 6.4a8 8 0 0 1 0 11.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  off: `<svg class="mute-ico" viewBox="0 0 24 24" aria-hidden="true">${SPEAKER}<path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+};
+/** Paints both mute buttons from the countdown's state (on toggle and when the setting changes, never per tick). */
+export function paintMute() {
+  const m = muteNow();
+  for (const [id, text] of /** @type {[string, boolean][]} */ ([['r-mute', true], ['rp-mute', false]])) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.toggle('hidden', m.hidden);
+    el.ariaPressed = String(m.muted);
+    el.ariaLabel = m.label;
+    el.innerHTML = MUTE_ICO[m.muted ? 'off' : 'on'] + (text ? `<span>${m.text}</span>` : '');
+  }
 }
 
 // ------------------------------------------------------------------ ride rendering
