@@ -1606,9 +1606,13 @@ async function run(viewport, label) {
   await idb('a.forEach((r) => st.put(r));', local);
   await page.click('#tabs button[data-tab="today"]');
   await page.click('#tabs button[data-tab="training"]');
-  await page.waitForFunction((id) => !document.querySelector(`#ride-table [data-ride="${id}"]`), local[0].summary.id, { timeout: 5000 })
+  // the list redraws asynchronously: wait for the two that stay to show, then for the deleted one to be gone (from the
+  // list and from IndexedDB); checking absence first would pass before the seeded rides were drawn at all
+  const shows = (id) => `#ride-table [data-ride="${id}"]`;
+  await page.waitForFunction((sels) => sels.every((q) => document.querySelector(q)), local.slice(1).map((r) => shows(r.summary.id)), { timeout: 5000 })
+    .catch(() => fail('a ride pushed a minute ago or never synced left the list'));
+  await page.waitForFunction((q) => !document.querySelector(q), shows(local[0].summary.id), { timeout: 5000 })
     .catch(() => fail('a ride deleted on another device still shows'));
-  for (const r of local.slice(1)) if (!(await page.locator(`#ride-table [data-ride="${r.summary.id}"]`).count())) fail(`${r.name} (local ride) left the list`);
   const keys = await page.evaluate(() => new Promise((res) => { const o = indexedDB.open('rodillo', 2); o.onsuccess = () => { const q = o.result.transaction('rides').objectStore('rides').getAllKeys(); q.onsuccess = () => res(q.result); }; }));
   if (keys.includes(local[0].id) || !keys.includes(local[1].id) || !keys.includes(local[2].id)) fail(`recordings left on this device: ${keys}`);
   await idb('a.forEach((k) => st.delete(k));', local.map((r) => r.id));
