@@ -139,7 +139,8 @@ globalThis.MutationObserver = /** @type {any} */ (class { constructor(f) { obser
 globalThis.MouseEvent = /** @type {any} */ (class { constructor(type, init) { this.type = type; Object.assign(this, init); } });
 globalThis.window = /** @type {any} */ (globalThis);
 globalThis.requestAnimationFrame = /** @type {any} */ ((f) => setTimeout(f, 16));
-Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'iPhone', vibrate: undefined }, configurable: true });
+const audioSession = { type: 'auto' };
+Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'iPhone', vibrate: undefined, audioSession }, configurable: true });
 const fetched = [];
 globalThis.fetch = /** @type {any} */ ((url) => { fetched.push(url); return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve({ url }) }); });
 const fake = {
@@ -153,6 +154,9 @@ const fake = {
 const app = /** @type {any} */ ({ settings: { taps: 'all' }, screen: 'home' });
 s.initSound({ app, makeAudio: () => { fake.made++; return /** @type {any} */ (fake); }, isPhone: () => true });
 
+assert.equal(audioSession.type, 'ambient', 'at load: every sound follows the silent switch');
+assert.equal(s.followSilentSwitch({}), false, 'no audioSession (not Safari): nothing to set');
+ok('iPhone silent switch: the audio session is ambient from load');
 assert.equal(s.soundLog().kind, 'switch');
 const sw = switches[0];
 assert.equal(sw.id, 'hx-switch'); assert.equal(sw.type, 'checkbox'); assert.equal(sw.attrs.switch, ''); assert.equal(sw.tabIndex, -1);

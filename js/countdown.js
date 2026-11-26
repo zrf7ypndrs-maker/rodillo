@@ -78,7 +78,6 @@ let pending = [];
 const done = new Set();
 /** @type {RideSession | null} */
 let ses = null;
-let sessionType = '';
 /** What was decided, newest last (the smoke test reads it): tick n, or the GO kind and whether it had the lead-in. */
 export const countdownLog = /** @type {{ cue: string, n?: number, seg: number, in?: number, slide?: boolean }[]} */ ([]);
 const log = (x) => { countdownLog.push(x); if (countdownLog.length > 40) countdownLog.shift(); };
@@ -128,20 +127,11 @@ function cancel() {
   pending = [];
 }
 
-/** iPhone: let the ride's sounds play with the silent switch on (Safari's audio session); put it back after. */
-function rideAudio(on) {
-  const as = /** @type {{ audioSession?: { type: string } }} */ (/** @type {unknown} */ (navigator)).audioSession;
-  if (!as) return;
-  if (on && !sessionType) { sessionType = as.type || 'auto'; as.type = 'playback'; }
-  else if (!on && sessionType) { as.type = sessionType; sessionType = ''; }
-}
-
 /** Every engine tick (js/app.js beginSession): puts the next tick on the audio clock when it's close. Cheap.
  * @param {RideSession} s */
 export function countdownTick(s) {
   if (s !== ses) { cancel(); done.clear(); ses = s; }
   if (choice() === 'off' || !s.started || s.paused || s.finished) { cancel(); return; }
-  rideAudio(true);
   const t = nextTick(s.elapsed, s.seg, s.segRemaining, s.segT0);
   if (!t || t.in > AHEAD) return;
   const key = `${s.segIndex}:${t.n}`;
@@ -171,12 +161,11 @@ export function countdownDone(s) {
   play('rest', ctx ? ctx.currentTime : 0, FLY);
 }
 
-/** The ride is over: nothing more plays, and the audio session goes back to how it was. */
+/** The ride is over: nothing more plays. (The silent switch mutes it like every sound: js/sound.js followSilentSwitch.) */
 export function countdownStop() {
   cancel();
   done.clear();
   ses = null;
-  rideAudio(false);
 }
 
 /** The setting changed (here or on another device): the new level, and the files if it was just turned on. */

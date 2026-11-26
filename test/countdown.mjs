@@ -139,8 +139,8 @@ await ride(95, 99.75);
 assert.deepEqual(starts.map((x) => x.name), ['tick-3', 'tick-2', 'tick-1']);
 near(starts[0].when, 6.5); near(starts[1].when, 7.5); near(starts[2].when, 8.5); // elapsed 96.5, 97.5, 98.5
 assert.deepEqual(starts.map((x) => x.offset), [0, 0, 0]);
-assert.equal(session.type, 'playback');
-ok('a timed step: tick 3, 2, 1 each once, on the audio clock exactly when the number changes; silent switch off');
+assert.equal(session.type, 'auto', 'the countdown leaves the audio session alone: the silent switch mutes it (js/sound.js)');
+ok('a timed step: tick 3, 2, 1 each once, on the audio clock exactly when the number changes; the silent switch still mutes it');
 
 // pause before a tick plays: it's taken off the clock, and put back after the pause
 starts.length = 0; stops.length = 0;
@@ -193,7 +193,7 @@ ok('Soft halves the level; Off: nothing decided, nothing played');
 
 countdownStop();
 assert.equal(session.type, 'auto');
-ok('ride over: the audio session goes back');
+ok('ride over: the audio session never changed');
 
 console.warn = warn;
 console.log(`countdown: ${n} checks passed`);

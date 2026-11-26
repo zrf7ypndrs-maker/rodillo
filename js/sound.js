@@ -25,6 +25,16 @@ export const soundWanted = (choice, screen) => screen !== 'ride' && (tapChoice(c
 /** Haptics wanted: by the setting, never on the ride screen. */
 export const hapticWanted = (choice, screen) => screen !== 'ride' && (tapChoice(choice) === 'all' || tapChoice(choice) === 'haptic');
 
+/** iPhone: every sound in Rodillo (taps, title music, countdown) follows the silent switch and mixes with other audio
+ *  (Agustín, Nov 26: "Sound in the app should respect silence config in phone"). Safari's audio session is page-wide,
+ *  so this is set once, at load, before any sound. Other browsers have no audioSession: nothing to do.
+ * @param {{ audioSession?: { type: string } }} [nav] @returns {boolean} whether it was set */
+export function followSilentSwitch(nav = /** @type {any} */ (globalThis.navigator)) {
+  if (!nav?.audioSession) return false;
+  nav.audioSession.type = 'ambient';
+  return true;
+}
+
 /** How this device can tick: 'vibrate' (Android), 'switch' (iPhone, the label overlays), or 'none' (desktop, iPad).
  * @param {{ phone: boolean, vibrate: boolean, ios: boolean }} d */
 export function hapticKind({ phone, vibrate, ios }) {
@@ -204,6 +214,7 @@ function setupSwitch() {
 /** @param {SoundDeps} deps */
 export function initSound(deps) {
   ({ app, makeAudio, isPhone } = deps);
+  followSilentSwitch();
   const ios = /iPhone|iPod/.test(navigator.userAgent) || deps.forceSwitch === true;
   kind = hapticKind({ phone: isPhone(), vibrate: typeof navigator.vibrate === 'function' && !deps.forceSwitch, ios });
   if (kind === 'switch') setupSwitch();
