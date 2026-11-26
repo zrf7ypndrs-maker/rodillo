@@ -390,17 +390,23 @@ export function intervalCard(s, v) {
   return { zc: v.gradeHex(s.grade), label: 'Free ride', text: 'up/down changes the grade by 1%, shift to hold your cadence', big: `${num((s.grade * 100).toFixed(1), '%')}${word('grade')}`, bar: null, rep: '' };
 }
 
+export const MAX_PIPS = 6; // more reps than this: one bar the width of 6 dashes (Nov 26: 10 dashes ran into the phone countdown)
 /**
  * Rep counter on the interval card and the phone hero (Agustín, Nov 25): "REP 3/5" (or "REST 3/5" on the easier step
- * of a repeat) with one dash per rep, done ones solid. '' outside a repeat. Nested repeats count the inner rep.
+ * of a repeat) with one dash per rep, done ones solid; over MAX_PIPS reps, one bar filled to the rep.
+ * '' outside a repeat. Nested repeats count the inner rep.
  */
 /** @param {Segment[] | null} segs @param {number} i */
 export function repBadge(segs, i) {
   const seg = segs?.[i], r = seg?.rep;
   if (!r) return '';
   let pips = '';
-  for (let k = 1; k <= r.of; k++) pips += k <= r.i ? '<b class="on"></b>' : '<b></b>';
-  return `<span class="rk">${repWord(segs, i)}</span><span class="rn">${r.i}<i>/${r.of}</i></span><span class="pips">${pips}</span>`;
+  if (r.of > MAX_PIPS) pips = `<span class="pips bar"><b style="width:${((r.i / r.of) * 100).toFixed(1)}%"></b></span>`; // 30/15 x 10: dashes would run into the countdown
+  else {
+    for (let k = 1; k <= r.of; k++) pips += k <= r.i ? '<b class="on"></b>' : '<b></b>';
+    pips = `<span class="pips">${pips}</span>`;
+  }
+  return `<span class="rk">${repWord(segs, i)}</span><span class="rn">${r.i}<i>/${r.of}</i></span>${pips}`;
 }
 /**
  * 'Rest' for an easy step (under Tempo, under 4% grade) when its repeat block's harder steps add up to at least

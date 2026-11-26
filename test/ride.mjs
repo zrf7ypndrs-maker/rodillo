@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   rideTiles, intervalCard, nextCard, gearViz, powerScale, workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep,
-  trackProgress, workoutLeft, secsLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount, repBadge, repWord, nextRep,
+  trackProgress, workoutLeft, secsLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount, repBadge, repWord, nextRep, MAX_PIPS,
 } from '../js/ride.js';
 import { flatten, track, trackDist, trackClimbed, climbsByDist } from '../js/engine/workout.js';
 import { Gearbox } from '../js/engine/drivetrain.js';
@@ -111,6 +111,11 @@ function ses(x = {}) {
   assert.equal(pips(repBadge(vo, 7)), '3/5');
   assert.equal(text(repBadge(vo, 8)), 'Rest3/5');
   assert.equal(pips(repBadge(vo, 12)), '5/5');
+  // 30/15 x 10: one bar instead of ten dashes, filled to the rep
+  const t15 = flatten(W('vo2-30-15')), k3 = t15.findIndex((g) => g.rep?.of > MAX_PIPS && g.rep.i === 3);
+  assert.ok(k3 > 0);
+  assert.match(repBadge(t15, k3), /<span class="pips bar"><b style="width:30\.0%"><\/b><\/span>$/);
+  assert.equal(text(repBadge(t15, k3)), `Rep3/${t15[k3].rep.of}`);
   assert.equal(intervalCard(ses({ segs: vo, segIndex: 7 }), v).rep, repBadge(vo, 7));
   assert.equal(intervalCard(ses({ segs: vo, segIndex: 2 }), v).rep, '');
   assert.equal(intervalCard(ses({ segIndex: -1 }), v).rep, '');

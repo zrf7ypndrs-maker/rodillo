@@ -678,6 +678,9 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .rep-badge .pips { display: flex; gap: 4px; margin-top: 6px; }
 .rep-badge .pips b { width: 13px; height: 6px; border-radius: 3px; background: currentColor; opacity: .22; }
 .rep-badge .pips b.on { opacity: 1; }
+.rep-badge .pips.bar { position: relative; width: 98px; height: 6px; border-radius: 3px; }
+.rep-badge .pips.bar::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: .22; }
+.rep-badge .pips.bar b { position: relative; display: block; height: 100%; border-radius: inherit; opacity: 1; }
 .interval:has(#r-rep:not(:empty)) .int-head { padding: 0 120px; } /* the label stays centred and clear of the counter */
 .rt-next .nrep { font-size: 15px; font-weight: 650; color: var(--muted); margin-top: 2px; }
 .int-big { font-size: min(96px, 14cqi); line-height: 1; font-weight: 850; margin-top: 6px; white-space: nowrap; letter-spacing: -0.01em; }
@@ -1790,6 +1793,7 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
   .rp-hero .rep-badge .rn { font-size: 26px; }
   .rp-hero .rep-badge .pips { gap: 3px; margin-top: 5px; }
   .rp-hero .rep-badge .pips b { width: 9px; height: 4px; border-radius: 2px; }
+  .rp-hero .rep-badge .pips.bar { width: 69px; height: 4px; border-radius: 2px; }
   .rp-hero:has(#rp-rep:not(:empty)) .rp-int-label { padding: 0 64px; }
   .rp-count { font-size: clamp(64px, 22vw, 116px); font-weight: 900; line-height: .9; margin: 2px 0 8px; }
   .rp-target-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
