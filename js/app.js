@@ -30,6 +30,7 @@ import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, sl
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js';
 import { initMusic, syncMusic } from './music.js';
 import { initCountdown, countdownTick, countdownDone, countdownStop, syncCountdown } from './countdown.js';
+import { initSound } from './sound.js';
 /** @typedef {import('./types.js').Settings} Settings */
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 /** @typedef {import('./types.js').FieldEvent} FieldEvent */
@@ -1307,6 +1308,8 @@ async function forgetHere() {
 initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData });
 initMusic({ app, makeAudio: () => new AudioContext() });
 initCountdown({ app, makeAudio: () => new AudioContext() });
+// tap sounds on the home screens, phone haptics (js/sound.js); ?hx=1 = the iPhone label overlays, for the smoke test
+initSound({ app, makeAudio: () => new AudioContext({ latencyHint: 'interactive' }), isPhone, forceSwitch: /[?&]hx=1\b/.test(location.search) });
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {

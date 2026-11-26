@@ -77,6 +77,13 @@ const cues = (page) => page.evaluate(() => import('./js/countdown.js').then((m) 
 // title music (js/music.js): its state, from the app's own module instance
 const musicIs = (page, state, what, timeout = 25000) => page.waitForFunction((s) => import('./js/music.js').then((m) => m.musicNow().state === s), state, { timeout, polling: 250 })
   .catch(async () => { throw new Error(`music: ${what}: ${JSON.stringify(await page.evaluate(() => import('./js/music.js').then((m) => m.musicNow())))}, expected ${state}`); });
+// tap sounds (js/sound.js): what played since the last call, from the app's own module instance
+const soundLog = (page) => page.evaluate(() => import('./js/sound.js').then((m) => m.soundLog()));
+const played = async (page, want, what) => {
+  await page.waitForTimeout(80); // past the one-sound-per-action window
+  const got = (await soundLog(page)).played;
+  if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`taps: ${what}: played ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+};
 const shownNow = (page, sel) => page.$eval(sel, (el) => !el.closest('.hidden') && el.getBoundingClientRect().height > 0);
 const kindsShown = (page) => page.evaluate(() => ['erg', 'slope', 'mine'].filter((k) => !document.querySelector(`#kind-${k}`).classList.contains('hidden')).join());
 const lsGet = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(`rodillo.${key}`) ?? 'null'), k);
@@ -1686,6 +1693,26 @@ async function run(viewport, label) {
     await musicIs(page, 'playing', 'home after the first clicks');
     ok(`${label}: title music plays on home after the first click`);
 
+    // tap sounds: a tab is navigate, opening a panel click, Esc (closePanels) back, arrow keys move the focus ring
+    await soundLog(page);
+    await page.click('#tabs button[data-tab="calendar"]');
+    await played(page, ['navigate'], 'a tab');
+    await page.click('#cal-next');
+    await played(page, ['navigate'], 'next month');
+    await page.click('#tabs button[data-tab="today"]');
+    await played(page, ['navigate'], 'back to Today');
+    await page.click('#btn-settings');
+    await played(page, ['click'], 'the Settings gear');
+    await page.keyboard.press('Escape');
+    await played(page, ['back'], 'Esc closes Settings');
+    await page.keyboard.press('Escape');
+    await played(page, [], 'Esc with nothing open');
+    await page.keyboard.press('ArrowRight');
+    await played(page, ['navigate'], 'arrow right: next tab');
+    await page.keyboard.press('ArrowLeft');
+    await soundLog(page);
+    ok(`${label}: tap sounds: tabs and months navigate, the gear clicks, Esc goes back (silent with nothing open), arrows navigate`);
+
     for (const btn of ['#btn-settings', '#btn-controls', '#btn-garage', '#btn-devices']) {
       await page.click(btn);
       await page.waitForTimeout(150);
@@ -1755,6 +1782,7 @@ async function run(viewport, label) {
       ['ride', '#set-pain', 'painVision', 'subtle', 'subtle', orig.painVision || 'full'],
       ['ride', '#set-music', 'titleMusic', 'off', 'off', orig.titleMusic || 'normal'],
       ['ride', '#set-countdown', 'countdownSound', 'soft', 'soft', orig.countdownSound || 'on'],
+      ['ride', '#set-taps', 'taps', 'off', 'off', orig.taps || 'all'],
       ['road', '#set-gradeScale', 'gradeScale', '75', 0.75, num('gradeScale', 100)],
       ['trainer', '#set-gmax', 'maxSendGrade', '12', 0.12, num('maxSendGrade', 100)],
       ['trainer', '#set-shift', 'trainerShifting', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'app' : 'auto'],
@@ -1804,6 +1832,10 @@ async function run(viewport, label) {
     ok(`${label}: demo workout starts`);
     await musicIs(page, 'quiet', 'ride screen', 3000);
     ok(`${label}: title music goes quiet when the ride starts`);
+    await soundLog(page);
+    await page.keyboard.press('ArrowUp'); await page.waitForTimeout(100); await page.keyboard.press('ArrowDown');
+    await played(page, [], 'ride screen keys');
+    ok(`${label}: no tap sounds on the ride screen (effort up and down)`);
 
     await page.waitForFunction(() => document.querySelector('#ride.active') && /\d:\d\d/.test(document.body.innerText), null, { timeout: 10000 });
     await page.waitForTimeout(13000); // past the 10-sample minimum so the ride is kept
@@ -1827,6 +1859,60 @@ async function run(viewport, label) {
   await ctx.close();
 }
 
+
+// ---- iPhone haptics (js/sound.js): ?hx=1 puts the iPhone's label overlays on in Chrome. Every tap on a control lands on
+// its invisible label: the hidden switch must toggle once (the tick on a real iPhone) and the control must get the tap
+// once, with the same target as without the label (the library's Start reads e.target.dataset).
+async function iphoneTapsRun() {
+  const label = 'phone (iPhone taps)';
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.fulfill({ status: 404, body: '' }));
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
+  await page.goto(`${base}?hx=1`, { waitUntil: 'load' });
+  await page.waitForFunction(() => import('./js/sound.js').then((m) => m.soundLog().armed > 10), null, { timeout: 5000 });
+  const log = await soundLog(page);
+  if (log.kind !== 'switch') throw new Error(`${label}: haptics kind ${log.kind}`);
+  ok(`${label}: an invisible label on the controls (${log.armed}), pointing at one hidden switch`);
+  // one read per step (soundLog() also clears what played): switch toggles since the step's start, and the sounds
+  const step = async (t0, toggled, sounds, what) => {
+    await page.waitForTimeout(80);
+    const l = await soundLog(page);
+    if (l.switchToggles - t0 !== toggled || JSON.stringify(l.played) !== JSON.stringify(sounds)) {
+      throw new Error(`${label}: ${what}: switch toggled ${l.switchToggles - t0} times, played ${JSON.stringify(l.played)}; expected ${toggled}, ${JSON.stringify(sounds)}`);
+    }
+  };
+  // demo trainer, through the overlays too: the Connections button (click), Demo (click), Close (back)
+  let t0 = log.switchToggles;
+  await page.tap('#btn-devices');
+  await page.waitForSelector('#devpop:not(.hidden)', { timeout: 3000 });
+  await page.waitForSelector('#btn-demo > .hx', { state: 'attached', timeout: 3000 });
+  await step(t0, 1, ['click'], 'Connections');
+  t0 += 1;
+  await page.tap('#btn-demo');
+  await step(t0, 1, ['click'], 'Demo');
+  t0 += 1;
+  if (await page.$eval('#devpop', (d) => !d.classList.contains('hidden'))) { await page.tap('#devpop-close'); await step(t0, 1, ['back'], 'Close'); t0 += 1; }
+  await page.tap('#tabs button[data-tab="workouts"]');
+  await page.waitForFunction(() => document.querySelector('#home').dataset.tab === 'workouts', null, { timeout: 3000 });
+  await step(t0, 1, ['navigate'], 'a tab tap');
+  // a library row: tap its title to open it, then Start (the row's handler reads e.target.dataset.start)
+  await page.waitForSelector('#workout-list .wo[data-i="0"] .wo-top > .hx', { state: 'attached', timeout: 3000 });
+  t0 = (await soundLog(page)).switchToggles;
+  await page.tap('#workout-list .wo[data-i="0"] .wo-top');
+  await page.waitForSelector('#workout-list .wo[data-i="0"].expanded', { timeout: 3000 });
+  await page.waitForTimeout(400);
+  await page.waitForSelector('#workout-list button[data-start="0"] > .hx', { state: 'attached', timeout: 3000 });
+  await step(t0, 1, ['click'], 'a library row tap');
+  t0 += 1;
+  await page.tap('#workout-list button[data-start="0"]');
+  await page.waitForSelector('#ride.active', { timeout: 5000 });
+  await step(t0, 1, ['click'], 'the Start tap');
+  if (await page.$('#ride .hx')) throw new Error(`${label}: labels on the ride screen`);
+  ok(`${label}: a tab, a library row and its Start: each tap toggles the switch once and runs the control once; none on the ride screen`);
+  await ctx.close();
+}
 
 // ---- WebKit (Safari, Bluefy) can run app.js before css/app.css has loaded (WebKit bug 261655), as after every deploy.
 // Chrome waits, so make it act like WebKit: the stylesheet arrives 1.5 s late and doesn't block scripts. Every chart color
@@ -1864,6 +1950,7 @@ async function lateCssRun(viewport, label) {
 try {
   await run({ width: 1280, height: 800 }, 'desktop');
   await run({ width: 390, height: 844 }, 'phone');
+  await iphoneTapsRun();
   await mineRun();
   await todayRun({ width: 1280, height: 800 }, 'desktop');
   await todayRun({ width: 390, height: 844 }, 'phone');

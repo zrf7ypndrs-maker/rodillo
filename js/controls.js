@@ -11,6 +11,7 @@ import { shiftStyleFor } from './engine/garage.js';
 import { builderOpen, closeBuilder } from './builder.js';
 import { logMsg } from './ble/base.js';
 import { $, $$, toast } from './ui.js';
+import { tap, actionSound } from './sound.js';
 /** @typedef {import('./ble/sim.js').SimTrainer} SimTrainer */
 /**
  * @typedef {object} ControlState
@@ -226,10 +227,13 @@ const DO = {
 /** Run a verb (up, down, left, right, select, back, skip, lap, ergToggle, easier, harder, front) on the screen showing.
  *  src = 'ctl' (Ride button), 'key' or 'tap' (on screen): skip / end show the hold ring for 'ctl' / 'key'. */
 export function action(a, src = 'tap') {
-  const screen = screenOf(controlState());
+  const st = controlState();
+  const screen = screenOf(st);
   const name = actionFor(screen, a);
   if (screen === 'modal' && !name) return modalAction(null, a); // still navigation: the modal shows its ring
+  const focus = app.focus;
   if (name) DO[name](src, a);
+  tap(actionSound(name, { moved: app.focus !== focus, open: st.panel })); // js/sound.js: silent on the ride screen
   if (screen.startsWith('ride-') && name !== 'closePanels') renderRide();
 }
 

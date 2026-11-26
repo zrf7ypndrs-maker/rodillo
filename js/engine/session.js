@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS = {
   climbDetail: {},       // real climbs: detail level per workout id (js/engine/climb.js), only when not the climb's default
   titleMusic: 'normal',  // 'normal' | 'soft' | 'off': the home screens' music loop (js/music.js)
   countdownSound: 'on',  // 'on' | 'soft' | 'off': the last 3 s of a step and the next one's start (js/countdown.js)
+  taps: 'all',           // 'all' | 'sound' | 'haptic' | 'off': tap sounds and phone haptics on the home screens (js/sound.js)
 };
 
 // The trim carried from one ride to the next stays small: it only has to cancel the trainer's own drag. A large

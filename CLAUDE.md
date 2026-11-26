@@ -49,6 +49,7 @@ Agustín's own Zwift replacement (vanilla JS web app on GitHub Pages). Private d
 - End of ride and ride page: js/ridepage.js, js/sync.js (`rideSources()`); `claude/rodillo-ride-screen.md`.
 - Workout format and timed messages: js/engine/workout.js; `claude/rodillo-workout-messages.md`.
 - Controller and keyboard: js/controls.js; `claude/rodillo-code-map.md`, `claude/rodillo-fix-queue.md` (holds).
+- Title music, countdown, tap sounds and phone haptics: js/music.js, js/countdown.js, js/sound.js, sounds/ (rendered by tools/countdown-sounds.py and tools/sounds.py); `claude/rodillo-title-music.md`, `claude/rodillo-countdown-sound.md`, `claude/rodillo-sounds.md`. Never sound on the ride screen except the countdown. iPhone haptics only come from a real tap on a native switch (iOS 26.5+): js/sound.js puts an invisible label over each tappable control; new tappable controls are covered by its `ARM` selector.
 - Bike garage: js/garage.js, js/engine/garage.js; `claude/rodillo-bike-garage.md`.
 - Gearing (Garage's Gearing tab, mid-ride switch): js/garage.js, js/engine/drivetrain.js; `claude/rodillo-bike-gearing-split.md` (wins over the garage doc), `claude/rodillo-gearing-trainer.md`.
 - Bike weight: js/engine/bikes.js; `claude/rodillo-bike-weight.md`.

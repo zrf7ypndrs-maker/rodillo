@@ -1410,6 +1410,11 @@ html:has(#home.active) .b-foot button:not(.primary) { border-color: transparent;
    ===================================================================== */
 .rp { display: none; }
 @media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+  /* iPhone haptics (js/sound.js): an invisible label over each tappable control, pointing at one hidden native switch.
+     The finger lands on the label, the switch ticks, the control gets the tap. Only present on iPhones. */
+  :where(.hx-host) { position: relative; }
+  .hx { position: absolute; inset: 0; margin: 0; border-radius: inherit; -webkit-tap-highlight-color: transparent; }
+  .hx-switch { position: fixed; top: 0; left: 0; margin: 0; opacity: 0; pointer-events: none; z-index: -1; }
   .wo-detail { flex-wrap: wrap; gap: 6px 12px; }
   .wo-detail input[type=range] { order: 3; flex: 1 1 100%; height: 32px; }
   /* ride page: one column, actions at the bottom, chart edge to edge */

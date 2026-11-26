@@ -72,6 +72,7 @@
  * @property {Record<string, number>} climbDetail
  * @property {string} [titleMusic] 'normal' | 'soft' | 'off' (js/music.js).
  * @property {string} [countdownSound] 'on' | 'soft' | 'off' (js/countdown.js).
+ * @property {string} [taps] 'all' | 'sound' | 'haptic' | 'off': tap sounds and haptics on the home screens (js/sound.js).
  */
 
 // ------------------------------------------------------------------ workouts (js/engine/workout.js)
@@ -547,6 +548,11 @@
  * @typedef {object} CountdownDeps initCountdown() in js/countdown.js.
  * @property {AppState} app
  * @property {() => AudioContext} makeAudio Called on the first tap or key with countdown sounds on.
+ * @typedef {object} SoundDeps initSound() in js/sound.js.
+ * @property {AppState} app
+ * @property {() => AudioContext} makeAudio Called on the first tap or key with sounds wanted.
+ * @property {() => boolean} isPhone The phone layout (PHONE_MQ): only phones tick.
+ * @property {boolean} [forceSwitch] The smoke test: the iPhone switch overlays in Chrome (?hx=1).
  */
 
 /**

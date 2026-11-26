@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node test/run.mjs && node test/rides.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/sync-errors.mjs && node test/import.mjs && node test/ridepage.mjs && node test/training.mjs && node test/dates.mjs && node test/library.mjs && node test/today.mjs && node test/controls.mjs && node test/controls-dom.mjs && node test/ride.mjs && node test/ride-dom.mjs && node test/ridephone.mjs && node test/ridephone-dom.mjs && node test/pain.mjs && node test/profile.mjs && node test/profile-dom.mjs && node test/music.mjs && node test/countdown.mjs",
+    "test": "node test/run.mjs && node test/rides.mjs && node test/ble-mock.mjs && node test/stats-sync.mjs && node test/sync-errors.mjs && node test/import.mjs && node test/ridepage.mjs && node test/training.mjs && node test/dates.mjs && node test/library.mjs && node test/today.mjs && node test/controls.mjs && node test/controls-dom.mjs && node test/ride.mjs && node test/ride-dom.mjs && node test/ridephone.mjs && node test/ridephone-dom.mjs && node test/pain.mjs && node test/profile.mjs && node test/profile-dom.mjs && node test/music.mjs && node test/countdown.mjs && node test/sound.mjs",
     "rides:record": "node test/rides.mjs --record",
     "lint": "eslint .",
     "typecheck": "node tools/typecheck.mjs",

@@ -12,6 +12,7 @@ import { ls } from './store.js';
 import { painChoice } from './pain.js';
 import { musicChoice } from './music.js';
 import { countdownChoice } from './countdown.js';
+import { tapChoice } from './sound.js';
 import { authEnabled, authSession, startSignIn, signOut } from './auth.js';
 import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js';
 
@@ -101,7 +102,8 @@ function renderSettings() {
     ride: fld('set-guard', 'ERG low-cadence guard', '<select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>', 'If cadence drops under 40 rpm in ERG, the target eases to 60% until you\'re spinning again.') +
       fld('set-pain', 'Pain vision', '<select id="set-pain"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select>', 'Near the end of hard reps, or when your W\u2032 runs low, the screen edges blur and darken with your heart rate. Your numbers stay sharp.') +
       fld('set-music', 'Title music', '<select id="set-music"><option value="normal">On</option><option value="soft">Soft</option><option value="off">Off</option></select>', 'A calm loop on the home screens. It fades out when a ride starts and comes back after.') +
-      fld('set-countdown', 'Countdown sounds', '<select id="set-countdown"><option value="on">On</option><option value="soft">Soft</option><option value="off">Off</option></select>', 'A soft pulse on each of the last 3 seconds of a step, then a sound as the next one starts: rising bells for work, a chime for rest.'),
+      fld('set-countdown', 'Countdown sounds', '<select id="set-countdown"><option value="on">On</option><option value="soft">Soft</option><option value="off">Off</option></select>', 'A soft pulse on each of the last 3 seconds of a step, then a sound as the next one starts: rising bells for work, a chime for rest.') +
+      fld('set-taps', 'Taps', '<select id="set-taps"><option value="all">Sound and haptics</option><option value="sound">Sound only</option><option value="haptic">Haptics only</option><option value="off">Off</option></select>', 'A soft tap when you move around and press things on the home screens. Haptics are on phones. Never during a ride.'),
     trainer: `${fld('set-trainer', 'Trainer', `<select id="set-trainer">${trainerOptions()}</select>`, '', 'full')}
       ${fld('set-shift', 'Virtual shifting', '<select id="set-shift"><option value="auto">In the trainer when it can (like Zwift)</option><option value="app">Always in Rodillo</option></select>', '', 'full')}
       <div class="help" id="shift-line">${shiftLine()}</div>
@@ -117,6 +119,7 @@ function renderSettings() {
   /** @type {HTMLSelectElement} */ ($('#set-pain')).value = painChoice(app.settings.painVision);
   /** @type {HTMLSelectElement} */ ($('#set-music')).value = musicChoice(app.settings.titleMusic);
   /** @type {HTMLSelectElement} */ ($('#set-countdown')).value = countdownChoice(app.settings.countdownSound);
+  /** @type {HTMLSelectElement} */ ($('#set-taps')).value = tapChoice(app.settings.taps);
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   fillTrainer();
   /** @type {HTMLSelectElement} */ ($('#set-shift')).value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
@@ -127,6 +130,7 @@ function renderSettings() {
     else if (el.id === 'set-pain') app.settings.painVision = el.value;
     else if (el.id === 'set-music') app.settings.titleMusic = el.value;
     else if (el.id === 'set-countdown') app.settings.countdownSound = el.value;
+    else if (el.id === 'set-taps') app.settings.taps = el.value;
     else if (el.id === 'set-trainer') pickTrainer(el.value);
     else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
     else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) /** @type {import('./ble/trainer.js').Trainer} */ (app.trainer).useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
