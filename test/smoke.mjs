@@ -1064,12 +1064,14 @@ async function rideRun() {
       msg: q('#r-msg').classList.contains('show') ? tx('#r-msg') : '',
       takeover: q('#takeover').classList.contains('hidden') ? null : { line: tx('#to-line'), big: tx('#to-big'), sub: tx('#to-sub') },
       segn: tx('#r-segn'), withSegs: q('#r-body').classList.contains('with-segs'),
-      s: { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, elapsed: s.elapsed, chartPos: s.chartPos, climbed: s.climbed, mode: s.mode, gb: { label: s.gb.label, seq: s.gb.seq, ratio: s.gb.ratio, rear: s.gb.rear }, target: s.target, segs: s.segs, aim: s.aimStatus },
+      s: { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, elapsed: s.elapsed, segT0: s.segT0, chartPos: s.chartPos, climbed: s.climbed, mode: s.mode, gb: { label: s.gb.label, seq: s.gb.seq, ratio: s.gb.ratio, rear: s.gb.rear }, target: s.target, segs: s.segs, aim: s.aimStatus },
     };
   });
-  /** Seconds left as the ride screen counts them: on the elapsed clock, so they tick with elapsed. */
-  const onClock = (sec, e) => Math.max(0, Math.round(e + sec) - Math.round(e));
-  const left = (rem, e) => (rem.sec !== undefined ? fmtTime(onClock(rem.sec, e)) : rem.m < 1000 ? `${Math.round(rem.m)}m` : `${(rem.m / 1000).toFixed(2)}km`);
+  /** The ride clock: elapsed and seconds left step on the current step's own seconds; its last second reads 1. */
+  const off = (s) => s.segT0 - Math.floor(s.segT0);
+  const shownE = (s) => Math.max(0, Math.floor(s.elapsed - off(s) + 1e-6));
+  const onClock = (sec, s) => Math.max(0, Math.round(s.elapsed + sec - off(s)) - shownE(s));
+  const left = (rem, s) => (rem.sec !== undefined ? fmtTime(onClock(rem.sec, s)) : rem.m < 1000 ? `${Math.round(rem.m)}m` : `${(rem.m / 1000).toFixed(2)}km`);
   const gearText = (gb) => (gb.seq ? gb.label : gb.label.replace('x', '×'));
   const expect = (what, got, want) => { if (got !== want) fail(`${what}: "${got}", expected "${want}"`); };
   /** Climbed / To the top tile on a slope-only workout, from the road laid out in Node. */
@@ -1103,7 +1105,7 @@ async function rideRun() {
   await run(5000);
   let v = await screen();
   expect('ERG card label', v.label, ss[0].label);
-  expect('ERG card, ramp', v.big, `Ramp to${Math.round(ss[0].to * FTP)}Win${left(v.s.rem, v.s.elapsed)}`);
+  expect('ERG card, ramp', v.big, `Ramp to${Math.round(ss[0].to * FTP)}Win${left(v.s.rem, v.s)}`);
   const now = +v.text.match(/^now (\d+) W$/)?.[1];
   if (!(now >= Math.round(ss[0].from * FTP) && now <= Math.round(ss[0].to * FTP))) fail(`ERG card, ramp sub line "${v.text}"`);
   expect('Next card', v.next.amt, `${fmtTime(ss[1].dur)}@${Math.round(ss[1].from * FTP)}W`);
@@ -1114,7 +1116,7 @@ async function rideRun() {
   await key('ArrowUp'); // effort 101%
   v = await screen();
   if (v.s.intensity !== 1.01 || v.pct !== '101%') fail(`effort up: ${v.s.intensity}, tile "${v.pct}"`);
-  expect('ERG card at 101%', v.big, `Ramp to${Math.round(ss[0].to * FTP * 1.01)}Win${left(v.s.rem, v.s.elapsed)}`);
+  expect('ERG card at 101%', v.big, `Ramp to${Math.round(ss[0].to * FTP * 1.01)}Win${left(v.s.rem, v.s)}`);
   expect('Next card at 101%', v.next.amt, `${fmtTime(ss[1].dur)}@${Math.round(ss[1].from * FTP * 1.01)}W`);
   expect('rep counter in the warm-up', v.rep, '');
   expect('Next card rep line before rep 1', v.nrep, 'Rep 1/3');
@@ -1125,7 +1127,7 @@ async function rideRun() {
   expect('ERG card label after the skip', v.label, ss[1].label);
   expect('rep counter on rep 1', v.rep, 'Rep1/3');
   expect('Next card rep line before the recovery', v.nrep, '');
-  expect('ERG card, hold', v.big, `Hold${Math.round(ss[1].from * FTP * 1.01)}Wfor${left(v.s.rem, v.s.elapsed)}`);
+  expect('ERG card, hold', v.big, `Hold${Math.round(ss[1].from * FTP * 1.01)}Wfor${left(v.s.rem, v.s)}`);
   expect('ERG card sub line', v.text, `${Math.round(ss[1].from * 100 * 1.01)}% FTP · ${ss[1].cad.label}`);
   expect('Next card after the skip', v.next.amt, `${fmtTime(ss[2].dur)}@${Math.round(ss[2].from * FTP * 1.01)}W`);
   expect('interval count', v.segn, `1/${ss.length}`);
@@ -1141,7 +1143,7 @@ async function rideRun() {
   v = await screen();
   if (v.s.mode !== 'sim' || v.pct !== null) fail(`slope workout in ${v.s.mode} mode, effort tile ${v.pct}`);
   expect('slope card label', v.label, cr[0].label);
-  expect('slope card', v.big, `${(cr[0].grade * 100).toFixed(0)}%grade for${left(v.s.rem, v.s.elapsed)}`);
+  expect('slope card', v.big, `${(cr[0].grade * 100).toFixed(0)}%grade for${left(v.s.rem, v.s)}`);
   expect('slope card sub line', v.text, 'use your gears');
   expect('Next card on a slope workout', v.next.amt, `${fmtTime(cr[1].dur)}@${(cr[1].grade * 100).toFixed(0)}%`);
   expect('Next card cadence and power aim', v.next.cad, `${cr[1].cad.label} · ~${Math.round(cr[1].aim.mid * FTP)} W`);
@@ -1153,7 +1155,7 @@ async function rideRun() {
   await run(5000);
   v = await screen();
   if (v.s.seg !== 1 || Math.abs(v.s.offset - 0.01) > 1e-9) fail(`slope: segment ${v.s.seg}, offset ${v.s.offset}`);
-  expect('slope card on the climb', v.big, `${((cr[1].grade + 0.01) * 100).toFixed(0)}%grade for${left(v.s.rem, v.s.elapsed)}`);
+  expect('slope card on the climb', v.big, `${((cr[1].grade + 0.01) * 100).toFixed(0)}%grade for${left(v.s.rem, v.s)}`);
   expect('slope card sub line on the climb', v.text, `profile +1% · ${ftpWatts(cr[1].text, FTP)} · ${cr[1].cad.label}`);
   if (v.text.includes('FTP')) fail(`slope card still says FTP: "${v.text}"`);
   toTop(v);
@@ -1179,7 +1181,7 @@ async function rideRun() {
   const g1 = v.s.segs[1];
   if (v.s.seg !== 1 || !g1.dist) fail(`real climb: segment ${v.s.seg} after the skip`);
   expect('real climb card label', v.label, g1.label);
-  expect('real climb card', v.big, `${(g1.grade * 100).toFixed(0)}%grade for${left(v.s.rem, v.s.elapsed)}`);
+  expect('real climb card', v.big, `${(g1.grade * 100).toFixed(0)}%grade for${left(v.s.rem, v.s)}`);
   if (!/m$/.test(v.big)) fail(`real climb card counts metres: "${v.big}"`);
   toTop(v);
   await shifts('real climb');
@@ -1235,7 +1237,7 @@ async function rideRun() {
   v = await screen();
   const step1 = rt.findIndex((g) => g.untilFail);
   if (v.s.seg !== step1) fail(`ramp test: segment ${v.s.seg}, expected the first step (${step1})`);
-  expect('ramp test card', v.big, `Hold${Math.round(rt[step1].from * FTP)}Wfor${left(v.s.rem, v.s.elapsed)}`);
+  expect('ramp test card', v.big, `Hold${Math.round(rt[step1].from * FTP)}Wfor${left(v.s.rem, v.s)}`);
   if (!v.takeover || v.takeover.line !== 'Here we go.' || v.takeover.big !== `${Math.round(rt[step1].from * FTP)} W` || !/^\+20 W every minute/.test(v.takeover.sub)) fail(`ramp test takeover ${JSON.stringify(v.takeover)}`);
   await page.waitForFunction(() => document.querySelector('#takeover').classList.contains('hidden'), null, { timeout: 6000 });
   ok('desktop: ride, ramp test: workout messages over the chart, "Here we go" takeover on step 1, then back');
@@ -1322,20 +1324,23 @@ async function phoneRideRun() {
       toast: q('#toast').classList.contains('show') ? tx('#toast') : '', theme: window.rodillo.theme, themeBtn: tx('#rp-theme'),
       screen: window.rodillo.screen,
       s: s && { seg: s.segIndex, intensity: s.intensity, offset: s.gradeOffset, grade: s.grade, rem: s.segRemaining, progress: s.segProgress, chartPos: s.chartPos,
-        mode: s.mode, target: s.target, aim: s.aimStatus, paused: s.paused, elapsed: s.elapsed, dist: s.bike.dist, v: s.bike.v, segs: s.segs, name: s.name,
+        mode: s.mode, target: s.target, aim: s.aimStatus, paused: s.paused, elapsed: s.elapsed, segT0: s.segT0, dist: s.bike.dist, v: s.bike.v, segs: s.segs, name: s.name,
         gb: { label: s.gb.label, seq: s.gb.seq, isDouble: s.gb.isDouble, front: s.gb.front, rear: s.gb.rear, ring: s.gb.ring, cog: s.gb.cog } },
     };
   });
   const expect = (what, got, want) => { if (got !== want) fail(`${what}: "${got}", expected "${want}"`); };
   const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`);
-  const onClock = (sec, e) => Math.max(0, Math.round(e + sec) - Math.round(e)); // ticks with elapsed
-  const count = (rem, e) => (rem.sec !== undefined ? fmtTime(onClock(rem.sec, e)) : fmtDist(rem.m));
+  /** The ride clock: elapsed and seconds left step on the current step's own seconds; its last second reads 1. */
+  const off = (s) => s.segT0 - Math.floor(s.segT0);
+  const shownE = (s) => Math.max(0, Math.floor(s.elapsed - off(s) + 1e-6));
+  const onClock = (sec, s) => Math.max(0, Math.round(s.elapsed + sec - off(s)) - shownE(s));
+  const count = (rem, s) => (rem.sec !== undefined ? fmtTime(onClock(rem.sec, s)) : fmtDist(rem.m));
   /** Elapsed and time left on the top line (workouts with no distance steps). */
   const top = (v, name) => {
-    expect(`${name}: elapsed`, v.elapsed, fmtTime(v.s.elapsed));
+    expect(`${name}: elapsed`, v.elapsed, fmtTime(shownE(v.s)));
     expect(`${name}: workout name`, v.name, v.s.name);
     expect(`${name}: time left label`, v.leftK, 'Left');
-    expect(`${name}: time left`, v.left, fmtTime(onClock(v.s.segs.at(-1).end - v.s.chartPos, v.s.elapsed)));
+    expect(`${name}: time left`, v.left, fmtTime(onClock(v.s.segs.at(-1).end - v.s.chartPos, v.s)));
   };
   /** The gauge's dot: the target in the middle, ±20% at the ends. */
   const gauge = (v, gt, name) => {
@@ -1364,7 +1369,7 @@ async function phoneRideRun() {
   if (!v.phone) fail('the phone ride screen is not the one showing (or the desktop tiles show too)');
   top(v, 'ERG');
   expect('ERG hero label', v.label, ss[0].label);
-  expect('ERG hero countdown', v.count, count(v.s.rem, v.s.elapsed));
+  expect('ERG hero countdown', v.count, count(v.s.rem, v.s));
   if (!(v.s.target >= Math.round(ss[0].from * FTP) && v.s.target <= Math.round(ss[0].to * FTP))) fail(`ERG target ${v.s.target} W outside the ramp`);
   expect('ERG hero target', v.target, `${v.s.target} W`);
   expect('ERG hero sub line', v.targetSub, `${pct(segTarget(ss[0], v.s.progress))}% FTP${cadOf(ss[0])}`);
@@ -1415,7 +1420,7 @@ async function phoneRideRun() {
   v = await screen();
   expect('ERG hero label after the skip', v.label, ss[1].label);
   expect('rep counter on rep 1', v.rep, 'Rep1/3');
-  expect('ERG hero countdown after the skip', v.count, count(v.s.rem, v.s.elapsed));
+  expect('ERG hero countdown after the skip', v.count, count(v.s.rem, v.s));
   expect('ERG hero target, hold', v.target, `${Math.round(ss[1].from * FTP * 1.01)} W`);
   expect('ERG hero sub line, hold', v.targetSub, `${pct(ss[1].from * 1.01)}% FTP${cadOf(ss[1])}`);
   expect('ERG Next line after the skip', v.next, `Next ${fmtTime(ss[2].dur)} @ ${Math.round(ss[2].from * FTP * 1.01)} W${cadOf(ss[2])}`);
@@ -1451,7 +1456,7 @@ async function phoneRideRun() {
   if (v.s.mode !== 'sim') fail(`slope workout in ${v.s.mode} mode`);
   top(v, 'slope');
   expect('slope hero label', v.label, cr[0].label);
-  expect('slope hero countdown', v.count, count(v.s.rem, v.s.elapsed));
+  expect('slope hero countdown', v.count, count(v.s.rem, v.s));
   expect('slope hero target', v.target, `${(cr[0].grade * 100).toFixed(0)}%`);
   expect('slope hero sub line', v.targetSub, `grade, use your gears${cadOf(cr[0])}`);
   if (!v.gaugeOff || v.powerCls || v.powerSub) fail(`warm-up has no aim: gauge off ${v.gaugeOff}, box "${v.powerCls}" "${v.powerSub}"`);
@@ -1513,7 +1518,7 @@ async function phoneRideRun() {
   expect('real climb hero label', v.label, g1.label);
   expect('real climb hero, metres left', v.count, fmtDist(v.s.rem.m));
   expect('real climb hero target', v.target, `${(g1.grade * 100).toFixed(0)}%`);
-  expect('real climb time left (an estimate)', v.left, `~${fmtTime(onClock(v.s.segs.at(-1).end - v.s.chartPos, v.s.elapsed))}`);
+  expect('real climb time left (an estimate)', v.left, `~${fmtTime(onClock(v.s.segs.at(-1).end - v.s.chartPos, v.s))}`);
   const lead = CLIMB.profile.lead.length, v0 = ctr.parts[lead].d0, up0 = trackClimbed(ctr, v0), d = trackDist(ctr, v.s.segs, v.s.chartPos);
   expect('real climb road label', v.viewK, `${((d - v0) / 1000).toFixed(1)} of ${((ctr.D - v0) / 1000).toFixed(1)} km · +${Math.round(trackClimbed(ctr, d) - up0)} of ${Math.round((ctr.ascent - up0) / 5) * 5} m`);
   if (v.drawn < 1000) fail(`real climb chart drew ${v.drawn} pixels`);

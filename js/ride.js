@@ -8,7 +8,7 @@
 // workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding, secsLeft.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { paintPain, painLevel } from './pain.js';
-import { countdownGo, beatPhase } from './countdown.js';
+import { countdownGo, beatPhase, shownLeft, shownElapsed } from './countdown.js';
 import { POWER_SHOW_S } from './engine/session.js';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
 import { stepCue, resultCue, bestAvg } from './testcoach.js';
@@ -82,15 +82,13 @@ export { fmtDist }; // lives in js/ridepage.js next to fmtTime (js/profile.js us
 export const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
 
 /**
- * Whole seconds left as shown next to the elapsed clock: the end on the elapsed clock, rounded, minus the elapsed
- * shown (fmtTime rounds it). An interval starts on whatever tick crossed the last one's end (or a skip), so its start
- * isn't a whole second; rounding the seconds left on their own made the countdown tick out of step with elapsed.
+ * Whole seconds left as shown next to the elapsed clock (shownLeft in js/countdown.js): both step on the current
+ * step's own seconds, so they change together and a step's last second reads 1; the next step starts where 0 would be.
  */
 /** @param {Session} s @param {number} sec */
-export function secsLeft(s, sec) {
-  const e = s.elapsed || 0;
-  return Math.max(0, Math.round(e + sec) - Math.round(e));
-}
+export const secsLeft = (s, sec) => shownLeft(s.elapsed || 0, sec, s.segT0 || 0);
+/** Elapsed as the ride screen shows it, in whole seconds. @param {Session} s */
+export const rideElapsed = (s) => shownElapsed(s.elapsed || 0, s.segT0 || 0);
 
 /** Remaining workout time ("~" while distance steps make it an estimate), shared by the desktop list and the phone. */
 /** @param {Session} s */
@@ -320,7 +318,7 @@ export function rideTiles(s, v) {
     upSub = `of ${Math.round(tr.ascent)} m`;
   }
   return {
-    elapsed: fmtTime(s.elapsed),
+    elapsed: fmtTime(rideElapsed(s)),
     power: p,
     powerCls: powerCls(s.target, r, as),
     target: powerSub(s.target, as, aim, p, v),
@@ -481,7 +479,7 @@ function pulseCard(s, card) {
   card._seg = i;
   const ending = intervalEnding(s);
   if (ending && !card.classList.contains('int-ending')) {
-    card._beatAt = performance.now() - beatPhase(s.elapsed) * 1000; // beats land when the number changes
+    card._beatAt = performance.now() - beatPhase(s.elapsed, s.segT0) * 1000; // beats land when the number changes
     if (!card.classList.contains('int-fresh')) beatDelay(card);
   }
   card.classList.toggle('int-ending', ending);

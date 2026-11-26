@@ -10,7 +10,7 @@
 import { segTarget, isTrack } from './engine/workout.js';
 import { fmtTime } from './ridepage.js';
 import { action, holdStart, holdEnd } from './controls.js';
-import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH, repBadge, nextRep } from './ride.js';
+import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, rideElapsed, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH, repBadge, nextRep } from './ride.js';
 import { ls } from './store.js';
 import { $, esc } from './ui.js';
 
@@ -77,7 +77,7 @@ export function sizePhoneChart() {
 /** @param {Session} s */
 export function phoneTop(s) {
   return {
-    elapsed: fmtTime(s.elapsed), name: esc(s.name),
+    elapsed: fmtTime(rideElapsed(s)), name: esc(s.name),
     leftK: s.segs ? 'Left' : 'Distance', left: s.segs ? (s.seg ? workoutLeft(s) : '0:00') : fmtDist(s.bike.dist),
   };
 }

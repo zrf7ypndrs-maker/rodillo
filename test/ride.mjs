@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   rideTiles, intervalCard, nextCard, gearViz, powerScale, workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep,
-  trackProgress, workoutLeft, secsLeft, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount, repBadge, repWord, nextRep, MAX_PIPS,
+  trackProgress, workoutLeft, secsLeft, rideElapsed, smoothPower, smoothHr, msgMs, intervalEnding, fmtDist, segAmount, repBadge, repWord, nextRep, MAX_PIPS,
 } from '../js/ride.js';
 import { flatten, track, trackDist, trackClimbed, climbsByDist } from '../js/engine/workout.js';
 import { Gearbox } from '../js/engine/drivetrain.js';
@@ -318,12 +318,15 @@ function ses(x = {}) {
   assert.deepEqual([end({ m: 90 }, { bike: { v: 10 } }), end({ m: 120 }, { bike: { v: 10 } }), end({ m: 5 }, { bike: { v: 0.5 } })], [true, false, false]);
   assert.equal(workoutLeft(ses({ chartPos: 600 })), '53:00');
   // the countdown ticks with the elapsed clock: an interval that started at 60.3 s (the tick that crossed the last end)
-  // must not flip its seconds 0.3 s away from elapsed's (shown elapsed + shown left stays the interval's end)
-  for (let e = 60.3; e < 75; e += 0.25) {
-    const left = 60 - (e - 60.3);
-    assert.equal(Math.round(e) + secsLeft(ses({ elapsed: e }), left), 120, `at ${e.toFixed(2)} s`);
+  // flips its seconds with elapsed's (shown elapsed + shown left stays the interval's end), and its last second reads
+  // 0:01: the next interval starts where 0:00 would be (Nov 26)
+  for (let e = 60.3; e < 120.3; e += 0.25) {
+    const left = 60 - (e - 60.3), x = ses({ elapsed: e, segT0: 60.3 });
+    assert.equal(rideElapsed(x) + secsLeft(x, left), 120, `at ${e.toFixed(2)} s`);
+    assert.ok(secsLeft(x, left) >= 1, `no 0:00 at ${e.toFixed(2)} s`);
   }
-  assert.equal(secsLeft(ses({ elapsed: 119.9 }), 0.4), 0); // never below 0:00
+  assert.equal(secsLeft(ses({ elapsed: 120.2, segT0: 60.3 }), 0.1), 1);
+  assert.equal(secsLeft(ses({ elapsed: 120.3, segT0: 60.3 }), 0), 0); // the step's end (the engine moves on that tick)
   assert.equal(workoutLeft(ses({ segIndex: -1 })), 'Done');
   assert.deepEqual([fmtDist(999.6), fmtDist(1234), segAmount(ss[1]), segAmount({ dist: 150 })], ['1000 m', '1.23 km', '12:00', '150 m']);
   assert.equal(rt.filter((g) => g.untilFail).length, 12); // the ramp test the takeover coaches (smoke: "Here we go")

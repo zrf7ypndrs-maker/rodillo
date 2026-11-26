@@ -106,7 +106,7 @@ Object.assign(globalThis, {
 });
 ResizeObserver.all = [];
 
-const { initRide, renderRide, smoothPower, smoothHr, trackProgress, workoutLeft } = await import('../js/ride.js');
+const { initRide, renderRide, smoothPower, smoothHr, trackProgress, workoutLeft, secsLeft, rideElapsed } = await import('../js/ride.js');
 const { initControls } = await import('../js/controls.js');
 const { initRidePhone, renderPhone, drawPhoneChart, sizePhoneChart, phoneSlices } = await import('../js/ridephone.js');
 const { Session, DEFAULT_SETTINGS } = await import('../js/engine/session.js');
@@ -188,11 +188,12 @@ app.phoneView = 'chart';
   const s = begin(W('sweetspot-3x12'));
   pedal(20);
   assert.ok(s.started && s.samples.length > 10);
-  assert.equal(html('rp-elapsed'), fmtTime(s.elapsed));
+  assert.equal(html('rp-elapsed'), fmtTime(rideElapsed(s)));
   assert.equal(html('rp-name'), 'Sweet spot 3 x 12');
   assert.deepEqual([html('rp-left-k'), html('rp-left')], ['Left', workoutLeft(s)]);
   assert.equal(html('rp-int-label'), 'Warm-up');
-  assert.equal(html('rp-count'), fmtTime(Math.round(s.elapsed + s.segRemaining.sec) - Math.round(s.elapsed))); // ticks with rp-elapsed
+  assert.equal(html('rp-count'), fmtTime(secsLeft(s, s.segRemaining.sec))); // ticks with rp-elapsed
+  assert.equal(rideElapsed(s) + secsLeft(s, s.segRemaining.sec), Math.floor(s.segT0) + s.seg.dur); // the step's end
   assert.equal(html('rp-target'), `${s.target} W`);
   assert.equal(html('rp-target-sub'), `${Math.round(segTarget(s.seg, s.segProgress) * 100)}% FTP`);
   assert.equal($('#rp').style.props['--zc'], zoneHex(segTarget(s.seg, s.segProgress)));

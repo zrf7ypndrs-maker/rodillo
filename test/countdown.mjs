@@ -33,7 +33,7 @@ let audio;
 const app = { settings: /** @type {Record<string, any>} */ ({}) };
 
 const m = await import('../js/countdown.js');
-const { FLY, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, stepKind, shownLeft, beatPhase, nextTick,
+const { FLY, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, stepKind, shownLeft, shownElapsed, beatPhase, nextTick,
   countdownLog, countdownTick, countdownGo, countdownDone, countdownStop, syncCountdown, initCountdown } = m;
 
 let n = 0;
@@ -70,25 +70,33 @@ assert.equal(stepKind({ kind: 'sim', grade: 0.08, free: true }), 'rest');
 assert.equal(stepKind(null), 'rest');
 ok('work or rest: ERG by the step\'s higher end, slope by its power aim, else by grade (4%+); free and none = rest');
 
-// ---- the countdown's clock (a step ending at elapsed 100)
-assert.equal(shownLeft(97, 3), 3);
-assert.equal(shownLeft(97.4, 2.6), 3);
-assert.equal(shownLeft(97.6, 2.4), 2);
-assert.equal(shownLeft(96.5, 3.5), 3); // the number changes at x.5
+// ---- the countdown's clock (a step that started at elapsed 40 and ends at 100)
+assert.equal(shownLeft(97, 3, 40), 3);
+assert.equal(shownLeft(97.4, 2.6, 40), 3);
+assert.equal(shownLeft(97.6, 2.4, 40), 3);
+assert.equal(shownLeft(98, 2, 40), 2); // the number changes on the step's whole seconds
+assert.equal(shownLeft(99.75, 0.25, 40), 1); // the last second reads 1, never 0
 assert.equal(shownLeft(100.2, 0), 0);
-near(beatPhase(96.5), 0);
-near(beatPhase(96.75), 0.25);
-near(beatPhase(97.25), 0.75);
-near(beatPhase(97), 0.5);
-ok('shown seconds step at every x.5 of elapsed; the beat\'s phase is 0 right there');
+near(beatPhase(97), 0);
+near(beatPhase(97.25), 0.25);
+near(beatPhase(97.75), 0.75);
+// a step that started off the second (the tick that crossed the last end): elapsed and left still step together
+for (let e = 60.3; e < 120.3; e += 0.25) {
+  assert.equal(shownElapsed(e, 60.3) + shownLeft(e, 120.3 - e, 60.3), 120, `at ${e.toFixed(2)} s`);
+  assert.ok(shownLeft(e, 120.3 - e, 60.3) >= 1, `no 0 at ${e.toFixed(2)} s`);
+}
+assert.deepEqual([shownLeft(60.3, 60, 60.3), shownLeft(119.25, 1.05, 60.3), shownLeft(119.35, 0.95, 60.3)], [60, 2, 1]);
+assert.deepEqual([shownElapsed(60.3, 60.3), shownElapsed(61.29, 60.3), shownElapsed(61.3, 60.3)], [60, 60, 61]);
+near(beatPhase(61.3, 60.3), 0); near(beatPhase(61.55, 60.3), 0.25);
+ok('shown seconds step on the step\'s own seconds, elapsed with them; the last one reads 1; the beat\'s phase is 0 right there');
 
 const g = { kind: 'erg', from: 0.5, to: 0.5, dur: 60 };
-const at = (e) => nextTick(e, g, { sec: 100 - e });
-const t3 = at(95.9); assert.equal(t3.n, 3); near(t3.in, 0.6); // shows 4; 3 at 96.5
-const t2 = at(96.6); assert.equal(t2.n, 2); near(t2.in, 0.9);
-const t1 = at(98.0); assert.equal(t1.n, 1); near(t1.in, 0.5);
-assert.equal(at(94.9), null); // shows 5: 4 is next, no tick
-assert.equal(at(99.0), null); // shows 1: next is 0, the step change plays instead
+const at = (e) => nextTick(e, g, { sec: 100 - e }, 40);
+const t3 = at(96.4); assert.equal(t3.n, 3); near(t3.in, 0.6); // shows 4; 3 at 97
+const t2 = at(97.1); assert.equal(t2.n, 2); near(t2.in, 0.9);
+const t1 = at(98.5); assert.equal(t1.n, 1); near(t1.in, 0.5);
+assert.equal(at(95.4), null); // shows 5: 4 is next, no tick
+assert.equal(at(99.5), null); // shows 1: the step change plays next, where 0 would be
 assert.equal(nextTick(96, { ...g, dur: 4 }, { sec: 4 }), null);
 assert.equal(nextTick(96, g, { m: 40 }), null); // distance step
 assert.equal(nextTick(96, null, null), null);
@@ -97,7 +105,8 @@ ok('next tick: 3, 2, 1 on the number changes of timed steps (none on distance st
 // ---- the player
 initCountdown({ app: /** @type {any} */ (app), makeAudio: () => { made++; audio = new FakeCtx(); return /** @type {any} */ (audio); } });
 syncCountdown(); // no context yet: nothing to do
-const ses = (e, over = {}) => ({ started: true, paused: false, finished: false, elapsed: e, seg: g, segIndex: 2, segRemaining: { sec: 100 - e }, segs: [erg(0.5), erg(0.95), g, erg(0.92)], ...over });
+// the step started at 40.5 and ends at 99.5, so its seconds (and the ticks) fall on every x.5
+const ses = (e, over = {}) => ({ started: true, paused: false, finished: false, elapsed: e, segT0: 40.5, seg: g, segIndex: 2, segRemaining: { sec: 99.5 - e }, segs: [erg(0.5), erg(0.95), g, erg(0.92)], ...over });
 let s = ses(96);
 countdownTick(/** @type {any} */ (s));
 assert.deepEqual(countdownLog.at(-1), { cue: 'tick', n: 3, seg: 2, in: 0.5 });

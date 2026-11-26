@@ -32,19 +32,30 @@ export function stepKind(g) {
   return (g.grade ?? 0) >= 0.04 ? 'work' : 'rest';
 }
 
-/** Seconds left as the ride screen shows them (secsLeft in js/ride.js): on the elapsed clock, so the countdown steps
- * when Math.round(elapsed) does, at every x.5. @param {number} e @param {number} sec */
-export const shownLeft = (e, sec) => Math.max(0, Math.round(e + sec) - Math.round(e));
-/** Where the card's 1 s beat is (0 to 1): 0 when the countdown number changes. @param {number} e Elapsed s */
-export const beatPhase = (e) => e + 0.5 - Math.floor(e + 0.5);
+// The ride clock (Nov 26, Agustín: "0 should be the start of the next interval"). A step starts on whichever engine
+// tick crossed the last one's end, so not on a whole second of elapsed. Elapsed and the countdowns are both shown on
+// the current step's own seconds: elapsed steps at its start plus every whole second after, so the countdown reads
+// 3, 2, 1 and the next step starts where 0 would be (no 0 on the card), in step with elapsed the whole time.
+const EPS = 1e-6;
+/** The fraction of a second the current step started at (its segT0). @param {number} [t0] */
+export const clockOff = (t0 = 0) => t0 - Math.floor(t0);
+/** Whole seconds shown on the elapsed clock. @param {number} e Elapsed s @param {number} [t0] The step's start */
+export const shownElapsed = (e, t0 = 0) => Math.max(0, Math.floor(e - clockOff(t0) + EPS));
+/** Seconds left as the ride screen shows them (secsLeft in js/ride.js): the end on the elapsed clock minus elapsed
+ * shown, so the two step together and a step's last second reads 1. @param {number} e @param {number} sec
+ * @param {number} [t0] */
+export const shownLeft = (e, sec, t0 = 0) => Math.max(0, Math.round(e + sec - clockOff(t0)) - shownElapsed(e, t0));
+/** Where the card's 1 s beat is (0 to 1): 0 when the countdown number changes. @param {number} e Elapsed s
+ * @param {number} [t0] */
+export const beatPhase = (e, t0 = 0) => { const x = e - clockOff(t0); return Math.max(0, x - Math.floor(x + EPS)); };
 
 /** The next tick, if the coming number change shows 3, 2 or 1 on a timed step: the number and the seconds until it.
  * @param {number} e Elapsed s @param {Segment | null} g The current step @param {{ sec?: number, m?: number } | null} rem
- * @returns {{ n: number, in: number } | null} */
-export function nextTick(e, g, rem) {
+ * @param {number} [t0] The step's start (segT0) @returns {{ n: number, in: number } | null} */
+export function nextTick(e, g, rem, t0 = 0) {
   if (!g || !rem || rem.sec === undefined || g.dur < MIN_STEP) return null;
-  const n = shownLeft(e, rem.sec) - 1;
-  return n >= 1 && n <= 3 ? { n, in: 1 - beatPhase(e) } : null;
+  const n = shownLeft(e, rem.sec, t0) - 1;
+  return n >= 1 && n <= 3 ? { n, in: 1 - beatPhase(e, t0) } : null;
 }
 
 // ------------------------------------------------------------------ the player
@@ -131,7 +142,7 @@ export function countdownTick(s) {
   if (s !== ses) { cancel(); done.clear(); ses = s; }
   if (choice() === 'off' || !s.started || s.paused || s.finished) { cancel(); return; }
   rideAudio(true);
-  const t = nextTick(s.elapsed, s.seg, s.segRemaining);
+  const t = nextTick(s.elapsed, s.seg, s.segRemaining, s.segT0);
   if (!t || t.in > AHEAD) return;
   const key = `${s.segIndex}:${t.n}`;
   if (done.has(key)) return;
