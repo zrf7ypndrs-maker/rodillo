@@ -70,6 +70,7 @@
  * @property {GarageBike[] | null} garage
  * @property {string} bike
  * @property {Record<string, number>} climbDetail
+ * @property {string} [titleMusic] 'normal' | 'soft' | 'off' (js/music.js).
  */
 
 // ------------------------------------------------------------------ workouts (js/engine/workout.js)
@@ -533,6 +534,12 @@
  * @property {() => any} syncPending
  * @property {() => any} refreshAfterSettings
  * @property {(revoke: () => any, keepsAccess?: boolean) => Promise<boolean>} leaveData Signs out / drops the token (`revoke`); false when the rider cancels.
+ */
+
+/**
+ * @typedef {object} MusicDeps initMusic() in js/music.js.
+ * @property {AppState} app
+ * @property {() => AudioContext} makeAudio Called on the first tap or key with music wanted.
  */
 
 /**

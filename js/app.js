@@ -28,6 +28,7 @@ import { initRidePhone, renderPhone, sizePhoneChart } from './ridephone.js';
 import { initControls, onButton, onRelease, focusables, applyFocus } from './controls.js';
 import { initRide, renderRide, renderRideStatus, rideClock, sizeChart, slide, slideEnd, rideMsg, rideMsgReset, rideMsgQ, lastTestBest, testStep, testEnded, hideTakeover } from './ride.js';
 import { authEnabled, authSession, authToken, takeSignIn } from './auth.js';
+import { initMusic, syncMusic } from './music.js';
 /** @typedef {import('./types.js').Settings} Settings */
 /** @typedef {import('./types.js').ElementEvent} ElementEvent */
 /** @typedef {import('./types.js').FieldEvent} FieldEvent */
@@ -318,6 +319,7 @@ function reconcileSettings(source = 'settings') {
   ls.set('settingsBase', r.base);
   ls.set('settingsPending', r.pending);
   if (r.adopted.length) logMsg('coach', `settings from the plan: ${r.adopted.map((k) => `${k} ${JSON.stringify(app.settings[k])}`).join(', ')}`);
+  syncMusic(); // Title music set here or on another device
   return r;
 }
 
@@ -1104,6 +1106,7 @@ function show(name) {
   if ($('#devpop').classList.contains('on-ride')) setDevPop(false); // don't carry a pause-screen popover into the next screen
   $$('.screen').forEach((s) => s.classList.toggle('active', s.id === name));
   if (name === 'home') { renderDevices(); applyFocus(); }
+  syncMusic(); // title music: quiet on the ride screen, back everywhere else
 }
 initRide({ app, isPhone, renderPhone, setDevPop, look: rideLook, zoneHex, gradeHex, setZc, NUM_FONT });
 
@@ -1298,6 +1301,7 @@ async function forgetHere() {
   logMsg('sync', 'signed out: private data removed from this browser');
 }
 initSettings({ app, saveSettings, ask, tell, setDevPop, dataRepo, syncClient, syncHint, loadCoachData, syncPending, refreshAfterSettings, leaveData });
+initMusic({ app, makeAudio: () => new AudioContext() });
 $('#btn-garage').innerHTML = BIKE_ICO; // the same bicycle as the Free ride button
 $('#btn-garage').onclick = () => openGarage('bikes');
 $('#btn-controls').onclick = () => {

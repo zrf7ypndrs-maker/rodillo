@@ -71,6 +71,9 @@ const listOf = (page, sel) => page.$$eval(`${sel} .wo-sec`, (secs) => secs.map((
   g: s.querySelector('.wo-gh').textContent,
   rows: [...s.querySelectorAll('.wo')].map((r) => ({ i: +r.dataset.i, name: r.querySelector('.wo-name').childNodes[0].textContent.trim(), meta: r.querySelector('.wo-meta').textContent })),
 })));
+// title music (js/music.js): its state, from the app's own module instance
+const musicIs = (page, state, what, timeout = 25000) => page.waitForFunction((s) => import('./js/music.js').then((m) => m.musicNow().state === s), state, { timeout, polling: 250 })
+  .catch(async () => { throw new Error(`music: ${what}: ${JSON.stringify(await page.evaluate(() => import('./js/music.js').then((m) => m.musicNow())))}, expected ${state}`); });
 const shownNow = (page, sel) => page.$eval(sel, (el) => !el.closest('.hidden') && el.getBoundingClientRect().height > 0);
 const kindsShown = (page) => page.evaluate(() => ['erg', 'slope', 'mine'].filter((k) => !document.querySelector(`#kind-${k}`).classList.contains('hidden')).join());
 const lsGet = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(`rodillo.${key}`) ?? 'null'), k);
@@ -1661,6 +1664,10 @@ async function run(viewport, label) {
   await libraryStep(page, label);
 
   if (label === 'desktop') {
+    // title music: the tab clicks above were the first taps, so it renders (2 s after load, then a few s) and plays
+    await musicIs(page, 'playing', 'home after the first clicks');
+    ok(`${label}: title music plays on home after the first click`);
+
     for (const btn of ['#btn-settings', '#btn-controls', '#btn-garage', '#btn-devices']) {
       await page.click(btn);
       await page.waitForTimeout(150);
@@ -1728,6 +1735,7 @@ async function run(viewport, label) {
       ['ride', '#set-autoPauseSec', 'autoPauseSec', String(orig.autoPauseSec + 2), orig.autoPauseSec + 2, num('autoPauseSec')],
       ['ride', '#set-guard', 'ergCadenceGuard', orig.ergCadenceGuard ? '0' : '1', !orig.ergCadenceGuard, orig.ergCadenceGuard ? '1' : '0'],
       ['ride', '#set-pain', 'painVision', 'subtle', 'subtle', orig.painVision || 'full'],
+      ['ride', '#set-music', 'titleMusic', 'off', 'off', orig.titleMusic || 'normal'],
       ['road', '#set-gradeScale', 'gradeScale', '75', 0.75, num('gradeScale', 100)],
       ['trainer', '#set-gmax', 'maxSendGrade', '12', 0.12, num('maxSendGrade', 100)],
       ['trainer', '#set-shift', 'trainerShifting', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'auto' : 'app', orig.trainerShifting === 'app' ? 'app' : 'auto'],
@@ -1735,6 +1743,7 @@ async function run(viewport, label) {
     await page.click('#btn-settings');
     await shown('#settings-form .fld');
     for (const [tab, sel, key, typed, want] of edits) { await onTab(tab); await put(sel, typed); await expect(key, want, `${tab} tab`); }
+    await musicIs(page, 'off', 'Title music set to Off', 3000);
     await onTab('sync');
     const repo = await page.inputValue('#set-repo');
     await page.fill('#set-repo', 'smoke/rodillo-data');
@@ -1760,6 +1769,7 @@ async function run(viewport, label) {
     // a typed grade range marks the trainer as chosen (trainerModel "" -> a model or "custom"), and the menu has no "none"
     const norm = (s) => JSON.stringify({ ...s, riderName: s.riderName || '', trainerModel: null });
     if (norm(await settings()) !== norm(orig)) throw new Error('settings: putting every field back left other settings changed');
+    await musicIs(page, 'playing', 'Title music put back to On', 5000);
     await page.click('#settings [data-close]');
     await page.waitForSelector('#settings.hidden', { state: 'attached', timeout: 3000 });
     ok(`${label}: Settings: each tab, a change saved in each, reopened and put back`);
@@ -1773,6 +1783,8 @@ async function run(viewport, label) {
     await page.click('#workout-list button[data-start="0"]');
     await page.waitForSelector('#ride.active');
     ok(`${label}: demo workout starts`);
+    await musicIs(page, 'quiet', 'ride screen', 3000);
+    ok(`${label}: title music goes quiet when the ride starts`);
 
     await page.waitForFunction(() => document.querySelector('#ride.active') && /\d:\d\d/.test(document.body.innerText), null, { timeout: 10000 });
     await page.waitForTimeout(13000); // past the 10-sample minimum so the ride is kept
@@ -1784,6 +1796,8 @@ async function run(viewport, label) {
     await page.waitForSelector('#ridepage.active', { timeout: 10000 });
     await page.waitForFunction(() => /Demo ride/.test(document.querySelector('#ridepage').innerText), null, { timeout: 5000 });
     ok(`${label}: hold Esc ends the ride, done page opens`);
+    await musicIs(page, 'playing', 'done page', 5000);
+    ok(`${label}: title music comes back on the done page`);
 
     // Export .FIT from the done page: the file is named after the local day the ride was ridden
     const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }), page.click('#rd [data-rd="fit"] >> nth=0')]);

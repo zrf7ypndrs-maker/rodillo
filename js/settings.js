@@ -10,6 +10,7 @@ import { GitHubSync } from './sync.js';
 import { logMsg } from './ble/base.js';
 import { ls } from './store.js';
 import { painChoice } from './pain.js';
+import { musicChoice } from './music.js';
 import { authEnabled, authSession, startSignIn, signOut } from './auth.js';
 import { $, $$, esc, toast, fld, placeInk, inkObserver, slideIn } from './ui.js';
 
@@ -97,7 +98,8 @@ function renderSettings() {
   const extra = {
     rider: `<div class="help">Bike weight and wheel are per bike, in the Garage (<a href="#" data-open-garage>bike icon</a> at the top). Gearing is its own choice: <a href="#" data-open-gearing>Gearing</a>. All settings are saved to your plan, so every device gets them.</div>`,
     ride: fld('set-guard', 'ERG low-cadence guard', '<select id="set-guard"><option value="1">On</option><option value="0">Off</option></select>', 'If cadence drops under 40 rpm in ERG, the target eases to 60% until you\'re spinning again.') +
-      fld('set-pain', 'Pain vision', '<select id="set-pain"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select>', 'Near the end of hard reps, or when your W\u2032 runs low, the screen edges blur and darken with your heart rate. Your numbers stay sharp.'),
+      fld('set-pain', 'Pain vision', '<select id="set-pain"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select>', 'Near the end of hard reps, or when your W\u2032 runs low, the screen edges blur and darken with your heart rate. Your numbers stay sharp.') +
+      fld('set-music', 'Title music', '<select id="set-music"><option value="normal">On</option><option value="soft">Soft</option><option value="off">Off</option></select>', 'A calm loop on the home screens. It fades out when a ride starts and comes back after.'),
     trainer: `${fld('set-trainer', 'Trainer', `<select id="set-trainer">${trainerOptions()}</select>`, '', 'full')}
       ${fld('set-shift', 'Virtual shifting', '<select id="set-shift"><option value="auto">In the trainer when it can (like Zwift)</option><option value="app">Always in Rodillo</option></select>', '', 'full')}
       <div class="help" id="shift-line">${shiftLine()}</div>
@@ -111,6 +113,7 @@ function renderSettings() {
     `<div class="settings-form stab-pane hidden" data-pane="${id}">${id === 'rider' ? nameField() : ''}${fields.map(numField).join('')}${extra[id] || ''}</div>`).join('');
   /** @type {HTMLSelectElement} */ ($('#set-guard')).value = app.settings.ergCadenceGuard ? '1' : '0';
   /** @type {HTMLSelectElement} */ ($('#set-pain')).value = painChoice(app.settings.painVision);
+  /** @type {HTMLSelectElement} */ ($('#set-music')).value = musicChoice(app.settings.titleMusic);
   $('#tm-reset').onclick = (e) => { e.preventDefault(); app.settings.gradeTrim = 0; app.settings.realDev = DEFAULT_SETTINGS.realDev; saveSettings(); renderSettings(); };
   fillTrainer();
   /** @type {HTMLSelectElement} */ ($('#set-shift')).value = app.settings.trainerShifting === 'app' ? 'app' : 'auto';
@@ -119,6 +122,7 @@ function renderSettings() {
     if (el.id === 'set-name') app.settings.riderName = el.value.trim();
     else if (el.id === 'set-guard') app.settings.ergCadenceGuard = el.value === '1';
     else if (el.id === 'set-pain') app.settings.painVision = el.value;
+    else if (el.id === 'set-music') app.settings.titleMusic = el.value;
     else if (el.id === 'set-trainer') pickTrainer(el.value);
     else if (el.id === 'set-gmax' || el.id === 'set-gmin') { if (!editGradeRange()) return; }
     else if (el.id === 'set-shift') { app.settings.trainerShifting = el.value; if (app.trainer) /** @type {import('./ble/trainer.js').Trainer} */ (app.trainer).useZwift = el.value !== 'app'; $('#shift-line').textContent = shiftLine(); }
