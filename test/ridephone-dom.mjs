@@ -192,7 +192,7 @@ app.phoneView = 'chart';
   assert.equal(html('rp-name'), 'Sweet spot 3 x 12');
   assert.deepEqual([html('rp-left-k'), html('rp-left')], ['Left', workoutLeft(s)]);
   assert.equal(html('rp-int-label'), 'Warm-up');
-  assert.equal(html('rp-count'), fmtTime(s.segRemaining.sec));
+  assert.equal(html('rp-count'), fmtTime(Math.round(s.elapsed + s.segRemaining.sec) - Math.round(s.elapsed))); // ticks with rp-elapsed
   assert.equal(html('rp-target'), `${s.target} W`);
   assert.equal(html('rp-target-sub'), `${Math.round(segTarget(s.seg, s.segProgress) * 100)}% FTP`);
   assert.equal($('#rp').style.props['--zc'], zoneHex(segTarget(s.seg, s.segProgress)));

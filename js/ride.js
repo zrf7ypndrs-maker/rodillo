@@ -5,7 +5,7 @@
 // The phone ride screen (renderPhone) is still in app.js and imports what it shares from here: segRows, workoutLeft,
 // fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, sizeChart, renderRide.
 // Pure parts (unit tests: test/ride.mjs): rideTiles, intervalCard, nextCard, gearViz, the chart geometry (powerScale,
-// workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding.
+// workoutX, gradeBarH, ergShape, trackFrame, trackView, trackKmStep), smoothPower, smoothHr, msgMs, intervalEnding, secsLeft.
 // Never imports app.js: app state and app.js hooks come in initRide(deps); theme colors come from `look()` at draw time.
 import { POWER_SHOW_S } from './engine/session.js';
 import { segTarget, ftpWatts, isTrack, track, trackDist, trackHeight, trackClimbed, climbAhead, climbsByDist } from './engine/workout.js';
@@ -74,11 +74,22 @@ export function renderRideStatus() {
 export { fmtDist }; // lives in js/ridepage.js next to fmtTime (js/profile.js uses it too)
 export const segAmount = (g) => (g.dist ? fmtDist(g.dist) : fmtTime(g.dur));
 
+/**
+ * Whole seconds left as shown next to the elapsed clock: the end on the elapsed clock, rounded, minus the elapsed
+ * shown (fmtTime rounds it). An interval starts on whatever tick crossed the last one's end (or a skip), so its start
+ * isn't a whole second; rounding the seconds left on their own made the countdown tick out of step with elapsed.
+ */
+/** @param {Session} s @param {number} sec */
+export function secsLeft(s, sec) {
+  const e = s.elapsed || 0;
+  return Math.max(0, Math.round(e + sec) - Math.round(e));
+}
+
 /** Remaining workout time ("~" while distance steps make it an estimate), shared by the desktop list and the phone. */
 /** @param {Session} s */
 export function workoutLeft(s) {
   const last = s.segs.at(-1), est = s.segs.some((g) => g.estDur && s.segs.indexOf(g) >= Math.max(0, s.segIndex));
-  return s.seg ? `${est ? '~' : ''}${fmtTime(last.end - s.chartPos)}` : 'Done';
+  return s.seg ? `${est ? '~' : ''}${fmtTime(secsLeft(s, last.end - s.chartPos))}` : 'Done';
 }
 
 /**
@@ -189,7 +200,7 @@ const cadChips = (g, ftp) => (g.cad ? `<span class="cad-chip">${g.cad.label}</sp
 
 /** An ERG row: target and time (time left on the current one). */
 function ergRow(g, i, s, state, color, tgtW, cadChip) {
-  const time = state === 'current' ? fmtTime(s.segRemaining.sec ?? 0) : segAmount(g);
+  const time = state === 'current' ? fmtTime(secsLeft(s, s.segRemaining.sec ?? 0)) : segAmount(g);
   return `<div class="seg erg ${state}" style="--c:${color}" data-i="${i}"><div class="seg-name">${state === 'done' ? CHECK : ''}<span class="big">${tgtW}</span>${cadChip}</div><div class="seg-r"><span class="big">${time}</span></div>${state === 'current' ? segBar() : ''}</div>`;
 }
 /** Right side of a slope or free row: the amount still to ride, or the average watts and HR so far. a = s.segAgg[i]. */
@@ -198,7 +209,7 @@ function stepRight(g, s, state, a) {
   const avgP = a?.n ? Math.round(a.p / a.n) : null;
   if (!avgP) return state === 'done' ? '<span class="muted">skipped</span>' : `<span class="big">${segAmount(g)}</span>`;
   const avgHr = a?.hrN ? Math.round(a.hr / a.hrN) : null;
-  const left = state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(s.segRemaining.sec) : fmtDist(s.segRemaining.m)} left` : '';
+  const left = state === 'current' ? ` &middot; ${s.segRemaining.sec !== undefined ? fmtTime(secsLeft(s, s.segRemaining.sec)) : fmtDist(s.segRemaining.m)} left` : '';
   return `<span class="big">${avgP} W</span><br><span class="muted">${avgHr ? `&hearts; ${avgHr}` : ''}${left}</span>`;
 }
 /** A slope or free row: name (and rep), target and amount, right side. */
@@ -336,7 +347,7 @@ export function intervalCard(s, v) {
   const word = (w) => `<span class="w">${w}</span>`;
   if (seg) {
     const rem = s.segRemaining;
-    const left = rem.sec !== undefined ? num(fmtTime(rem.sec)) : num(fmtDist(rem.m).replace(/ (k?m)$/, ''), rem.m < 1000 ? 'm' : 'km');
+    const left = rem.sec !== undefined ? num(fmtTime(secsLeft(s, rem.sec))) : num(fmtDist(rem.m).replace(/ (k?m)$/, ''), rem.m < 1000 ? 'm' : 'km');
     const cad = seg.cad ? ` &middot; ${seg.cad.label}` : '';
     let big, sub, zc;
     if (seg.kind === 'erg') {
@@ -403,7 +414,7 @@ function renderPaused(s) {
 export function intervalEnding(s) {
   const rem = s.segRemaining;
   if (!rem || !s.started || s.paused) return false;
-  if (rem.sec !== undefined) return rem.sec > 0 && rem.sec < 10.5; // the countdown reads 0:10
+  if (rem.sec !== undefined) return rem.sec > 0 && secsLeft(s, rem.sec) <= 10; // the countdown reads 0:10
   return s.bike.v > 1 && rem.m > 0 && rem.m / s.bike.v < 10.5;
 }
 /** @param {RideCard} card */

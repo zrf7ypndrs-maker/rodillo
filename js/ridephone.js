@@ -10,7 +10,7 @@
 import { segTarget, isTrack } from './engine/workout.js';
 import { fmtTime } from './ridepage.js';
 import { action, holdStart, holdEnd } from './controls.js';
-import { renderRide, rideView, segRows, writeSegRows, workoutLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
+import { renderRide, rideView, segRows, writeSegRows, workoutLeft, secsLeft, fmtDist, segAmount, drawTrack, trackProgress, smoothPower, drawHrTrace, workoutX, gradeBarH } from './ride.js';
 import { ls } from './store.js';
 import { $, esc } from './ui.js';
 
@@ -93,7 +93,7 @@ export function phoneHero(s, v) {
     return {
       zc: seg.kind === 'erg' ? v.zoneHex(tgt) : v.gradeHex(seg.grade + s.gradeOffset),
       label: `${esc(seg.label)}${seg.rep ? ` ${seg.rep.i}/${seg.rep.of}` : ''}${s.ergOff && seg.kind === 'erg' ? ' &middot; ERG off' : ''}`,
-      count: rem.sec !== undefined ? fmtTime(rem.sec) : fmtDist(rem.m),
+      count: rem.sec !== undefined ? fmtTime(secsLeft(s, rem.sec)) : fmtDist(rem.m),
       target: seg.kind === 'erg' ? `${s.target || Math.round(tgt * v.ftp * s.intensity)} W` : `${((seg.grade + s.gradeOffset) * 100).toFixed(0)}%`,
       targetSub: seg.kind === 'erg' ? `${Math.round(tgt * 100 * s.intensity)}% FTP${cad}` : `${seg.aim ? `grade, aim ${Math.round(seg.aim.mid * v.ftp)} W` : 'grade, use your gears'}${cad}`,
     };
