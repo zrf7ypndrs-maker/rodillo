@@ -843,6 +843,9 @@ html:has(#home.active) #log-body { background: var(--sheet); border-radius: 14px
 .rd-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
 .rd-grid:has(> :only-child) { grid-template-columns: 1fr; }
 .rd-sum { margin: 0 0 14px; }
+/* side by side the taller card sets the row height: the zone rows spread out to fill the zones card */
+.rd-sum > .card { display: flex; flex-direction: column; }
+.rd-sum .zbars { flex: 1; grid-auto-rows: 1fr; }
 .rd-grid .card { padding: 16px 18px; }
 .rd-grid .card h3 .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
 .rd-grid .zbars { margin-bottom: 0; }
