@@ -35,7 +35,7 @@ let audio;
 const app = { settings: /** @type {Record<string, any>} */ ({}) };
 
 const m = await import('../js/countdown.js');
-const { FLY, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, muteLook, stepKind, shownLeft, shownElapsed, beatPhase, nextTick,
+const { FLY, SWISH, WORK_FROM, MIN_STEP, SOUNDS, countdownChoice, countdownLevel, muteLook, stepKind, shownLeft, shownElapsed, beatPhase, nextTick,
   countdownLog, countdownTick, countdownGo, countdownDone, countdownStop, syncCountdown, initCountdown,
   countdownMuted, muteNow, toggleRideMute, onCountdownChange } = m;
 
@@ -45,6 +45,7 @@ const near = (a, b, tol = 1e-9) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${
 
 // ---- constants and the setting
 assert.equal(FLY, 0.38);
+assert.equal(SWISH, 0.16);
 assert.equal(WORK_FROM, 0.76);
 assert.equal(MIN_STEP, 5);
 assert.deepEqual(SOUNDS, ['tick-3', 'tick-2', 'tick-1', 'work', 'rest']);
@@ -165,9 +166,9 @@ countdownGo(/** @type {any} */ (s), 3, true);
 assert.deepEqual(starts.at(-1), { name: 'work', when: audio.currentTime, offset: 0 });
 assert.deepEqual(countdownLog.at(-1), { cue: 'work', seg: 3, slide: true });
 countdownGo(/** @type {any} */ (s), 0, false);
-assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset: FLY });
+assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset: FLY - SWISH });
 countdownDone(/** @type {any} */ (s));
-assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset: FLY });
+assert.deepEqual(starts.at(-1), { name: 'rest', when: audio.currentTime, offset: FLY - SWISH });
 assert.deepEqual(countdownLog.at(-1), { cue: 'rest', seg: 4, slide: false });
 ok('new step: the work sound for 92% FTP, the rest sound for 50% and at the end; the lead-in only with the slide');
 
@@ -232,6 +233,13 @@ ok('Soft halves the level; Off: nothing decided, nothing played');
 countdownStop();
 assert.equal(session.type, 'auto');
 ok('ride over: the audio session never changed');
+
+// the build id goes on the sound files too (js/assets.js): a deploy can't leave old sounds in the browser's cache
+const stamped = await import('../js/assets.js?v=202611270012');
+assert.equal(stamped.assetUrl('sounds/countdown-work.wav'), 'sounds/countdown-work.wav?v=202611270012');
+const plain = await import('../js/assets.js');
+assert.equal(plain.assetUrl('sounds/countdown-work.wav'), 'sounds/countdown-work.wav');
+ok('sound files carry the build id when the app is stamped, and nothing locally');
 
 console.warn = warn;
 console.log(`countdown: ${n} checks passed`);

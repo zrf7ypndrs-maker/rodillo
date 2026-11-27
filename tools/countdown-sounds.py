@@ -12,7 +12,7 @@ https://claude.ai/artifact/Ge3TMB9oDxAnoFEY2bisZ2, he took no. 20 with the boom 
                         rounder boom. No note.
 The swish sits at the end of a 0.38 s lead-in, so the ping / boom lands at 0.38 s: on the desktop the file starts with
 the Next card's 380 ms slide (slideNextIn in js/ride.js) and the hit lands with the card. With no slide (phone,
-reduced motion) the player starts 0.38 s in, right at the hit.
+reduced motion) the player starts 0.22 s in, at the swoosh, so the hit lands 0.16 s after the change.
 """
 import os
 import numpy as np

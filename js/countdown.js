@@ -5,17 +5,20 @@
 // (and when the workout ends).
 // On the desktop the change is the Next card sliding onto the interval card (380 ms, slideNextIn in js/ride.js): the
 // GO's lead-in plays during the slide and its hit lands with the card. On the phone (no slide) the file starts at the
-// hit. The sounds are files in sounds/, rendered by tools/countdown-sounds.py. Settings > Ride > Countdown sounds;
+// swoosh, so the hit lands 0.16 s after the change, on the card's bump. The sounds are files in sounds/, rendered by tools/countdown-sounds.py. Settings > Ride > Countdown sounds;
 // a mute button on the ride screen (desktop and phone) silences them on this device until it's pressed again.
 // Project doc: claude/rodillo-countdown-sound.md.
 
 import { ls } from './store.js';
+import { assetUrl } from './assets.js';
 
 /** @typedef {import('./types.js').CountdownDeps} CountdownDeps */
 /** @typedef {import('./types.js').Segment} Segment */
 /** @typedef {import('./types.js').RideSession} RideSession */
 
 export const FLY = 0.38;       // s: the GO files' lead-in, the length of the desktop slide
+export const SWISH = 0.16;     // s: the swoosh at the end of that lead-in (work 0.14, rest 0.16); without a slide the file
+                               // starts here, so the swoosh plays and the hit lands 0.16 s in, with the card's bump
 export const WORK_FROM = 0.76; // fraction of FTP: from here (Z3 and up) a step counts as work
 export const MIN_STEP = 5;     // s: shorter steps get the start sound only
 export const SOUNDS = ['tick-3', 'tick-2', 'tick-1', 'work', 'rest'];
@@ -103,7 +106,7 @@ const level = () => (muted ? 0 : countdownLevel(choice()));
 
 /** Fetches and decodes the five files, once. */
 function load() {
-  loading ||= Promise.all(SOUNDS.map((name) => fetch(`sounds/countdown-${name}.wav`)
+  loading ||= Promise.all(SOUNDS.map((name) => fetch(assetUrl(`sounds/countdown-${name}.wav`))
     .then((r) => { if (!r.ok) throw new Error(`${name}: ${r.status}`); return r.arrayBuffer(); })
     .then((b) => ctx.decodeAudioData(b))
     .then((buf) => { bufs[name] = buf; })))
@@ -160,14 +163,14 @@ export function countdownTick(s) {
 }
 
 /** A new step is on the card (js/ride.js): the work or rest sound. `slide`: the desktop slide is starting now, so the
- * lead-in plays first and the hit lands with the card; without it the file starts at the hit.
+ * lead-in plays first and the hit lands with the card; without it the file starts at the swoosh (the hit 0.16 s in).
  * @param {RideSession} s @param {number} i The new step @param {boolean} slide */
 export function countdownGo(s, i, slide) {
   if (!wanted()) return;
   cancel(); // a skip: the old step's ticks are moot
   const cue = stepKind(s.segs?.[i]);
   log({ cue, seg: i, slide });
-  play(cue, ctx ? ctx.currentTime : 0, slide ? 0 : FLY);
+  play(cue, ctx ? ctx.currentTime : 0, slide ? 0 : FLY - SWISH);
 }
 
 /** The workout's last step is done: the rest chime, once. @param {RideSession} s */
@@ -175,7 +178,7 @@ export function countdownDone(s) {
   if (!wanted()) return;
   cancel();
   log({ cue: 'rest', seg: s.segs?.length ?? -1, slide: false });
-  play('rest', ctx ? ctx.currentTime : 0, FLY);
+  play('rest', ctx ? ctx.currentTime : 0, FLY - SWISH);
 }
 
 /** The ride is over: nothing more plays. (The silent switch mutes it like every sound: js/sound.js followSilentSwitch.) */

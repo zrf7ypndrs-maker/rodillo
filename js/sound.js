@@ -14,6 +14,8 @@
 // with control.click() (same target, same handlers, still inside the user's gesture). Controller presses have no tap,
 // so they never tick on an iPhone. Pure half tested in test/sound.mjs; the DOM half in the smoke test.
 
+import { assetUrl } from './assets.js';
+
 /** @typedef {import('./types.js').SoundDeps} SoundDeps */
 /** @typedef {'navigate' | 'click' | 'back'} TapRole */
 
@@ -138,7 +140,7 @@ export function tap(role) {
 
 /** Fetches the three files (once, shortly after load: no audio context needed yet). */
 function fetchSounds() {
-  return Promise.all(ROLES.map((r) => fetch(`sounds/tap-${r}.wav`).then((res) => (res.ok ? res.arrayBuffer() : null))
+  return Promise.all(ROLES.map((r) => fetch(assetUrl(`sounds/tap-${r}.wav`)).then((res) => (res.ok ? res.arrayBuffer() : null))
     .then((b) => { if (b) raw[r] = b; }).catch(() => {})));
 }
 /** First tap or key: browsers only start sound from one. Decodes the files into the new context. */
