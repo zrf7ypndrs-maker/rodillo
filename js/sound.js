@@ -1,7 +1,7 @@
 // @ts-check
 // Tap feedback on the home screens (Nov 26): three short sounds and, on phones, a haptic tick. Never on the ride screen
-// (pause included): there only the countdown plays. Sounds: sounds/tap-{navigate,click,back}.wav, the "Haptic" set
-// Agustín picked (rendered by tools/sounds.py). Settings > Ride > Taps: 'all' | 'sound' | 'haptic' | 'off'.
+// (pause included): there only the countdown plays. Sounds: sounds/tap-{navigate,click,back}.wav, the "Tick" set
+// Agustín picked (discrete clicks, no tone; rendered by tools/sounds.py). Settings > Ride > Taps: 'all' | 'sound' | 'haptic' | 'off'.
 //
 // What plays: a click on a control plays the role of that control (roleOf: navigate, click or back); a controller or
 // keyboard action that clicks nothing plays its own (actionSound). One sound per action: a second one within 50 ms
